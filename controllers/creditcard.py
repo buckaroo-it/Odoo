@@ -1,0 +1,87 @@
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+
+import base64
+import logging
+
+import requests as req_lib
+
+from odoo import _, http
+from odoo.http import request
+
+from ..utils import const
+
+from odoo.addons.website_sale.controllers.payment import PaymentPortal
+
+_logger = logging.getLogger(__name__)
+
+
+class CreditCardPaymentPortal(PaymentPortal):
+
+    def shop_payment_transaction(self, order_id, access_token, **kwargs):
+        hf_session_id = kwargs.pop('buckaroo_hf_session_id', None)
+        hf_service = kwargs.pop('buckaroo_hf_service', None)
+        if hf_session_id:
+            request.session['buckaroo_hf_session_id'] = hf_session_id
+            request.session['buckaroo_hf_service'] = hf_service or ''
+        return super().shop_payment_transaction(order_id, access_token, **kwargs)
+
+
+class CreditCardController(http.Controller):
+
+    @http.route(
+        '/payment/buckaroo_official/hosted-fields-token',
+        type='jsonrpc',
+        auth='public',
+        methods=['POST'],
+    )
+    def hosted_fields_token(self, provider_id, payment_method_id=None, **_kwargs):
+        """Fetch an OAuth token for Buckaroo Hosted Fields."""
+        provider_sudo = request.env['payment.provider'].sudo().browse(int(provider_id))
+        if (
+            not provider_sudo.exists()
+            or provider_sudo.code != 'buckaroo_official'
+            or provider_sudo.company_id != request.env.company
+        ):
+            return {'error': _("Invalid provider.")}
+
+        if payment_method_id:
+            pm_sudo = request.env['payment.method'].sudo().browse(int(payment_method_id))
+        else:
+            pm_sudo = provider_sudo.payment_method_ids.filtered(
+                lambda m: m.code == 'creditcard'
+            )[:1]
+        if not pm_sudo.exists():
+            return {'error': _("Credit card payment method not found.")}
+        if pm_sudo not in provider_sudo.payment_method_ids:
+            return {'error': _("Invalid payment method for this provider.")}
+        if pm_sudo.code != 'creditcard':
+            return {'error': _("Payment method is not a credit card.")}
+
+        client_id = pm_sudo.buckaroo_official_hosted_fields_client_id
+        client_secret = pm_sudo.buckaroo_official_hosted_fields_client_secret
+        if not client_id or not client_secret:
+            return {'error': _("Hosted Fields credentials are not configured.")}
+
+        credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode()).decode()
+        try:
+            response = req_lib.post(
+                const.BUCKAROO_OAUTH_TOKEN_URL,
+                headers={
+                    'Authorization': f'Basic {credentials}',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                data={
+                    'scope': 'hostedfields:save',
+                    'grant_type': 'client_credentials',
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return {
+                'access_token': data.get('access_token'),
+                'expires_in': data.get('expires_in'),
+            }
+        except req_lib.RequestException:
+            _logger.exception("Failed to fetch Hosted Fields token from Buckaroo")
+            return {'error': _("Failed to obtain Hosted Fields token.")}

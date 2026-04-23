@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Hosted Fields: credit card inline form for Buckaroo's Hosted Fields SDK.
+         Rendered only for credit card payment methods when provider is in inline mode. -->
+    <template id="hosted_fields_inline_form"
+              name="Buckaroo Hosted Fields Inline Form"
+              inherit_id="payment.method_form">
+        <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
+            <t t-if="pm_sudo.code == 'creditcard'
+                       and pm_sudo.buckaroo_official_creditcard_method == 'inline'">
+                <div id="o_buckaroo_hosted_fields_container"
+                     class="mt-2"
+                     t-att-data-provider-id="provider_sudo.id"
+                     t-att-data-payment-method-id="pm_sudo.id"
+                     t-att-data-creditcard-method="pm_sudo.buckaroo_official_creditcard_method"
+                     t-att-data-supported-brands="','.join(pm_sudo.brand_ids.filtered('buckaroo_official_sdk_service_name').mapped('buckaroo_official_sdk_service_name'))">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label id="buckaroo-card-number-label"
+                                   class="form-label text-muted small mb-1">Card number</label>
+                            <div id="buckaroo-card-number" class="o_buckaroo_hf_field"></div>
+                            <div id="buckaroo-card-number-error" class="text-danger small"></div>
+                        </div>
+                        <div class="col-6">
+                            <label id="buckaroo-expiry-label"
+                                   class="form-label text-muted small mb-1">Expiration date</label>
+                            <div id="buckaroo-expiry" class="o_buckaroo_hf_field"></div>
+                            <div id="buckaroo-expiry-error" class="text-danger small"></div>
+                        </div>
+                        <div class="col-6">
+                            <label id="buckaroo-cvc-label"
+                                   class="form-label text-muted small mb-1">Security code</label>
+                            <div id="buckaroo-cvc" class="o_buckaroo_hf_field"></div>
+                            <div id="buckaroo-cvc-error" class="text-danger small"></div>
+                        </div>
+                        <div class="col-12">
+                            <label id="buckaroo-cardholder-name-label"
+                                   class="form-label text-muted small mb-1">Cardholder name</label>
+                            <div id="buckaroo-cardholder-name" class="o_buckaroo_hf_field"></div>
+                            <div id="buckaroo-cardholder-name-error" class="text-danger small"></div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

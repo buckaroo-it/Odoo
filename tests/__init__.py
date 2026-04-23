@@ -1,0 +1,15 @@
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+
+from . import common
+from . import test_payment_method_amount_limits
+from . import test_payment_method_data
+from . import test_payment_provider
+from . import test_processing_flows
+from . import test_push_handlers
+from . import test_helpers
+from . import test_hosted_fields
+from . import test_payment_method_sdk
+from . import test_payment_method_billink
+from . import test_payment_method_creditcard
+from . import test_payment_method_sdk_contract
+from . import test_transaction_model_dispatch

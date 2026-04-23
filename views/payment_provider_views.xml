@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="payment_provider_form_buckaroo_official" model="ir.ui.view">
+        <field name="name">Buckaroo Official Provider Form</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <group name="provider_credentials" position="inside">
+                <group invisible="code != 'buckaroo_official'">
+                    <field name="buckaroo_official_website_key"
+                           required="code == 'buckaroo_official' and state != 'disabled'"/>
+                    <field name="buckaroo_official_secret_key"
+                           required="code == 'buckaroo_official' and state != 'disabled'"
+                           password="True"/>
+                    <div colspan="2">
+                        <button name="action_buckaroo_official_test_connection"
+                                type="object"
+                                string="Test Connection"
+                                icon="fa-plug"
+                                class="btn-link"
+                                invisible="state == 'disabled'"
+                                confirm="This will send a test request to the Buckaroo API. Continue?"/>
+                    </div>
+                    <separator string="Descriptions" colspan="2"/>
+                    <field name="buckaroo_official_transaction_description"
+                           placeholder="e.g. Payment {order_number} - {shop_name}"/>
+                    <field name="buckaroo_official_refund_description"
+                           placeholder="e.g. Refund {order_number} - {shop_name}"/>
+                </group>
+            </group>
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Billink: T&C checkbox and birthdate inside the payment method inline form.
+         Rendered only when the payment method is Billink. Odoo's built-in JS
+         shows/hides o_payment_inline_form when the method is selected. -->
+    <template id="billink_inline_form"
+              name="Buckaroo Billink Inline Form"
+              inherit_id="payment.method_form">
+        <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
+            <t t-if="pm_sudo.code == 'billink'">
+                <div class="mt-2">
+                    <div class="mb-2">
+                        <label class="form-label mb-1"
+                               for="o_buckaroo_billink_birthdate">
+                            Date of birth
+                        </label>
+                        <input type="date"
+                               class="form-control o_buckaroo_billink_birthdate"
+                               id="o_buckaroo_billink_birthdate"
+                               required="required"/>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input o_buckaroo_billink_tc"
+                               type="checkbox"
+                               id="o_buckaroo_billink_tc_checkbox"/>
+                        <label class="form-check-label"
+                               for="o_buckaroo_billink_tc_checkbox">
+                            I agree to the
+                            <a href="https://www.billink.nl/algemene-voorwaarden/"
+                               target="_blank"
+                               rel="noopener noreferrer">
+                                Billink Terms and Conditions
+                            </a>.
+                        </label>
+                    </div>
+                </div>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>
