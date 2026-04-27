@@ -28,8 +28,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.be')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
@@ -61,8 +60,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.at')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
@@ -78,8 +76,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.be')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
@@ -95,8 +92,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.be')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
@@ -144,8 +140,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.be')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
@@ -161,8 +156,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.se')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.SEK')])]"/>
     </record>
@@ -178,8 +172,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.es')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
@@ -195,8 +188,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.pt')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
@@ -212,8 +204,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.pt')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
@@ -277,8 +268,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.pl')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR'), ref('base.PLN')])]"/>
     </record>
@@ -294,8 +284,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.pl')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.PLN')])]"/>
     </record>
@@ -311,8 +300,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.ch')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.CHF')])]"/>
     </record>
@@ -328,8 +316,7 @@
         <field name="support_express_checkout">False</field>
         <field name="support_manual_capture">none</field>
         <field name="support_refund">partial</field>
-        <field name="supported_country_ids"
-               eval="[Command.set([ref('base.nl'), ref('base.be')])]"/>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
         <field name="supported_currency_ids"
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>

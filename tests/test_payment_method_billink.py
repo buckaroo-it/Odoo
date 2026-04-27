@@ -368,21 +368,15 @@ class TestBillinkAmountLimitEnforcement(BuckarooOfficialCommon):
 
 
 @tagged('post_install', '-at_install')
-class TestBillinkCountryRestriction(BuckarooOfficialCommon):
+class TestBillinkCurrencyRestriction(BuckarooOfficialCommon):
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.billink = cls.env.ref('payment_buckaroo_official.payment_method_billink')
         cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
-        cls.partner_de = cls.env['res.partner'].create({
-            'name': 'DE', 'country_id': cls.env.ref('base.de').id,
-        })
         cls.partner_nl = cls.env['res.partner'].create({
             'name': 'NL', 'country_id': cls.env.ref('base.nl').id,
-        })
-        cls.partner_be = cls.env['res.partner'].create({
-            'name': 'BE', 'country_id': cls.env.ref('base.be').id,
         })
 
     def _visible(self, partner, currency=None):
@@ -394,14 +388,8 @@ class TestBillinkCountryRestriction(BuckarooOfficialCommon):
         )
         return self.billink in methods
 
-    def test_nl_visible(self):
+    def test_eur_visible(self):
         self.assertTrue(self._visible(self.partner_nl))
-
-    def test_be_visible(self):
-        self.assertTrue(self._visible(self.partner_be))
-
-    def test_other_country_hidden(self):
-        self.assertFalse(self._visible(self.partner_de))
 
     def test_non_eur_currency_hidden(self):
         self.assertFalse(self._visible(self.partner_nl, currency=self.env.ref('base.USD')))

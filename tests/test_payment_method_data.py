@@ -1,5 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon
@@ -21,27 +22,29 @@ _MULTI_CURRENCY = {
 
 
 # (code, expected_currencies, expected_countries) — empty set = no restriction.
+# Country lists are intentionally empty for all methods: Buckaroo gates country
+# eligibility per method on its side, so Odoo only enforces currency.
 METHOD_DATA = [
     ('ideal',       {'EUR'},                              set()),
-    ('bancontact',  {'EUR'},                              {'BE'}),
+    ('bancontact',  {'EUR'},                              set()),
     ('wero',        {'EUR'},                              set()),
-    ('eps',         {'EUR'},                              {'AT'}),
-    ('belfius',     {'EUR'},                              {'BE'}),
-    ('kbc',         {'EUR'},                              {'BE'}),
+    ('eps',         {'EUR'},                              set()),
+    ('belfius',     {'EUR'},                              set()),
+    ('kbc',         {'EUR'},                              set()),
     ('alipay',      {'EUR'},                              set()),
     ('wechatpay',   {'EUR'},                              set()),
-    ('payconiq',    {'EUR'},                              {'BE'}),
-    ('swish',       {'SEK'},                              {'SE'}),
-    ('bizum',       {'EUR'},                              {'ES'}),
-    ('mbway',       {'EUR'},                              {'PT'}),
-    ('multibanco',  {'EUR'},                              {'PT'}),
+    ('payconiq',    {'EUR'},                              set()),
+    ('swish',       {'SEK'},                              set()),
+    ('bizum',       {'EUR'},                              set()),
+    ('mbway',       {'EUR'},                              set()),
+    ('multibanco',  {'EUR'},                              set()),
     ('knaken',      {'EUR'},                              set()),
     ('paypal',      _MULTI_CURRENCY,                      set()),
     ('trustly',     {'EUR', 'SEK', 'NOK', 'DKK', 'GBP'},  set()),
-    ('przelewy24',  {'EUR', 'PLN'},                       {'PL'}),
-    ('blik',        {'PLN'},                              {'PL'}),
-    ('twint',       {'CHF'},                              {'CH'}),
-    ('billink',     {'EUR'},                              {'NL', 'BE'}),
+    ('przelewy24',  {'EUR', 'PLN'},                       set()),
+    ('blik',        {'PLN'},                              set()),
+    ('twint',       {'CHF'},                              set()),
+    ('billink',     {'EUR'},                              set()),
     ('creditcard',  _MULTI_CURRENCY,                      set()),
 ]
 
@@ -82,3 +85,40 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
                 self.assertEqual(
                     set(method.supported_currency_ids.mapped('name')), currencies,
                 )
+
+    def test_methods_available_for_nl_partner(self):
+        for code, _currencies, _countries in METHOD_DATA:
+            pm = self.env.ref(f'payment_buckaroo_official.payment_method_{code}')
+            self.buckaroo.payment_method_ids = [Command.link(pm.id)]
+
+        nl_partner = self.env['res.partner'].create({
+            'name': 'Test NL Partner',
+            'country_id': self.env.ref('base.nl').id,
+        })
+
+        for code, currencies, _countries in METHOD_DATA:
+            with self.subTest(code=code):
+                pm = self.env.ref(f'payment_buckaroo_official.payment_method_{code}')
+                currency = self.env.ref(f'base.{next(iter(currencies))}')
+                methods = self.env['payment.method']._get_compatible_payment_methods(
+                    self.buckaroo.ids,
+                    nl_partner.id,
+                    currency_id=currency.id,
+                )
+                self.assertIn(pm, methods)
+
+    def test_mbway_excluded_for_non_eur_currency(self):
+        mbway = self.env.ref('payment_buckaroo_official.payment_method_mbway')
+        self.buckaroo.payment_method_ids = [Command.link(mbway.id)]
+
+        nl_partner = self.env['res.partner'].create({
+            'name': 'Test NL Partner',
+            'country_id': self.env.ref('base.nl').id,
+        })
+
+        methods = self.env['payment.method']._get_compatible_payment_methods(
+            self.buckaroo.ids,
+            nl_partner.id,
+            currency_id=self.env.ref('base.USD').id,
+        )
+        self.assertNotIn(mbway, methods)
