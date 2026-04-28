@@ -29,4 +29,18 @@
         </field>
     </record>
 
+    <record id="view_partner_form_buckaroo_official" model="ir.ui.view">
+        <field name="name">Buckaroo Official Partner Form</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='sales_purchases']" position="inside">
+                <group string="Buckaroo BNPL">
+                    <field name="buckaroo_klarna_gender"/>
+                    <field name="buckaroo_billink_birthdate"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
 </odoo>

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from buckaroo.services.payment_service import PaymentService
 
-from odoo import models
+from odoo import fields, models
 
 from ..helpers.articles import get_order_articles
 from ..helpers.customer import (
@@ -115,3 +115,12 @@ class PaymentMethodBillink(models.Model):
         builder.add_parameter('shippingCustomer', [shipping_customer])
 
         return builder.pay()
+
+
+class ResPartner(models.Model):
+    _inherit = 'res.partner'
+
+    buckaroo_billink_birthdate = fields.Date(
+        string="Billink Date of Birth",
+        help="Saved from the last Billink checkout to prefill on next order.",
+    )

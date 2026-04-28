@@ -230,7 +230,13 @@ class PaymentTransaction(models.Model):
         return ref
 
     def _extract_amount_data(self, payment_data):
-        """Extract amount and currency from Buckaroo callback data."""
+        """Extract amount and currency from Buckaroo callback data.
+
+        Returns ``None`` to signal the framework to skip amount/currency
+        validation. Klarna's "Reserve failed" pushes carry no amount or
+        currency; returning ``{}`` would crash the framework's
+        ``amount_data['amount']`` lookup.
+        """
         if self.provider_code != const.PROVIDER_CODE:
             return super()._extract_amount_data(payment_data)
 
@@ -238,7 +244,7 @@ class PaymentTransaction(models.Model):
         amount = payment_data.amount or (abs(credit_amount) if credit_amount else None)
         currency = payment_data.currency
         if amount is None or not currency:
-            return {}
+            return None
         return {
             'amount': amount,
             'currency_code': currency,

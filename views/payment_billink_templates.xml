@@ -9,6 +9,8 @@
               inherit_id="payment.method_form">
         <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
             <t t-if="pm_sudo.code == 'billink'">
+                <t t-set="billink_saved_birthdate"
+                   t-value="(not request.env.user._is_public()) and request.env.user.partner_id.buckaroo_billink_birthdate and request.env.user.partner_id.buckaroo_billink_birthdate.isoformat() or ''"/>
                 <div class="mt-2">
                     <div class="mb-2">
                         <label class="form-label mb-1"
@@ -18,7 +20,8 @@
                         <input type="date"
                                class="form-control o_buckaroo_billink_birthdate"
                                id="o_buckaroo_billink_birthdate"
-                               required="required"/>
+                               required="required"
+                               t-att-value="billink_saved_birthdate"/>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input o_buckaroo_billink_tc"

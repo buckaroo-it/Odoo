@@ -339,6 +339,11 @@ msgid "KBC"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_klarna
+msgid "Klarna"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_mbway
 msgid "MB WAY"
 msgstr ""
@@ -351,6 +356,32 @@ msgstr ""
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_brand_mastercard
 msgid "Mastercard"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
+msgid "He/Him"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
+msgid "Please select your gender"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: code:addons/payment_buckaroo_official/controllers/klarna.py:0
+#: code:addons/payment_buckaroo_official/models/payment_method_klarna.py:0
+msgid "Please select your gender to proceed with Klarna."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
+msgid "Salutation"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
+msgid "She/Her"
 msgstr ""
 
 #. module: payment_buckaroo_official

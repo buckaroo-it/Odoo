@@ -89,12 +89,14 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         self.assertEqual(result['amount'], 50.00)
         self.assertEqual(result['currency_code'], 'EUR')
 
-    def test_extract_amount_data_missing_returns_empty(self):
-        """Empty dict returned when amount data is missing."""
+    def test_extract_amount_data_missing_returns_none(self):
+        """``None`` returned when amount data is missing so Odoo's payment
+        framework skips the amount/currency check (callbacks for failed
+        Klarna reservations carry no amount)."""
         tx = self._create_transaction()
         empty = parsed_from_form({})
         result = tx._extract_amount_data(empty)
-        self.assertEqual(result, {})
+        self.assertIsNone(result)
 
     def test_extract_amount_data_uses_credit_when_no_debit(self):
         """Credit amount is used when debit amount is absent (refund push)."""
@@ -108,8 +110,8 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         result = tx._extract_amount_data(parsed)
         self.assertEqual(result['amount'], 25.0)
 
-    def test_extract_amount_data_both_missing_returns_empty(self):
-        """Empty dict returned when both debit and credit amount are missing."""
+    def test_extract_amount_data_both_missing_returns_none(self):
+        """``None`` when both debit and credit amount are missing."""
         tx = self._create_transaction()
         parsed = parsed_from_form({
             'brq_currency': 'EUR',
@@ -117,7 +119,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
             'brq_invoicenumber': 'TX-BUCK-001',
         })
         result = tx._extract_amount_data(parsed)
-        self.assertEqual(result, {})
+        self.assertIsNone(result)
 
     # -- Rendering values tests (URL splitting) --
 

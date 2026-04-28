@@ -35,6 +35,10 @@ class BillinkPaymentPortal(PaymentPortal):
                         _("You must be at least 18 years old to use Billink.")
                     )
                 request.session['buckaroo_billink_birthdate'] = birthdate
+                # Persist on the user's partner so the next checkout can prefill.
+                user = request.env.user
+                if not user._is_public():
+                    user.partner_id.sudo().buckaroo_billink_birthdate = dob
         kwargs.pop('billink_tc_accepted', None)
         kwargs.pop('billink_birthdate', None)
         return super().shop_payment_transaction(order_id, access_token, **kwargs)

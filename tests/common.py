@@ -51,18 +51,20 @@ def make_mock_response(redirect_url='https://checkout.buckaroo.nl/pay/123'):
 def make_mock_sdk_builder():
     """Return (mock_builder, mock_response) for patching PaymentService.
 
-    The builder has stubs for pay, refund, authorize, payWithToken,
-    authorizeWithToken, capture, and cancelAuthorize.
+    The builder has stubs for pay, refund, authorize, reserve, payWithToken,
+    authorizeWithToken, capture, cancelAuthorize, and cancelReservation.
     """
     mock_response = make_mock_response()
     mock_builder = MagicMock()
     mock_builder.pay.return_value = mock_response
     mock_builder.refund.return_value = mock_response
     mock_builder.authorize.return_value = mock_response
+    mock_builder.reserve.return_value = mock_response
     mock_builder.payWithToken.return_value = mock_response
     mock_builder.authorizeWithToken.return_value = mock_response
     mock_builder.capture.return_value = mock_response
     mock_builder.cancelAuthorize.return_value = mock_response
+    mock_builder.cancelReservation.return_value = mock_response
     return mock_builder, mock_response
 
 

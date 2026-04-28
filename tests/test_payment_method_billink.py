@@ -446,6 +446,18 @@ class TestBillinkShopPaymentControllerValidations(BuckarooOfficialCommon):
             self._invoke(billink_tc_accepted=True, billink_birthdate='2020-01-01')
         self.assertIn('18', str(ctx.exception))
 
+    def test_valid_birthdate_persists_on_logged_in_user_partner(self):
+        """Logged-in user → write to partner so next checkout can prefill."""
+        from datetime import date
+        partner = self.env.user.partner_id
+        partner.buckaroo_billink_birthdate = False
+        with patch(
+            'odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction',
+            return_value='SUPER_OK',
+        ):
+            self._invoke(billink_tc_accepted=True, billink_birthdate='1990-05-15')
+        self.assertEqual(partner.buckaroo_billink_birthdate, date(1990, 5, 15))
+
 
 @tagged('post_install', '-at_install')
 class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Klarna: gender selection inside the payment method inline form.
+         Klarna requires a gender per customer (1=He/Him, 2=She/Her).
+         Prefilled from the logged-in user's partner record on subsequent orders. -->
+    <template id="klarna_inline_form"
+              name="Buckaroo Klarna Inline Form"
+              inherit_id="payment.method_form">
+        <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
+            <t t-if="pm_sudo.code == 'klarna'">
+                <t t-set="klarna_saved_gender"
+                   t-value="(not request.env.user._is_public()) and request.env.user.partner_id.buckaroo_klarna_gender or ''"/>
+                <div class="mt-2">
+                    <label class="form-label mb-1"
+                           for="o_buckaroo_klarna_gender">
+                        Salutation
+                    </label>
+                    <select class="form-select o_buckaroo_klarna_gender"
+                            id="o_buckaroo_klarna_gender"
+                            name="o_buckaroo_klarna_gender"
+                            required="required">
+                        <option value="">Please select your gender</option>
+                        <option value="1"
+                                t-att-selected="klarna_saved_gender == '1' or None">He/Him</option>
+                        <option value="2"
+                                t-att-selected="klarna_saved_gender == '2' or None">She/Her</option>
+                    </select>
+                </div>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

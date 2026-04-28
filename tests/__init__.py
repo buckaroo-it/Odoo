@@ -10,6 +10,7 @@ from . import test_helpers
 from . import test_hosted_fields
 from . import test_payment_method_sdk
 from . import test_payment_method_billink
+from . import test_payment_method_klarna
 from . import test_payment_method_creditcard
 from . import test_payment_method_sdk_contract
 from . import test_transaction_model_dispatch
