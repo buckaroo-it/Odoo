@@ -338,7 +338,7 @@ class TestBillinkAmountLimitEnforcement(BuckarooOfficialCommon):
         super().setUpClass()
         cls.billink = cls.env.ref('payment_buckaroo_official.payment_method_billink')
         cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
-        cls.billink.buckaroo_official_max_amount = 750.0
+        cls.billink.buckaroo_official_max_amount = '750.00'
         cls.partner_nl = cls.env['res.partner'].create({
             'name': 'NL Partner',
             'country_id': cls.env.ref('base.nl').id,
@@ -363,7 +363,7 @@ class TestBillinkAmountLimitEnforcement(BuckarooOfficialCommon):
         self.assertFalse(self._billink_visible(800.0))
 
     def test_no_limit_always_visible(self):
-        self.billink.buckaroo_official_max_amount = 0
+        self.billink.buckaroo_official_max_amount = ''
         self.assertTrue(self._billink_visible(50000.0))
 
 

@@ -59,7 +59,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
 
     def test_processing_blocks_method_outside_configured_amount_limits(self):
         """Buckaroo should reject processing when the selected method is out of range."""
-        self.ideal.write({'buckaroo_official_max_amount': 25.00})
+        self.ideal.write({'buckaroo_official_max_amount': '25.00'})
         tx = self._create_transaction(payment_method_id=self.ideal.id, amount=50.00)
 
         with self.assertRaises(ValidationError):

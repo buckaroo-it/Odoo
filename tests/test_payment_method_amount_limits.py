@@ -39,8 +39,8 @@ class TestBuckarooOfficialPaymentMethodAmountLimits(BuckarooOfficialCommon):
             with self.subTest(code=code):
                 pm = self.env.ref(f'payment_buckaroo_official.payment_method_{code}')
                 pm.write({
-                    'buckaroo_official_min_amount': 100.00,
-                    'buckaroo_official_max_amount': 0.00,
+                    'buckaroo_official_min_amount': '100.00',
+                    'buckaroo_official_max_amount': '',
                 })
                 methods = self.env['payment.method']._get_compatible_payment_methods(
                     self.buckaroo.ids,
@@ -55,8 +55,8 @@ class TestBuckarooOfficialPaymentMethodAmountLimits(BuckarooOfficialCommon):
             with self.subTest(code=code):
                 pm = self.env.ref(f'payment_buckaroo_official.payment_method_{code}')
                 pm.write({
-                    'buckaroo_official_min_amount': 0.00,
-                    'buckaroo_official_max_amount': 25.00,
+                    'buckaroo_official_min_amount': '',
+                    'buckaroo_official_max_amount': '25.00',
                 })
                 methods = self.env['payment.method']._get_compatible_payment_methods(
                     self.buckaroo.ids,
@@ -71,8 +71,8 @@ class TestBuckarooOfficialPaymentMethodAmountLimits(BuckarooOfficialCommon):
             with self.subTest(code=code):
                 pm = self.env.ref(f'payment_buckaroo_official.payment_method_{code}')
                 pm.write({
-                    'buckaroo_official_min_amount': 10.00,
-                    'buckaroo_official_max_amount': 100.00,
+                    'buckaroo_official_min_amount': '10.00',
+                    'buckaroo_official_max_amount': '100.00',
                 })
                 methods = self.env['payment.method']._get_compatible_payment_methods(
                     self.buckaroo.ids,
@@ -85,19 +85,15 @@ class TestBuckarooOfficialPaymentMethodAmountLimits(BuckarooOfficialCommon):
 
     def test_negative_min_amount_raises(self):
         with self.assertRaises(ValidationError):
-            self.ideal.write({
-                'buckaroo_official_min_amount': -1,
-            })
+            self.ideal.write({'buckaroo_official_min_amount': '-1'})
 
     def test_negative_max_amount_raises(self):
         with self.assertRaises(ValidationError):
-            self.ideal.write({
-                'buckaroo_official_max_amount': -1,
-            })
+            self.ideal.write({'buckaroo_official_max_amount': '-1'})
 
     def test_max_below_min_raises(self):
         with self.assertRaises(ValidationError):
             self.ideal.write({
-                'buckaroo_official_min_amount': 100,
-                'buckaroo_official_max_amount': 50,
+                'buckaroo_official_min_amount': '100',
+                'buckaroo_official_max_amount': '50',
             })

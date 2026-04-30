@@ -25,20 +25,20 @@ class PaymentMethod(models.Model):
         help="PascalCase service name used by the Buckaroo SDK (e.g. 'Visa', 'Mastercard', 'AMEX').",
     )
 
-    buckaroo_official_min_amount = fields.Float(
+    buckaroo_official_min_amount = fields.Char(
         string="Buckaroo Min Amount (EUR)",
-        digits=(16, 2),
+        default='',
         help=(
             "Minimum order total in EUR for which this payment method is available with "
-            "Buckaroo Official. Leave at 0.00 to disable the minimum limit."
+            "Buckaroo Official. Leave empty to disable the minimum limit."
         ),
     )
-    buckaroo_official_max_amount = fields.Float(
+    buckaroo_official_max_amount = fields.Char(
         string="Buckaroo Max Amount (EUR)",
-        digits=(16, 2),
+        default='',
         help=(
             "Maximum order total in EUR for which this payment method is available with "
-            "Buckaroo Official. Leave at 0.00 to disable the maximum limit."
+            "Buckaroo Official. Leave empty to disable the maximum limit."
         ),
     )
 
@@ -67,20 +67,26 @@ class PaymentMethod(models.Model):
 
     @api.constrains('buckaroo_official_min_amount', 'buckaroo_official_max_amount')
     def _check_buckaroo_official_amount_limits(self):
-        for payment_method in self:
-            if payment_method.buckaroo_official_min_amount < 0:
-                raise ValidationError(_("The Buckaroo minimum amount cannot be negative."))
-            if payment_method.buckaroo_official_max_amount < 0:
-                raise ValidationError(_("The Buckaroo maximum amount cannot be negative."))
-            if (
-                payment_method.buckaroo_official_min_amount > 0
-                and payment_method.buckaroo_official_max_amount > 0
-                and payment_method.buckaroo_official_max_amount
-                < payment_method.buckaroo_official_min_amount
-            ):
+        for pm in self:
+            min_v = pm._buckaroo_parse_amount_limit(pm.buckaroo_official_min_amount)
+            max_v = pm._buckaroo_parse_amount_limit(pm.buckaroo_official_max_amount)
+            if min_v is not None and max_v is not None and max_v < min_v:
                 raise ValidationError(
                     _("The Buckaroo maximum amount must be greater than the minimum amount.")
                 )
+
+    @staticmethod
+    def _buckaroo_parse_amount_limit(value):
+        # Empty → no limit (None). Non-numeric or negative → ValidationError.
+        raw = (value or '').strip()
+        if not raw:
+            return None
+        if not re.match(r'^\d+(?:\.\d+)?$', raw):
+            raise ValidationError(_(
+                "The Buckaroo amount limit must be a positive number "
+                "(e.g. '100.00'). Leave empty for no limit."
+            ))
+        return float(raw)
 
     @api.constrains('buckaroo_official_fee_amount')
     def _check_buckaroo_official_fee_amount(self):
@@ -99,9 +105,11 @@ class PaymentMethod(models.Model):
         self.ensure_one()
         if not self._is_linked_to_buckaroo(provider_id_set):
             return True
-        if self.buckaroo_official_min_amount > 0 and amount < self.buckaroo_official_min_amount:
+        min_v = self._buckaroo_parse_amount_limit(self.buckaroo_official_min_amount)
+        max_v = self._buckaroo_parse_amount_limit(self.buckaroo_official_max_amount)
+        if min_v is not None and amount < min_v:
             return False
-        if self.buckaroo_official_max_amount > 0 and amount > self.buckaroo_official_max_amount:
+        if max_v is not None and amount > max_v:
             return False
         return True
 

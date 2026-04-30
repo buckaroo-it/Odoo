@@ -319,7 +319,7 @@ class TestKlarnaAmountLimitEnforcement(BuckarooOfficialCommon):
         super().setUpClass()
         cls.klarna = cls.env.ref('payment_buckaroo_official.payment_method_klarna')
         cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
-        cls.klarna.buckaroo_official_max_amount = 750.0
+        cls.klarna.buckaroo_official_max_amount = '750.00'
         cls.partner_nl = cls.env['res.partner'].create({
             'name': 'NL Partner',
             'country_id': cls.env.ref('base.nl').id,
@@ -344,7 +344,7 @@ class TestKlarnaAmountLimitEnforcement(BuckarooOfficialCommon):
         self.assertFalse(self._klarna_visible(800.0))
 
     def test_no_limit_always_visible(self):
-        self.klarna.buckaroo_official_max_amount = 0
+        self.klarna.buckaroo_official_max_amount = ''
         self.assertTrue(self._klarna_visible(50000.0))
 
 
