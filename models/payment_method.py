@@ -7,6 +7,7 @@ from buckaroo.services.payment_service import PaymentService
 from odoo import _, api, fields, models
 from odoo.addons.payment import utils as payment_utils
 from odoo.exceptions import ValidationError
+from odoo.tools.misc import format_amount
 
 from ..utils import const
 
@@ -41,12 +42,18 @@ class PaymentMethod(models.Model):
         ),
     )
 
-    def _is_linked_to_buckaroo(self, provider_ids=None):
-        """Return whether this method is linked to a Buckaroo provider.
+    buckaroo_official_fee_amount = fields.Char(
+        string="Payment fee",
+        default='',
+        help=(
+            "Per-method payment fee added to the order. Amount is in the order "
+            "currency; no FX conversion is performed. Use a fixed amount like "
+            "'1.50' or a percentage like '1%'. Leave empty or set to '0' for "
+            "no fee."
+        ),
+    )
 
-        If *provider_ids* (a set of ints) is given, only those providers are
-        considered.
-        """
+    def _is_linked_to_buckaroo(self, provider_ids=None):
         self.ensure_one()
         providers = self.provider_ids
         if provider_ids is not None:
@@ -75,14 +82,20 @@ class PaymentMethod(models.Model):
                     _("The Buckaroo maximum amount must be greater than the minimum amount.")
                 )
 
-    def _buckaroo_official_is_amount_compatible(self, amount, provider_id_set):
-        """Check whether ``amount`` falls within the configured Buckaroo limits.
+    @api.constrains('buckaroo_official_fee_amount')
+    def _check_buckaroo_official_fee_amount(self):
+        for payment_method in self:
+            value = (payment_method.buckaroo_official_fee_amount or '').strip()
+            if value == '':
+                continue
+            if not re.match(r'^\d+(?:\.\d+)?%?$', value):
+                raise ValidationError(_(
+                    "The Buckaroo surcharge must be a positive number "
+                    "(e.g. '1.50') or a percentage (e.g. '1%'). "
+                    "Leave empty or use '0' for no surcharge."
+                ))
 
-        :param float amount: The order total to check.
-        :param set provider_id_set: Provider IDs to consider (as a set of ints).
-        :returns: ``True`` when compatible or when no Buckaroo provider is
-                  among *provider_id_set*.
-        """
+    def _buckaroo_official_is_amount_compatible(self, amount, provider_id_set):
         self.ensure_one()
         if not self._is_linked_to_buckaroo(provider_id_set):
             return True
@@ -122,6 +135,38 @@ class PaymentMethod(models.Model):
 
         return payment_methods
 
+
+    def _buckaroo_parse_fee_amount(self):
+        self.ensure_one()
+        raw = (self.buckaroo_official_fee_amount or '').strip()
+        if not raw:
+            return False, 0.0
+        is_percent = raw.endswith('%')
+        value = float(raw[:-1] or '0') if is_percent else float(raw)
+        return is_percent, value
+
+    def _buckaroo_get_label_suffix(self, currency):
+        self.ensure_one()
+        is_percent, value = self._buckaroo_parse_fee_amount()
+        if value == 0.0:
+            return ''
+        if is_percent:
+            return f' (+ {self.buckaroo_official_fee_amount.strip()[:-1]}%)'
+        if not currency:
+            return ''
+        return f' (+ {format_amount(self.env, value, currency)})'
+
+    def _buckaroo_compute_surcharge_amount(self, subtotal, currency):
+        """Compute the surcharge for *subtotal* in *currency*, rounded."""
+        self.ensure_one()
+        is_percent, value = self._buckaroo_parse_fee_amount()
+        amount = subtotal * value / 100.0 if is_percent else value
+        return currency.round(amount)
+
+    def _buckaroo_get_surcharge_line_name(self):
+        """Return the order-line label for this method's surcharge."""
+        self.ensure_one()
+        return _('%s surcharge', self.name)
 
     def _buckaroo_get_sdk_service_name(self):
         """Return the SDK service name for this payment method.

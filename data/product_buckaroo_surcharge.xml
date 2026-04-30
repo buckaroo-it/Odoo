@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <record id="product_buckaroo_surcharge" model="product.product">
+        <field name="name">Payment Surcharge</field>
+        <field name="default_code">BUCKAROO_SURCHARGE</field>
+        <field name="type">service</field>
+        <field name="sale_ok" eval="False"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="active" eval="True"/>
+        <field name="list_price">0.0</field>
+        <field name="standard_price">0.0</field>
+    </record>
+
+</odoo>

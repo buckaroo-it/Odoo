@@ -2,6 +2,7 @@
 
 from . import common
 from . import test_payment_method_amount_limits
+from . import test_buckaroo_surcharge
 from . import test_payment_method_data
 from . import test_payment_provider
 from . import test_processing_flows

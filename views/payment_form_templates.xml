@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="payment_method_form_buckaroo_surcharge"
+              inherit_id="payment.method_form">
+        <xpath expr="//label[@t-out='pm_sudo.name']" position="attributes">
+            <attribute name="t-out"/>
+        </xpath>
+        <xpath expr="//label[@t-attf-for='o_payment_method_{{pm_sudo.id}}']" position="inside">
+            <t t-out="pm_sudo.name"/>
+            <t t-if="pm_sudo.buckaroo_official_is_linked"
+               t-out="pm_sudo._buckaroo_get_label_suffix(currency)"/>
+        </xpath>
+    </template>
+
+    <template id="cart_total_buckaroo_surcharge"
+              inherit_id="website_sale.total">
+        <xpath expr="//tr[@name='o_order_total_untaxed']" position="before">
+            <tr name="o_order_buckaroo_surcharge"
+                t-attf-class="#{'d-none' if not website_sale_order.amount_buckaroo_surcharge else ''}">
+                <td class="ps-0 pt-0 pb-2 border-0 text-muted" colspan="2">
+                    Payment fee
+                </td>
+                <td class="text-end pe-0 pt-0 pb-2 border-0">
+                    <span t-out="website_sale_order.amount_buckaroo_surcharge"
+                          class="monetary_field"
+                          style="white-space: nowrap;"
+                          t-options="{'widget': 'monetary', 'display_currency': website_sale_order.currency_id}"/>
+                </td>
+            </tr>
+        </xpath>
+    </template>
+
+</odoo>

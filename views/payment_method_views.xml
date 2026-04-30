@@ -12,6 +12,7 @@
                        invisible="not buckaroo_official_is_linked">
                     <field name="buckaroo_official_min_amount"/>
                     <field name="buckaroo_official_max_amount"/>
+                    <field name="buckaroo_official_fee_amount"/>
                 </group>
                 <group string="Credit Card Settings"
                        invisible="not buckaroo_official_is_linked or code != 'creditcard'">
