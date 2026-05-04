@@ -338,6 +338,23 @@
                eval="[Command.set([ref('base.EUR'), ref('base.CHF'), ref('base.DKK'), ref('base.NOK'), ref('base.SEK'), ref('base.PLN'), ref('base.GBP')])]"/>
     </record>
 
+    <record id="payment_method_riverty" model="payment.method">
+        <field name="name">Riverty</field>
+        <field name="code">riverty</field>
+        <field name="sequence">1210</field>
+        <field name="active">True</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/riverty.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_manual_capture">full_only</field>
+        <field name="support_refund">full_only</field>
+        <field name="supported_country_ids"
+               eval="[Command.set([ref('base.nl'), ref('base.be'), ref('base.de'), ref('base.at'), ref('base.fi')])]"/>
+        <field name="supported_currency_ids"
+               eval="[Command.set([ref('base.EUR')])]"/>
+    </record>
+
     <record id="payment_method_creditcard" model="payment.method">
         <field name="name">Credit Card</field>
         <field name="code">creditcard</field>

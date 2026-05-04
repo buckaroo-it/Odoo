@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Riverty: birthdate + salutation inputs inside the payment method
+         inline form. Rendered only when the payment method is Riverty.
+         Odoo's built-in JS shows/hides o_payment_inline_form when the
+         method is selected. Salutation is required for NL/BE shoppers
+         per Riverty's API docs. -->
+    <template id="riverty_inline_form"
+              name="Buckaroo Riverty Inline Form"
+              inherit_id="payment.method_form">
+        <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
+            <t t-if="pm_sudo.code == 'riverty'">
+                <t t-set="riverty_partner"
+                   t-value="(not request.env.user._is_public()) and request.env.user.partner_id"/>
+                <t t-set="riverty_saved_birthdate"
+                   t-value="riverty_partner and riverty_partner.buckaroo_riverty_birthdate and riverty_partner.buckaroo_riverty_birthdate.isoformat() or ''"/>
+                <t t-set="riverty_saved_salutation"
+                   t-value="(riverty_partner and riverty_partner.buckaroo_riverty_salutation) or ''"/>
+                <t t-set="riverty_country_code"
+                   t-value="(riverty_partner and riverty_partner.country_id and riverty_partner.country_id.code) or ''"/>
+                <t t-set="riverty_salutation_required"
+                   t-value="riverty_country_code in ('NL', 'BE') or not riverty_country_code"/>
+                <div class="mt-2">
+                    <div class="mb-2">
+                        <label class="form-label mb-1"
+                               for="o_buckaroo_riverty_salutation">
+                            Salutation
+                        </label>
+                        <select class="form-select o_buckaroo_riverty_salutation"
+                                id="o_buckaroo_riverty_salutation"
+                                t-att-required="'required' if riverty_salutation_required else None">
+                            <option value="" t-att-selected="not riverty_saved_salutation">--</option>
+                            <option value="Mr" t-att-selected="riverty_saved_salutation == 'Mr'">Mr</option>
+                            <option value="Mrs" t-att-selected="riverty_saved_salutation == 'Mrs'">Mrs</option>
+                            <option value="Miss" t-att-selected="riverty_saved_salutation == 'Miss'">Miss</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label mb-1"
+                               for="o_buckaroo_riverty_birthdate">
+                            Date of birth
+                        </label>
+                        <input type="date"
+                               class="form-control o_buckaroo_riverty_birthdate"
+                               id="o_buckaroo_riverty_birthdate"
+                               required="required"
+                               t-att-value="riverty_saved_birthdate"/>
+                    </div>
+                </div>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

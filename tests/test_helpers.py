@@ -15,6 +15,7 @@ from odoo.addons.payment_buckaroo_official.helpers.customer import (
     get_shipping_partner,
     is_b2b,
     parse_street,
+    sanitize_phone,
 )
 
 
@@ -78,6 +79,7 @@ def make_partner(
     country_code='NL',
     email='jan@example.com',
     phone='+31612345678',
+    mobile=None,
     is_company=False,
     company_name=None,
     commercial_company_name=None,
@@ -95,6 +97,7 @@ def make_partner(
     partner.country_id = country
     partner.email = email
     partner.phone = phone
+    partner.mobile = mobile
     partner.is_company = is_company
     partner.company_name = company_name
     partner.commercial_company_name = commercial_company_name
@@ -283,6 +286,19 @@ class TestGetCustomerData(BaseCase):
     def test_phone_empty(self):
         self.assertEqual(get_customer_data(make_partner(phone=None))['phone'], '')
 
+    def test_phone_prefers_mobile_when_present(self):
+        # Riverty NL/BE accept either MobilePhone or Phone; prefer the
+        # dedicated mobile field so the customer's actual mobile flows
+        # through and is reachable for SMS-based fraud verification.
+        data = get_customer_data(make_partner(
+            phone='+31201234567', mobile='+31612345678',
+        ))
+        self.assertEqual(data['phone'], '+31612345678')
+
+    def test_phone_falls_back_to_landline_when_mobile_empty(self):
+        data = get_customer_data(make_partner(phone='+31201234567', mobile=None))
+        self.assertEqual(data['phone'], '+31201234567')
+
     def test_missing_country(self):
         partner = make_partner()
         partner.country_id = None
@@ -306,6 +322,24 @@ class TestGetCustomerData(BaseCase):
     def test_street2_fallback(self):
         data = get_customer_data(make_partner(street='Herengracht', street2='42'))
         self.assertEqual(data['house_number'], '42')
+
+
+class TestSanitizePhone(BaseCase):
+
+    def test_strips_plus_and_whitespace(self):
+        self.assertEqual(sanitize_phone('+31 20 123 4567'), '31201234567')
+
+    def test_strips_plus_only(self):
+        self.assertEqual(sanitize_phone('+31612345678'), '31612345678')
+
+    def test_empty_string(self):
+        self.assertEqual(sanitize_phone(''), '')
+
+    def test_none(self):
+        self.assertEqual(sanitize_phone(None), '')
+
+    def test_strips_dashes_and_parens(self):
+        self.assertEqual(sanitize_phone('(020) 123-4567'), '0201234567')
 
 
 class TestGetShippingPartner(BaseCase):

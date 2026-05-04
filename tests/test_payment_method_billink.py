@@ -16,6 +16,11 @@ from odoo.tests import BaseCase, tagged
 
 from .common import (
     BuckarooOfficialCommon,
+    CALLBACK_CANCEL_CODES,
+    CALLBACK_DONE_CODES,
+    CALLBACK_ERROR_CODES,
+    CALLBACK_PENDING_CODES,
+    REFUND_STATUS_CASES,
     make_mock_sdk_builder,
     make_mock_sdk_response,
     parsed_from_form,
@@ -124,11 +129,6 @@ class TestBillinkPaymentCreation(BuckarooOfficialCommon):
 @tagged('post_install', '-at_install')
 class TestBillinkWebhookCallbacks(BuckarooOfficialCommon):
 
-    CALLBACK_DONE_CODES = [190]
-    CALLBACK_PENDING_CODES = [790, 791, 792, 793]
-    CALLBACK_CANCEL_CODES = [890, 891]
-    CALLBACK_ERROR_CODES = [490, 690]
-
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -182,7 +182,7 @@ class TestBillinkWebhookCallbacks(BuckarooOfficialCommon):
                     self.assertEqual(tx.state, expected_state)
 
     def test_done_status_maps_to_done(self):
-        self._assert_status_maps_to_state(self.CALLBACK_DONE_CODES, 'done')
+        self._assert_status_maps_to_state(CALLBACK_DONE_CODES, 'done')
         # Spot-check provider_reference storage on the canonical success code.
         tx = self._create_tx('BILLINK-WH-REF-190')
         parsed = self._form_callback('BILLINK-WH-REF-190', 190)
@@ -190,13 +190,13 @@ class TestBillinkWebhookCallbacks(BuckarooOfficialCommon):
         self.assertEqual(tx.provider_reference, 'BILLINK_TXN_001')
 
     def test_pending_status_maps_to_pending(self):
-        self._assert_status_maps_to_state(self.CALLBACK_PENDING_CODES, 'pending')
+        self._assert_status_maps_to_state(CALLBACK_PENDING_CODES, 'pending')
 
     def test_cancel_status_maps_to_cancel(self):
-        self._assert_status_maps_to_state(self.CALLBACK_CANCEL_CODES, 'cancel')
+        self._assert_status_maps_to_state(CALLBACK_CANCEL_CODES, 'cancel')
 
     def test_error_status_maps_to_error(self):
-        self._assert_status_maps_to_state(self.CALLBACK_ERROR_CODES, 'error')
+        self._assert_status_maps_to_state(CALLBACK_ERROR_CODES, 'error')
 
     def test_e2e_creation_to_success_callback_sets_done(self):
         redirect_url = 'https://testcheckout.buckaroo.nl/pay/E2E'
@@ -226,12 +226,6 @@ class TestBillinkWebhookCallbacks(BuckarooOfficialCommon):
 @tagged('post_install', '-at_install')
 class TestBillinkRefundFlow(BuckarooOfficialCommon):
 
-    REFUND_STATUS_CASES = [
-        (190, 'done'),
-        (790, 'pending'),
-        (890, 'cancel'),
-        (490, 'error'),
-    ]
 
     @classmethod
     def setUpClass(cls):
@@ -282,7 +276,7 @@ class TestBillinkRefundFlow(BuckarooOfficialCommon):
         self.assertIn('R-', refund_tx.reference)
 
     def test_refund_status_matrix(self):
-        for status_code, expected_state in self.REFUND_STATUS_CASES:
+        for status_code, expected_state in REFUND_STATUS_CASES:
             with self.subTest(status_code=status_code, expected_state=expected_state):
                 tx = self._create_done_tx(reference='BL-REFUND-%s' % status_code)
                 with self._patch_refund(self._mock_refund_response(
@@ -520,8 +514,7 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
         with patch(
             'odoo.addons.payment_buckaroo_official.models.payment_method_billink.PaymentService'
         ) as MockPS, patch(
-            'odoo.addons.payment_buckaroo_official.models.payment_method_billink.'
-            'PaymentMethodBillink._get_birthdate_from_session',
+            'odoo.addons.payment_buckaroo_official.models.payment_method_billink.resolve_birthdate',
             return_value='',
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
@@ -533,48 +526,6 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
         self.assertIn('shippingCustomer', param_names)
         mock_builder.pay.assert_called_once()
         self.assertEqual(result, mock_response)
-
-
-@tagged('post_install', '-at_install')
-class TestBillinkBirthdateSession(BuckarooOfficialCommon):
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.billink = cls.env.ref('payment_buckaroo_official.payment_method_billink')
-        cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
-
-    def test_valid_date_converted_and_popped(self):
-        mock_session = {'buckaroo_billink_birthdate': '1990-05-15'}
-        mock_request = MagicMock()
-        mock_request.session = mock_session
-
-        with patch.dict('sys.modules', {'odoo.http': MagicMock(request=mock_request)}):
-            result = self.billink._get_birthdate_from_session()
-
-        self.assertEqual(result, '15-05-1990')
-        self.assertNotIn('buckaroo_billink_birthdate', mock_session)
-
-    def test_invalid_date_returns_empty(self):
-        mock_session = {'buckaroo_billink_birthdate': 'not-a-date'}
-        mock_request = MagicMock()
-        mock_request.session = mock_session
-
-        with patch.dict('sys.modules', {'odoo.http': MagicMock(request=mock_request)}):
-            self.assertEqual(self.billink._get_birthdate_from_session(), '')
-
-    def test_no_request_returns_empty(self):
-        with patch.dict('sys.modules', {'odoo.http': MagicMock(request=None)}):
-            self.assertEqual(self.billink._get_birthdate_from_session(), '')
-
-    def test_proxy_runtime_error_returns_empty(self):
-        # Odoo's request is a LocalProxy; accessing it outside HTTP context
-        # raises RuntimeError rather than returning None.
-        proxy_mock = MagicMock()
-        proxy_mock.session.pop.side_effect = RuntimeError("no request context")
-
-        with patch.dict('sys.modules', {'odoo.http': MagicMock(request=proxy_mock)}):
-            self.assertEqual(self.billink._get_birthdate_from_session(), '')
 
 
 class TestBillinkOrderLineFormatting(BaseCase):
@@ -694,7 +645,9 @@ class TestFormatBillinkCustomer(BaseCase):
         self.assertEqual(result['City'], 'Amsterdam')
         self.assertEqual(result['Country'], 'NL')
         self.assertEqual(result['Email'], 'jan@example.com')
-        self.assertEqual(result['MobilePhone'], '+31612345678')
+        # Phone sanitized to digits-only — Billink (like Klarna/Riverty)
+        # rejects ``+`` / whitespace.
+        self.assertEqual(result['MobilePhone'], '31612345678')
         self.assertEqual(result['CareOf'], '')
         self.assertNotIn('ChamberOfCommerce', result)
 

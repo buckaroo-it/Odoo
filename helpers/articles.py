@@ -1,11 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-"""Shared BNPL article helpers.
-
-Module-level pure functions that turn a transaction's sale-order lines
-into a list of generic article dicts (snake_case keys). Each BNPL method
-maps this list to its own API shape in its own file.
-"""
+"""Shared BNPL article helpers."""
 
 
 def get_order_articles(transaction):
@@ -13,17 +8,23 @@ def get_order_articles(transaction):
 
     Each dict has snake_case keys: identifier, description, quantity,
     unit_price_incl, unit_price_excl, vat_percentage, vat_amount, type
-    ('product' | 'shipping' | 'rounding'). A rounding entry is appended
-    when the line-item sum does not match ``transaction.amount``.
+    ('product' | 'shipping' | 'rounding'), and product (the resolved
+    recordset, or ``None`` for synthetic rounding entries). A rounding
+    entry is appended when the line-item sum doesn't match
+    ``transaction.amount``.
     """
     articles = []
     line_total = 0.0
 
     for order in transaction.sale_order_ids:
+        # Batch-prefetch relational fields once so the per-line reads
+        # below don't fan out into one SELECT per cold attribute.
+        if hasattr(order.order_line, 'mapped'):
+            order.order_line.mapped('product_id.default_code')
+            order.order_line.mapped('tax_ids.amount_type')
         for line in order.order_line:
             if line.display_type:
                 continue
-
             product = line.product_id
             identifier = product.default_code or str(product.id)
             description = line.name or product.display_name or identifier
@@ -35,13 +36,10 @@ def get_order_articles(transaction):
             price_unit_incl = round(line.price_total / qty, 2)
             price_unit_excl = round(line.price_subtotal / qty, 2)
 
-            # Derive VAT % — prefer computed tax amount, fall back to tax
-            # record, then to price difference.
+            # VAT %: computed tax amount → tax record → price difference.
             price_tax = getattr(line, 'price_tax', None)
             has_price_tax = isinstance(price_tax, (int, float))
             vat_pct = 0.0
-            # price_subtotal check also guards against division by zero
-            # in the fallback branch below.
             if line.price_subtotal and has_price_tax:
                 vat_pct = round(price_tax / line.price_subtotal * 100, 2)
             elif line.tax_ids:
@@ -74,6 +72,7 @@ def get_order_articles(transaction):
                 'vat_percentage': vat_pct,
                 'vat_amount': vat_amount,
                 'type': 'shipping' if is_delivery else 'product',
+                'product': product,
             })
 
     if articles:
@@ -88,6 +87,7 @@ def get_order_articles(transaction):
                 'vat_percentage': 0.0,
                 'vat_amount': 0.0,
                 'type': 'rounding',
+                'product': None,
             })
 
     return articles

@@ -9,9 +9,10 @@ from odoo.exceptions import ValidationError
 
 from ..helpers.articles import get_order_articles
 from ..helpers.customer import (
-    get_billing_partner,
-    get_customer_data,
-    get_shipping_partner,
+    pop_session_value,
+    resolve_bnpl_customer_data,
+    sanitize_phone,
+    split_house_number,
 )
 
 
@@ -20,11 +21,11 @@ class PaymentMethodKlarna(models.Model):
 
     @staticmethod
     def _format_klarna_articles(articles):
-        """Map generic article dicts to Klarna's API article format."""
         return [
             {
                 'articleNumber': a['identifier'],
-                'articleTitle': PaymentMethodKlarna._sanitize_text(a['description']),
+                # Klarna's articleTitle rejects multi-line descriptions.
+                'articleTitle': re.sub(r'\s+', ' ', (a['description'] or '')).strip(),
                 'articleQuantity': str(int(a['quantity'])),
                 'articlePrice': a['unit_price_incl'],
                 'articleVat': a['vat_percentage'],
@@ -32,33 +33,6 @@ class PaymentMethodKlarna(models.Model):
             for a in articles
             if a['unit_price_incl'] > 0
         ]
-
-    @staticmethod
-    def _get_gender_from_session():
-        """Read and consume the Klarna gender from the HTTP session.
-
-        Returns the gender as int (1=He/Him, 2=She/Her). Klarna won't accept
-        the request without it.
-        """
-        from odoo.http import request as http_request  # noqa: PLC0415
-        if not http_request:
-            raise ValidationError(
-                _("Please select your gender to proceed with Klarna.")
-            )
-        try:
-            gender = http_request.session.pop('buckaroo_klarna_gender', None)
-        except RuntimeError:
-            gender = None
-        if not gender:
-            raise ValidationError(
-                _("Please select your gender to proceed with Klarna.")
-            )
-        try:
-            return int(gender)
-        except (TypeError, ValueError):
-            raise ValidationError(
-                _("Please select your gender to proceed with Klarna.")
-            )
 
     def _buckaroo_get_payment_action(self):
         """Klarna MOR is always Reserve→Pay; never immediate capture."""
@@ -68,7 +42,6 @@ class PaymentMethodKlarna(models.Model):
         return super()._buckaroo_get_payment_action()
 
     def _buckaroo_create_payment(self, transaction, client):
-        """Klarna flow: add article and customer data, then .reserve()."""
         if self.code != 'klarna':
             return super()._buckaroo_create_payment(transaction, client)
 
@@ -77,26 +50,30 @@ class PaymentMethodKlarna(models.Model):
             self._buckaroo_get_sdk_service_name(), params,
         )
 
-        # Articles
         articles = get_order_articles(transaction)
         if articles:
             builder.add_parameter('article', self._format_klarna_articles(articles))
 
-        # Top-level Klarna service params
-        billing_partner = get_billing_partner(transaction)
-        shipping_partner = get_shipping_partner(transaction)
-        billing_data = get_customer_data(billing_partner)
+        billing_data, shipping_data, same_address = resolve_bnpl_customer_data(transaction)
 
-        builder.add_parameter('gender', self._get_gender_from_session())
+        # ``int(gender)`` is unguarded — both write paths (controller
+        # validation + Selection ``('1', '2')``) constrain the value.
+        gender = (
+            pop_session_value('buckaroo_klarna_gender')
+            or transaction.partner_id.buckaroo_klarna_gender
+            or ''
+        )
+        if not gender:
+            raise ValidationError(
+                _("Please select your gender to proceed with Klarna.")
+            )
+        builder.add_parameter('gender', int(gender))
         if billing_data['country_code']:
             builder.add_parameter('operatingCountry', billing_data['country_code'])
 
-        same_address = shipping_partner == billing_partner
         builder.add_parameter('shippingSameAsBilling', 'true' if same_address else 'false')
 
-        # Billing & shipping address (flat ``Billing*`` / ``Shipping*`` params)
         self._add_klarna_address(builder, 'Billing', billing_data)
-        shipping_data = billing_data if same_address else get_customer_data(shipping_partner)
         self._add_klarna_address(builder, 'Shipping', shipping_data)
 
         return builder.reserve(validate=False)
@@ -125,8 +102,7 @@ class PaymentMethodKlarna(models.Model):
 
     @staticmethod
     def _add_klarna_address(builder, prefix, data):
-        """Send a Klarna address group as flat ``{prefix}*`` service params."""
-        number, suffix = PaymentMethodKlarna._split_house_number(data['house_number'])
+        number, suffix = split_house_number(data['house_number'])
         builder.add_parameter(prefix + 'Street', data['street_name'])
         builder.add_parameter(prefix + 'HouseNumber', number)
         builder.add_parameter(prefix + 'HouseNumberSuffix', suffix)
@@ -134,52 +110,18 @@ class PaymentMethodKlarna(models.Model):
         builder.add_parameter(prefix + 'City', data['city'])
         builder.add_parameter(prefix + 'Country', data['country_code'])
         builder.add_parameter(
-            prefix + 'CellPhoneNumber', PaymentMethodKlarna._sanitize_phone(data['phone']),
+            prefix + 'CellPhoneNumber', sanitize_phone(data['phone']),
         )
         builder.add_parameter(prefix + 'Email', data['email'])
 
     @staticmethod
-    def _sanitize_phone(value):
-        """Return digits-only phone (no '+', no spaces). Klarna's
-        ``BillingCellPhoneNumber`` expects pure digits, e.g. ``310612345678``."""
-        if not value:
-            return ''
-        return re.sub(r'\D', '', str(value))
-
-    @staticmethod
-    def _sanitize_text(value):
-        """Collapse whitespace runs (incl. newlines) into single spaces."""
-        if not value:
-            return ''
-        return re.sub(r'\s+', ' ', str(value)).strip()
-
-    @staticmethod
-    def _split_house_number(raw):
-        """Split a raw house-number string into ``(number, suffix)``.
-
-        ``"1A"`` → ``("1", "A")``; ``"42"`` → ``("42", "")``.
-        Falls back to ``(raw, "")`` when the leading-digits pattern doesn't match.
-        """
-        if not raw:
-            return ('', '')
-        match = re.match(r'^\s*(\d+)\s*([A-Za-z][\w\-/]*)?\s*$', str(raw))
-        if not match:
-            return (str(raw).strip(), '')
-        return (match.group(1), match.group(2) or '')
-
-    @staticmethod
     def _buckaroo_klarna_normalize_idempotent(response, target_statuses):
-        """Treat Klarna's "order is already in target state" 490 as success.
+        """Promote Klarna's "already in target state" 490 to success.
 
-        Why: Odoo's :func:`service.model.retrying` re-fires the request handler
-        on serialization failure, which re-issues the SDK call. The first call
-        already moved Klarna's order to a target state; the retry then trips
-        ``OrderService_*_InvalidOrderStatus`` and we'd wrongly mark the tx as
-        ``error`` despite the operation having succeeded at Klarna.
-
-        ``target_statuses`` is a string or tuple of acceptable Klarna-side
-        states (e.g. ``'Captured'`` for capture, ``('Cancelled', 'Canceled')``
-        for void — Klarna's casing varies across regions).
+        Odoo's ``service.model.retrying`` re-fires the request handler
+        on serialization failure; the second SDK call hits Klarna's
+        ``InvalidOrderStatus`` 490 even though the first one succeeded.
+        Casing varies by region, so accept a tuple of Klarna-side states.
         """
         if isinstance(target_statuses, str):
             target_statuses = (target_statuses,)

@@ -1,12 +1,12 @@
 # Translation of Odoo Server.
 # This file contains the translation of the following modules:
 # 	* payment_buckaroo_official
-#
+# 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-23 08:07+0000\n"
+"POT-Creation-Date: 2026-05-04 09:33+0000\n"
 "PO-Revision-Date: 2026-04-03 09:58+0000\n"
 "Last-Translator: \n"
 "Language-Team: Dutch\n"
@@ -15,6 +15,18 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method.py:0
+msgid "%s surcharge"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
+#, fuzzy
+msgid "<option value=\"\">Please select your gender</option>"
+msgstr "Selecteer uw geslacht"
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_alipay
@@ -34,6 +46,7 @@ msgstr "Bedrag valt buiten de Buckaroo betaalmethode limieten."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_creditcard_authorize__authorize
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_riverty_authorize__authorize
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_transaction__buckaroo_official_payment_action__authorize
 msgid "Authorize"
 msgstr "Autoriseren"
@@ -59,6 +72,13 @@ msgid "Billink"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_partner__buckaroo_billink_birthdate
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_users__buckaroo_billink_birthdate
+#, fuzzy
+msgid "Billink Date of Birth"
+msgstr "Geboortedatum"
+
+#. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.billink_inline_form
 msgid "Billink Terms and Conditions"
 msgstr "Algemene Voorwaarden van Billink"
@@ -67,6 +87,12 @@ msgstr "Algemene Voorwaarden van Billink"
 #: model:payment.method,name:payment_buckaroo_official.payment_method_bizum
 msgid "Bizum"
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.view_partner_form_buckaroo_official
+#, fuzzy
+msgid "Buckaroo BNPL"
+msgstr "Buckaroo Official"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_max_amount
@@ -99,6 +125,12 @@ msgstr ""
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__buckaroo_official_service_code
 msgid "Buckaroo Service Code"
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order__amount_buckaroo_surcharge
+#, fuzzy
+msgid "Buckaroo Surcharge Amount"
+msgstr "Buckaroo maximumbedrag (EUR)"
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -171,6 +203,7 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_creditcard_authorize
+#: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_riverty_authorize
 msgid ""
 "Choose whether to capture the payment immediately ('Pay') or only authorize "
 "it for later manual capture ('Authorize')."
@@ -202,9 +235,19 @@ msgid "Connection successful!"
 msgstr "Verbinding geslaagd!"
 
 #. module: payment_buckaroo_official
+#: model:ir.model,name:payment_buckaroo_official.model_res_partner
+msgid "Contact"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #. odoo-javascript
 #: code:addons/payment_buckaroo_official/static/src/js/payment_form_creditcard.js:0
 msgid "Could not initialize the credit card form. Please try again."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model,website_form_label:payment_buckaroo_official.model_res_partner
+msgid "Create a Customer"
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -235,6 +278,7 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.billink_inline_form
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.riverty_inline_form
 msgid "Date of birth"
 msgstr "Geboortedatum"
 
@@ -268,6 +312,9 @@ msgstr "Omschrijvingen"
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__display_name
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__display_name
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__display_name
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_partner__display_name
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order__display_name
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order_line__display_name
 msgid "Display Name"
 msgstr "Weergavenaam"
 
@@ -299,6 +346,12 @@ msgid "Frozen at creation time so push notifications use a stable value."
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_klarna_gender__1
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
+msgid "He/Him"
+msgstr "Hij/Hem"
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_hosted_fields_client_id
 msgid "Hosted Fields Client ID"
 msgstr "Hosted Fields Client ID"
@@ -323,6 +376,9 @@ msgstr "Ik ga akkoord met de"
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__id
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__id
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__id
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_partner__id
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order__id
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order_line__id
 msgid "ID"
 msgstr "ID"
 
@@ -334,6 +390,7 @@ msgstr "Inline (Hosted Fields)"
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/controllers/billink.py:0
+#: code:addons/payment_buckaroo_official/controllers/riverty.py:0
 msgid "Invalid date of birth."
 msgstr "Ongeldige geboortedatum."
 
@@ -350,6 +407,17 @@ msgid "Invalid provider."
 msgstr "Ongeldige provider."
 
 #. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/riverty.py:0
+msgid "Invalid salutation; choose Mr, Mrs, or Miss."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order_line__is_buckaroo_surcharge
+msgid "Is Buckaroo Surcharge"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_kbc
 msgid "KBC"
 msgstr ""
@@ -358,6 +426,13 @@ msgstr ""
 #: model:payment.method,name:payment_buckaroo_official.payment_method_klarna
 msgid "Klarna"
 msgstr "Klarna"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_partner__buckaroo_klarna_gender
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_users__buckaroo_klarna_gender
+#, fuzzy
+msgid "Klarna Salutation"
+msgstr "Aanhef"
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_mbway
@@ -370,53 +445,54 @@ msgid "Maestro"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_sale_order_line__is_buckaroo_surcharge
+msgid ""
+"Marks this line as the Buckaroo payment surcharge so it can be located and "
+"replaced when the customer changes payment method."
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_brand_mastercard
 msgid "Mastercard"
 msgstr ""
 
 #. module: payment_buckaroo_official
-#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
-msgid "He/Him"
-msgstr "Hij/Hem"
-
-#. module: payment_buckaroo_official
-#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
-msgid "Please select your gender"
-msgstr "Selecteer uw geslacht"
-
-#. module: payment_buckaroo_official
-#: code:addons/payment_buckaroo_official/controllers/klarna.py:0
-#: code:addons/payment_buckaroo_official/models/payment_method_klarna.py:0
-msgid "Please select your gender to proceed with Klarna."
-msgstr "Selecteer uw geslacht om verder te gaan met Klarna."
-
-#. module: payment_buckaroo_official
-#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
-msgid "Salutation"
-msgstr "Aanhef"
-
-#. module: payment_buckaroo_official
-#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
-msgid "She/Her"
-msgstr "Zij/Haar"
-
-#. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_max_amount
+#, fuzzy
 msgid ""
 "Maximum order total in EUR for which this payment method is available with "
-"Buckaroo Official. Leave at 0.00 to disable the maximum limit."
+"Buckaroo Official. Leave empty to disable the maximum limit."
 msgstr ""
 "Maximaal ordertotaal in EUR waarvoor deze betaalmethode beschikbaar is met "
 "Buckaroo Official. Laat op 0,00 staan om de maximumlimiet uit te schakelen."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_min_amount
+#, fuzzy
 msgid ""
 "Minimum order total in EUR for which this payment method is available with "
-"Buckaroo Official. Leave at 0.00 to disable the minimum limit."
+"Buckaroo Official. Leave empty to disable the minimum limit."
 msgstr ""
 "Minimaal ordertotaal in EUR waarvoor deze betaalmethode beschikbaar is met "
 "Buckaroo Official. Laat op 0,00 staan om de minimumlimiet uit te schakelen."
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_riverty_salutation__miss
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.riverty_inline_form
+msgid "Miss"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_riverty_salutation__mr
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.riverty_inline_form
+msgid "Mr"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_riverty_salutation__mrs
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.riverty_inline_form
+msgid "Mrs"
+msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_multibanco
@@ -455,6 +531,7 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_creditcard_authorize__pay
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_riverty_authorize__pay
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_transaction__buckaroo_official_payment_action__pay
 msgid "Pay"
 msgstr "Betalen"
@@ -485,9 +562,22 @@ msgid "Payment Provider"
 msgstr "Betaalprovider"
 
 #. module: payment_buckaroo_official
+#: model:product.template,name:payment_buckaroo_official.product_buckaroo_surcharge_product_template
+#, fuzzy
+msgid "Payment Surcharge"
+msgstr "Betaalprovider"
+
+#. module: payment_buckaroo_official
 #: model:ir.model,name:payment_buckaroo_official.model_payment_transaction
 msgid "Payment Transaction"
 msgstr "Betaaltransactie"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_fee_amount
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.cart_total_buckaroo_surcharge
+#, fuzzy
+msgid "Payment fee"
+msgstr "Betaalmethode"
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -503,6 +593,14 @@ msgid ""
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_fee_amount
+msgid ""
+"Per-method payment fee added to the order. Amount is in the order currency; "
+"no FX conversion is performed. Use a fixed amount like '1.50' or a "
+"percentage like '1%'. Leave empty or set to '0' for no fee."
+msgstr ""
+
+#. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/controllers/billink.py:0
 msgid "Please accept the Billink Terms and Conditions to proceed."
@@ -513,6 +611,34 @@ msgstr "Accepteer de Algemene Voorwaarden van Billink om door te gaan."
 #: code:addons/payment_buckaroo_official/controllers/billink.py:0
 msgid "Please enter your date of birth to proceed with Billink."
 msgstr "Vul uw geboortedatum in om door te gaan met Billink."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/riverty.py:0
+#, fuzzy
+msgid "Please enter your date of birth to proceed with Riverty."
+msgstr "Vul uw geboortedatum in om door te gaan met Riverty."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_riverty.py:0
+#, fuzzy
+msgid "Please provide a date of birth to proceed with Riverty."
+msgstr "Vul uw geboortedatum in om door te gaan met Riverty."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_riverty.py:0
+#, fuzzy
+msgid "Please select a salutation to proceed with Riverty."
+msgstr "Selecteer uw geslacht om verder te gaan met Riverty."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/klarna.py:0
+#: code:addons/payment_buckaroo_official/models/payment_method_klarna.py:0
+msgid "Please select your gender to proceed with Klarna."
+msgstr "Selecteer uw geslacht om verder te gaan met Klarna."
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_brand_postepay
@@ -535,9 +661,92 @@ msgid "Refund Description"
 msgstr "Terugbetalingsomschrijving"
 
 #. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_riverty
+msgid "Riverty"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_partner__buckaroo_riverty_birthdate
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_users__buckaroo_riverty_birthdate
+#, fuzzy
+msgid "Riverty Date of Birth"
+msgstr "Geboortedatum"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_riverty_authorize
+#, fuzzy
+msgid "Riverty Payment Action"
+msgstr "Betalingsactie"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_partner__buckaroo_riverty_salutation
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_users__buckaroo_riverty_salutation
+#, fuzzy
+msgid "Riverty Salutation"
+msgstr "Aanhef"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.payment_method_form_buckaroo_official
+#, fuzzy
+msgid "Riverty Settings"
+msgstr "Creditcardinstellingen"
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_riverty.py:0
+msgid ""
+"Riverty partial refunds are not supported via Odoo. For partial refunds, use "
+"Buckaroo Plaza."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_riverty.py:0
+msgid ""
+"Riverty requires order articles. Create the transaction from a sale order "
+"with at least one line."
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_sdk_service_name
 msgid "SDK Service Name"
 msgstr "SDK-servicenaam"
+
+#. module: payment_buckaroo_official
+#: model:ir.model,name:payment_buckaroo_official.model_sale_order
+msgid "Sales Order"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model,name:payment_buckaroo_official.model_sale_order_line
+msgid "Sales Order Line"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.riverty_inline_form
+msgid "Salutation"
+msgstr "Aanhef"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_billink_birthdate
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_users__buckaroo_billink_birthdate
+msgid "Saved from the last Billink checkout to prefill on next order."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_klarna_gender
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_users__buckaroo_klarna_gender
+msgid "Saved from the last Klarna checkout to prefill on next order."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_riverty_birthdate
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_riverty_salutation
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_users__buckaroo_riverty_birthdate
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_users__buckaroo_riverty_salutation
+msgid "Saved from the last Riverty checkout to prefill on next order."
+msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_secret_key
@@ -557,6 +766,12 @@ msgid ""
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_klarna_gender__2
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
+msgid "She/Her"
+msgstr "Zij/Haar"
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_swish
 msgid "Swish"
 msgstr ""
@@ -574,8 +789,10 @@ msgstr "Verbinding testen"
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_method.py:0
-msgid "The Buckaroo maximum amount cannot be negative."
-msgstr "Het Buckaroo maximumbedrag kan niet negatief zijn."
+msgid ""
+"The Buckaroo amount limit must be a positive number (e.g. '100.00'). Leave "
+"empty for no limit."
+msgstr ""
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -586,8 +803,10 @@ msgstr "Het Buckaroo maximumbedrag moet groter zijn dan het minimumbedrag."
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_method.py:0
-msgid "The Buckaroo minimum amount cannot be negative."
-msgstr "Het Buckaroo minimumbedrag kan niet negatief zijn."
+msgid ""
+"The Buckaroo surcharge must be a positive number (e.g. '1.50') or a "
+"percentage (e.g. '1%'). Leave empty or use '0' for no surcharge."
+msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
@@ -654,6 +873,13 @@ msgstr "U moet minimaal 18 jaar oud zijn om Billink te gebruiken."
 
 #. module: payment_buckaroo_official
 #. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/riverty.py:0
+#, fuzzy
+msgid "You must be at least 18 years old to use Riverty."
+msgstr "U moet minimaal 18 jaar oud zijn om Riverty te gebruiken."
+
+#. module: payment_buckaroo_official
+#. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_provider.py:0
 msgid "Your Buckaroo %s credentials are valid."
 msgstr "Uw Buckaroo %s inloggegevens zijn geldig."
@@ -703,3 +929,9 @@ msgstr ""
 #: model:payment.method,name:payment_buckaroo_official.payment_method_ideal
 msgid "iDEAL | Wero"
 msgstr ""
+
+#~ msgid "The Buckaroo maximum amount cannot be negative."
+#~ msgstr "Het Buckaroo maximumbedrag kan niet negatief zijn."
+
+#~ msgid "The Buckaroo minimum amount cannot be negative."
+#~ msgstr "Het Buckaroo minimumbedrag kan niet negatief zijn."

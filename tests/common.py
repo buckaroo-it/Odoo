@@ -68,6 +68,24 @@ def make_mock_sdk_builder():
     return mock_builder, mock_response
 
 
+# Buckaroo status codes per documented group
+# (https://docs.buckaroo.io/docs/statuscodes), reused by all BNPL push
+# tests so adding a new code is a one-line change.
+CALLBACK_DONE_CODES = [190]
+CALLBACK_PENDING_CODES = [790, 791, 792, 793]
+CALLBACK_CANCEL_CODES = [890, 891]
+CALLBACK_ERROR_CODES = [490, 690]
+
+# (status_code, expected_refund_state) — reused across BNPL refund
+# matrices (Billink, Klarna, Riverty).
+REFUND_STATUS_CASES = [
+    (190, 'done'),
+    (790, 'pending'),
+    (890, 'cancel'),
+    (490, 'error'),
+]
+
+
 def make_mock_sdk_response(status_code):
     """Build a mock SDK response with status flags based on *status_code*.
 

@@ -288,8 +288,7 @@ class TestBillinkSdkContract(BuckarooOfficialCommon):
         with _patched_payment_service(
             'odoo.addons.payment_buckaroo_official.models.payment_method_billink'
         ) as MockPS, patch(
-            'odoo.addons.payment_buckaroo_official.models.payment_method_billink'
-            '.PaymentMethodBillink._get_birthdate_from_session',
+            'odoo.addons.payment_buckaroo_official.models.payment_method_billink.resolve_birthdate',
             return_value='',
         ):
             MockPS.return_value.create_payment.return_value = mock_builder

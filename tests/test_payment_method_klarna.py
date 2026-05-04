@@ -17,6 +17,11 @@ from odoo.tests import BaseCase, tagged
 
 from .common import (
     BuckarooOfficialCommon,
+    CALLBACK_CANCEL_CODES,
+    CALLBACK_DONE_CODES,
+    CALLBACK_ERROR_CODES,
+    CALLBACK_PENDING_CODES,
+    REFUND_STATUS_CASES,
     make_mock_sdk_builder,
     make_mock_sdk_response,
     parsed_from_form,
@@ -103,11 +108,6 @@ class TestKlarnaPaymentCreation(BuckarooOfficialCommon):
 @tagged('post_install', '-at_install')
 class TestKlarnaWebhookCallbacks(BuckarooOfficialCommon):
 
-    CALLBACK_DONE_CODES = [190]
-    CALLBACK_PENDING_CODES = [790, 791, 792, 793]
-    CALLBACK_CANCEL_CODES = [890, 891]
-    CALLBACK_ERROR_CODES = [490, 690]
-
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -161,20 +161,20 @@ class TestKlarnaWebhookCallbacks(BuckarooOfficialCommon):
                     self.assertEqual(tx.state, expected_state)
 
     def test_done_status_maps_to_done(self):
-        self._assert_status_maps_to_state(self.CALLBACK_DONE_CODES, 'done')
+        self._assert_status_maps_to_state(CALLBACK_DONE_CODES, 'done')
         tx = self._create_tx('KLARNA-WH-REF-190')
         parsed = self._form_callback('KLARNA-WH-REF-190', 190)
         self.env['payment.transaction'].sudo()._process('buckaroo_official', parsed)
         self.assertEqual(tx.provider_reference, 'KLARNA_TXN_001')
 
     def test_pending_status_maps_to_pending(self):
-        self._assert_status_maps_to_state(self.CALLBACK_PENDING_CODES, 'pending')
+        self._assert_status_maps_to_state(CALLBACK_PENDING_CODES, 'pending')
 
     def test_cancel_status_maps_to_cancel(self):
-        self._assert_status_maps_to_state(self.CALLBACK_CANCEL_CODES, 'cancel')
+        self._assert_status_maps_to_state(CALLBACK_CANCEL_CODES, 'cancel')
 
     def test_error_status_maps_to_error(self):
-        self._assert_status_maps_to_state(self.CALLBACK_ERROR_CODES, 'error')
+        self._assert_status_maps_to_state(CALLBACK_ERROR_CODES, 'error')
 
     def test_e2e_creation_to_success_callback_sets_authorized(self):
         """Klarna MOR is Reserve→Pay; a 190 callback after Reserve must
@@ -206,13 +206,6 @@ class TestKlarnaWebhookCallbacks(BuckarooOfficialCommon):
 
 @tagged('post_install', '-at_install')
 class TestKlarnaRefundFlow(BuckarooOfficialCommon):
-
-    REFUND_STATUS_CASES = [
-        (190, 'done'),
-        (790, 'pending'),
-        (890, 'cancel'),
-        (490, 'error'),
-    ]
 
     @classmethod
     def setUpClass(cls):
@@ -263,7 +256,7 @@ class TestKlarnaRefundFlow(BuckarooOfficialCommon):
         self.assertIn('R-', refund_tx.reference)
 
     def test_refund_status_matrix(self):
-        for status_code, expected_state in self.REFUND_STATUS_CASES:
+        for status_code, expected_state in REFUND_STATUS_CASES:
             with self.subTest(status_code=status_code, expected_state=expected_state):
                 tx = self._create_done_tx(reference='KL-REFUND-%s' % status_code)
                 with self._patch_refund(self._mock_refund_response(
@@ -820,34 +813,6 @@ class TestKlarnaGenderController(BuckarooOfficialCommon):
         self.assertEqual(partner.buckaroo_klarna_gender, '2')
 
 
-class TestGetGenderFromSession(BaseCase):
-
-    def test_returns_int_when_session_set(self):
-        fake_request = MagicMock()
-        fake_request.session = {'buckaroo_klarna_gender': '1'}
-        with patch('odoo.http.request', fake_request):
-            self.assertEqual(KlarnaPaymentMethod._get_gender_from_session(), 1)
-
-    def test_pops_value_from_session(self):
-        fake_request = MagicMock()
-        fake_request.session = {'buckaroo_klarna_gender': '2'}
-        with patch('odoo.http.request', fake_request):
-            KlarnaPaymentMethod._get_gender_from_session()
-        self.assertNotIn('buckaroo_klarna_gender', fake_request.session)
-
-    def test_raises_when_missing(self):
-        fake_request = MagicMock()
-        fake_request.session = {}
-        with patch('odoo.http.request', fake_request):
-            with self.assertRaises(ValidationError):
-                KlarnaPaymentMethod._get_gender_from_session()
-
-    def test_raises_when_no_request(self):
-        with patch('odoo.http.request', None):
-            with self.assertRaises(ValidationError):
-                KlarnaPaymentMethod._get_gender_from_session()
-
-
 class TestFormatKlarnaArticles(BaseCase):
 
     def test_maps_generic_dict_to_klarna_keys(self):
@@ -896,19 +861,14 @@ class TestFormatKlarnaArticles(BaseCase):
         self.assertEqual(result[0]['articleNumber'], 'PAID')
 
 
-class TestKlarnaPhoneAndHouseNumberSanitizers(BaseCase):
-
-    def test_phone_strips_plus_and_whitespace(self):
-        self.assertEqual(KlarnaPaymentMethod._sanitize_phone('+31 20 123 4567'), '31201234567')
-        self.assertEqual(KlarnaPaymentMethod._sanitize_phone('+31612345678'), '31612345678')
-        self.assertEqual(KlarnaPaymentMethod._sanitize_phone(''), '')
-        self.assertEqual(KlarnaPaymentMethod._sanitize_phone(None), '')
+class TestSplitHouseNumber(BaseCase):
 
     def test_house_number_splits_suffix(self):
-        self.assertEqual(KlarnaPaymentMethod._split_house_number('1'), ('1', ''))
-        self.assertEqual(KlarnaPaymentMethod._split_house_number('1A'), ('1', 'A'))
-        self.assertEqual(KlarnaPaymentMethod._split_house_number('424'), ('424', ''))
-        self.assertEqual(KlarnaPaymentMethod._split_house_number(''), ('', ''))
+        from ..helpers.customer import split_house_number  # noqa: PLC0415
+        self.assertEqual(split_house_number('1'), ('1', ''))
+        self.assertEqual(split_house_number('1A'), ('1', 'A'))
+        self.assertEqual(split_house_number('424'), ('424', ''))
+        self.assertEqual(split_house_number(''), ('', ''))
 
 
 class TestKlarnaIdempotentResponseNormalization(BaseCase):

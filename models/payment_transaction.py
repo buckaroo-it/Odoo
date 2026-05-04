@@ -28,7 +28,6 @@ class PaymentTransaction(models.Model):
     )
 
     def _get_specific_processing_values(self, processing_values):
-        """Create a payment on Buckaroo and return the redirect URL."""
         if self.provider_code != const.PROVIDER_CODE:
             return super()._get_specific_processing_values(processing_values)
 
@@ -43,8 +42,8 @@ class PaymentTransaction(models.Model):
                 )
             )
 
-        # Freeze the payment action so _apply_updates uses a stable value
-        # even if the merchant changes the setting between checkout and push.
+        # Freeze the action so _apply_updates uses a stable value even
+        # if the merchant flips the setting between checkout and push.
         action = self.payment_method_id._buckaroo_get_payment_action()
         if action == 'authorize':
             self.buckaroo_official_payment_action = 'authorize'
@@ -67,54 +66,43 @@ class PaymentTransaction(models.Model):
 
         redirect_url = self.payment_method_id._buckaroo_extract_redirect_url(response)
         if not redirect_url:
-            raise ValidationError(
-                "Buckaroo: no redirect URL received. Status: %s"
-                % (response.buckaroo_status_message or 'unknown')
-            )
+            error_message = response.get_some_error()
+            if error_message:
+                raise ValidationError(_("Buckaroo: %s", error_message))
+            raise ValidationError(_(
+                "Buckaroo: payment could not be initiated (no redirect URL "
+                "received and no error message provided)."
+            ))
 
         self.provider_reference = response.key
         return {'api_url': redirect_url}
 
     def _buckaroo_official_get_client(self):
-        """Instantiate and return a ``BuckarooClient`` for this transaction's provider."""
         return self.provider_id._buckaroo_official_get_client()
-
-    def _buckaroo_official_classify_status(self, status_code):
-        """Return the state category for a Buckaroo status code.
-
-        :returns: 'done', 'pending', 'cancel', 'error', or None when status_code is None.
-        """
-        if status_code is None:
-            return None
-        for category in ('done', 'pending', 'cancel'):
-            if status_code in const.BUCKAROO_STATUS_CODES_MAPPING[category]:
-                return category
-        return 'error'
 
     def _buckaroo_official_handle_response_status(self, response, operation,
                                                     success_state='done'):
-        """Handle a Buckaroo SDK response: extract status and set tx state.
+        """Map a Buckaroo SDK ``PaymentResponse`` to a tx state.
 
-        :param response: PaymentResponse from the SDK.
-        :param str operation: Label for log messages ('refund', 'capture', 'void').
-        :param str success_state: State to set on success — 'done' or 'canceled'.
+        Strict equality against ``BuckarooStatusCode.SUCCESS`` for the
+        done leg — SDK's ``is_successful`` reads ``is_successful_payment``
+        from raw_data and isn't reliable for refund / capture / void.
         """
         status_code = (
             response.status.code.code
             if response.status and response.status.code
             else None
         )
-        category = self._buckaroo_official_classify_status(status_code)
-        if category is None:
+        if status_code is None:
             self._set_error("Buckaroo: %s returned no status code" % operation)
-        elif category == 'done':
+        elif status_code == const.BuckarooStatusCode.SUCCESS:
             if success_state == 'canceled':
                 self._set_canceled()
             else:
                 self._set_done()
-        elif category == 'pending':
+        elif response.is_pending():
             self._set_pending()
-        elif category == 'cancel':
+        elif response.is_cancelled():
             self._set_canceled()
         else:
             self._set_error(
@@ -123,12 +111,7 @@ class PaymentTransaction(models.Model):
 
     def _buckaroo_official_send_sdk_request(self, operation, sdk_call,
                                               success_state='done'):
-        """Send a request to Buckaroo via the SDK and handle the response.
-
-        :param str operation: Label for log messages ('refund', 'capture', 'void').
-        :param callable sdk_call: ``(client) -> PaymentResponse``.
-        :param str success_state: State to set on success ('done' or 'canceled').
-        """
+        """Run *sdk_call(client)*, log, persist key, dispatch state."""
         client = self._buckaroo_official_get_client()
         try:
             response = sdk_call(client)
@@ -151,7 +134,7 @@ class PaymentTransaction(models.Model):
         )
 
     def _buckaroo_official_is_dispatchable(self, operation):
-        """Return True if the tx may POST to Buckaroo; False to skip."""
+        """``True`` when the tx may POST to Buckaroo; ``False`` to skip."""
         if self.state in ('draft', 'error'):
             return True
         _logger.info(
@@ -161,7 +144,6 @@ class PaymentTransaction(models.Model):
         return False
 
     def _send_refund_request(self):
-        """Request a refund from Buckaroo."""
         if self.provider_code != const.PROVIDER_CODE:
             return super()._send_refund_request()
 
@@ -177,7 +159,6 @@ class PaymentTransaction(models.Model):
         )
 
     def _send_capture_request(self):
-        """Request a capture from Buckaroo for an authorized transaction."""
         if self.provider_code != const.PROVIDER_CODE:
             return super()._send_capture_request()
 
@@ -190,7 +171,6 @@ class PaymentTransaction(models.Model):
         )
 
     def _send_void_request(self):
-        """Request a void (cancel authorize) from Buckaroo."""
         if self.provider_code != const.PROVIDER_CODE:
             return super()._send_void_request()
 
@@ -204,7 +184,6 @@ class PaymentTransaction(models.Model):
         )
 
     def _get_specific_rendering_values(self, processing_values):
-        """Return template context for the redirect form."""
         if self.provider_code != const.PROVIDER_CODE:
             return super()._get_specific_rendering_values(processing_values)
 
@@ -220,7 +199,6 @@ class PaymentTransaction(models.Model):
 
     @api.model
     def _extract_reference(self, provider_code, payment_data):
-        """Extract the Odoo transaction reference from Buckaroo callback data."""
         if provider_code != const.PROVIDER_CODE:
             return super()._extract_reference(provider_code, payment_data)
 
@@ -230,12 +208,9 @@ class PaymentTransaction(models.Model):
         return ref
 
     def _extract_amount_data(self, payment_data):
-        """Extract amount and currency from Buckaroo callback data.
-
-        Returns ``None`` to signal the framework to skip amount/currency
-        validation. Klarna's "Reserve failed" pushes carry no amount or
-        currency; returning ``{}`` would crash the framework's
-        ``amount_data['amount']`` lookup.
+        """Returns ``None`` to skip framework amount/currency validation —
+        Klarna's "Reserve failed" pushes carry no amount or currency, and
+        returning ``{}`` would crash the framework's ``amount`` lookup.
         """
         if self.provider_code != const.PROVIDER_CODE:
             return super()._extract_amount_data(payment_data)
@@ -251,7 +226,6 @@ class PaymentTransaction(models.Model):
         }
 
     def _apply_updates(self, payment_data):
-        """Update Odoo transaction state from Buckaroo callback status."""
         if self.provider_code != const.PROVIDER_CODE:
             return super()._apply_updates(payment_data)
 

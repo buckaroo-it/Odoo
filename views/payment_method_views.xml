@@ -26,6 +26,10 @@
                            required="buckaroo_official_creditcard_method == 'inline'"
                            password="True"/>
                 </group>
+                <group string="Riverty Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'riverty'">
+                    <field name="buckaroo_official_riverty_authorize"/>
+                </group>
             </field>
         </field>
     </record>
@@ -39,6 +43,7 @@
                 <group string="Buckaroo BNPL">
                     <field name="buckaroo_klarna_gender"/>
                     <field name="buckaroo_billink_birthdate"/>
+                    <field name="buckaroo_riverty_birthdate"/>
                 </group>
             </xpath>
         </field>

@@ -5,5 +5,6 @@ from . import payment_method
 from . import payment_method_creditcard
 from . import payment_method_billink
 from . import payment_method_klarna
+from . import payment_method_riverty
 from . import payment_transaction
 from . import sale_order

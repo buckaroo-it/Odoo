@@ -7,9 +7,20 @@ from .common import BuckarooOfficialCommon
 from ..utils import const
 
 
+# Methods present in the data XML but NOT auto-enabled on the provider —
+# merchants opt in via Configuration > Payment Methods. Klarna and Riverty
+# require BNPL onboarding (T&C, KYC, BirthDate collection); shipping them
+# enabled by default would leak partial flows to merchants who never
+# requested BNPL.
+OPT_IN_PAYMENT_METHOD_CODES = ['klarna', 'riverty']
+
+ALL_PAYMENT_METHOD_CODES = (
+    const.DEFAULT_PAYMENT_METHOD_CODES + OPT_IN_PAYMENT_METHOD_CODES
+)
+
 ALL_XML_IDS = [
     f'payment_buckaroo_official.payment_method_{code}'
-    for code in const.DEFAULT_PAYMENT_METHOD_CODES
+    for code in ALL_PAYMENT_METHOD_CODES
 ]
 
 
@@ -22,8 +33,10 @@ _MULTI_CURRENCY = {
 
 
 # (code, expected_currencies, expected_countries) — empty set = no restriction.
-# Country lists are intentionally empty for all methods: Buckaroo gates country
-# eligibility per method on its side, so Odoo only enforces currency.
+# Country lists are intentionally empty for *most* methods: Buckaroo gates
+# country eligibility per method on its side, so Odoo only enforces currency.
+# BNPL methods (Klarna, Riverty) are the exception: they pin a country list
+# explicitly to keep BNPL only visible to shoppers from supported markets.
 METHOD_DATA = [
     ('ideal',       {'EUR'},                              set()),
     ('bancontact',  {'EUR'},                              set()),
@@ -46,6 +59,13 @@ METHOD_DATA = [
     ('twint',       {'CHF'},                              set()),
     ('billink',     {'EUR'},                              set()),
     ('creditcard',  _MULTI_CURRENCY,                      set()),
+    ('klarna',      {'EUR', 'CHF', 'DKK', 'NOK', 'SEK', 'PLN', 'GBP'},
+        # ``base.uk`` resolves to country code 'GB' in Odoo (United
+        # Kingdom of Great Britain).
+        {'NL', 'BE', 'DE', 'AT', 'FI', 'FR', 'ES', 'IT', 'PT', 'IE',
+         'CH', 'DK', 'NO', 'SE', 'PL', 'GB'}),
+    ('riverty',     {'EUR'},
+        {'NL', 'BE', 'DE', 'AT', 'FI'}),
 ]
 
 
@@ -57,20 +77,24 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
     restrictions as defined in ``data/payment_method_data.xml``.
     """
 
-    def test_all_21_payment_method_records_exist(self):
+    def test_all_payment_method_records_exist(self):
         for xml_id in ALL_XML_IDS:
             with self.subTest(xml_id=xml_id):
                 record = self.env.ref(xml_id)
                 self.assertTrue(record.exists(), "Record %s not found" % xml_id)
 
-    def test_all_methods_support_refund_partial(self):
+    def test_methods_support_refund(self):
+        # Riverty refund is full-only because Odoo's amount-based refund
+        # flow can't supply the article-level breakdown Riverty requires.
+        full_only_codes = {'riverty'}
         for xml_id in ALL_XML_IDS:
             with self.subTest(xml_id=xml_id):
                 record = self.env.ref(xml_id)
+                expected = 'full_only' if record.code in full_only_codes else 'partial'
                 self.assertEqual(
-                    record.support_refund, 'partial',
-                    "Expected support_refund='partial' for %s, got '%s'" % (
-                        xml_id, record.support_refund,
+                    record.support_refund, expected,
+                    "Expected support_refund='%s' for %s, got '%s'" % (
+                        expected, xml_id, record.support_refund,
                     ),
                 )
 
@@ -106,6 +130,19 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
                     currency_id=currency.id,
                 )
                 self.assertIn(pm, methods)
+
+    def test_opt_in_methods_not_linked_by_default(self):
+        # Klarna and Riverty require BNPL onboarding (T&C, KYC,
+        # BirthDate / Salutation collection); merchants opt in via
+        # Configuration > Payment Methods rather than getting them
+        # exposed automatically when they enable the provider.
+        linked_codes = set(self.buckaroo.payment_method_ids.mapped('code'))
+        for code in OPT_IN_PAYMENT_METHOD_CODES:
+            with self.subTest(code=code):
+                self.assertNotIn(
+                    code, linked_codes,
+                    "Opt-in method %s must not be linked by default" % code,
+                )
 
     def test_mbway_excluded_for_non_eur_currency(self):
         mbway = self.env.ref('payment_buckaroo_official.payment_method_mbway')

@@ -77,7 +77,7 @@ class PaymentMethod(models.Model):
 
     @staticmethod
     def _buckaroo_parse_amount_limit(value):
-        # Empty → no limit (None). Non-numeric or negative → ValidationError.
+        """Empty → ``None`` (no limit); non-numeric → ValidationError."""
         raw = (value or '').strip()
         if not raw:
             return None
@@ -125,12 +125,14 @@ class PaymentMethod(models.Model):
         amount = kwargs.get('amount')
         if amount is None and kwargs.get('sale_order_id'):
             order = self.env['sale.order'].sudo().browse(kwargs['sale_order_id']).exists()
-            amount = order.amount_total if order else None
+            if order:
+                amount = order.amount_total
         if amount is None:
             return payment_methods
 
         provider_id_set = set(provider_ids)
-        payment_methods.mapped('provider_ids.code')  # batch prefetch
+        # Batch prefetch provider codes before filtering one-by-one.
+        payment_methods.mapped('provider_ids.code')
         unfiltered_payment_methods = payment_methods
         payment_methods = payment_methods.filtered(
             lambda pm: pm._buckaroo_official_is_amount_compatible(amount, provider_id_set)
@@ -165,31 +167,24 @@ class PaymentMethod(models.Model):
         return f' (+ {format_amount(self.env, value, currency)})'
 
     def _buckaroo_compute_surcharge_amount(self, subtotal, currency):
-        """Compute the surcharge for *subtotal* in *currency*, rounded."""
         self.ensure_one()
         is_percent, value = self._buckaroo_parse_fee_amount()
         amount = subtotal * value / 100.0 if is_percent else value
         return currency.round(amount)
 
     def _buckaroo_get_surcharge_line_name(self):
-        """Return the order-line label for this method's surcharge."""
         self.ensure_one()
         return _('%s surcharge', self.name)
 
     def _buckaroo_get_sdk_service_name(self):
-        """Return the SDK service name for this payment method.
-
-        Uses the ``buckaroo_official_sdk_service_name`` field when set,
-        otherwise falls back to ``self.code``.
-        """
+        """Return ``buckaroo_official_sdk_service_name`` or ``self.code``."""
         self.ensure_one()
         return self.buckaroo_official_sdk_service_name or self.code
 
     @staticmethod
     def _buckaroo_resolve_description(template, transaction):
-        """Replace placeholders in a description template.
+        """Substitute ``{order_number}`` and ``{shop_name}`` in *template*.
 
-        Supported placeholders: {order_number}, {shop_name}.
         Returns the transaction reference when *template* is empty.
         """
         if not template:
@@ -201,27 +196,18 @@ class PaymentMethod(models.Model):
             transaction.company_id.name if transaction.company_id else '',
         )
 
-        # Strip any unsupported placeholders (e.g. from old templates).
+        # Strip unsupported placeholders left over from old templates.
         label = re.sub(r'\{[a-z_]+\}', '', label).strip()
 
         return label or transaction.reference
 
     def _buckaroo_get_payment_action(self):
-        """Return the payment action for this method: 'pay', 'authorize', or None.
-
-        Base returns ``None`` (default 'pay' flow). Subclasses override to
-        return 'authorize' when their configuration selects it.
-        """
+        """``'pay'``, ``'authorize'``, or ``None`` (default ``'pay'``)."""
         self.ensure_one()
         return None
 
     def _buckaroo_get_payment_params(self, transaction, description_template=None):
-        """Build the dict passed to ``PaymentService.create_payment().from_dict()``.
-
-        Override in subclasses (via method-specific logic) to inject extra
-        parameters.  Call ``super()`` and merge when you only need to *extend*
-        the defaults.
-        """
+        """Build the dict passed to ``PaymentService.create_payment().from_dict()``."""
         self.ensure_one()
         provider = transaction.provider_id
         base_url = provider.get_base_url().rstrip('/')
@@ -243,31 +229,21 @@ class PaymentMethod(models.Model):
             'push_url_failure': webhook_url,
         }
 
-
     def _buckaroo_create_payment(self, transaction, client):
-        """Create a payment via the SDK and return the ``PaymentResponse``.
-
-        Default flow: build params, create_payment(...).pay(). Subclasses
-        override for method-specific dispatch.
-        """
         self.ensure_one()
         params = self._buckaroo_get_payment_params(transaction)
         return PaymentService(client).create_payment(
             self._buckaroo_get_sdk_service_name(), params,
         ).pay()
 
-
     def _buckaroo_extract_redirect_url(self, response):
-        """Return the redirect URL from the SDK *response*."""
         self.ensure_one()
         redirect_url = response.get_redirect_url()
         if not redirect_url and response.required_action:
             redirect_url = response.required_action.redirect_url
         return redirect_url
 
-
     def _buckaroo_get_refund_params(self, source_tx, refund_tx):
-        """Build the dict passed to the SDK for a refund request."""
         self.ensure_one()
         provider = refund_tx.provider_id
         template = (provider.buckaroo_official_refund_description
@@ -278,19 +254,14 @@ class PaymentMethod(models.Model):
         return params
 
     def _buckaroo_create_refund(self, source_tx, refund_tx, client):
-        """Execute a refund via the SDK and return the ``PaymentResponse``."""
         self.ensure_one()
         params = self._buckaroo_get_refund_params(source_tx, refund_tx)
         return PaymentService(client).create_payment(
             self._buckaroo_get_sdk_service_name(), params,
         ).refund()
 
-
     def _buckaroo_get_post_authorize_params(self, transaction):
-        """Build the params dict and original transaction key for capture/void.
-
-        :returns: ``(params, original_transaction_key)`` tuple.
-        """
+        """Returns ``(params, original_transaction_key)`` for capture/void."""
         self.ensure_one()
         provider = transaction.provider_id
         template = provider.buckaroo_official_transaction_description
@@ -299,19 +270,18 @@ class PaymentMethod(models.Model):
         original_transaction_key = source_tx.provider_reference
         return params, original_transaction_key
 
-    def _buckaroo_execute_post_authorize(self, transaction, client, sdk_method):
-        """Shared builder for capture and void SDK calls."""
+    def _buckaroo_create_capture(self, transaction, client):
         self.ensure_one()
         params, original_key = self._buckaroo_get_post_authorize_params(transaction)
         builder = PaymentService(client).create_payment(
             self._buckaroo_get_sdk_service_name(), params,
         )
-        return getattr(builder, sdk_method)(original_transaction_key=original_key)
-
-    def _buckaroo_create_capture(self, transaction, client):
-        """Execute a capture via the SDK."""
-        return self._buckaroo_execute_post_authorize(transaction, client, 'capture')
+        return builder.capture(original_transaction_key=original_key)
 
     def _buckaroo_create_void(self, transaction, client):
-        """Execute a cancel-authorize via the SDK."""
-        return self._buckaroo_execute_post_authorize(transaction, client, 'cancelAuthorize')
+        self.ensure_one()
+        params, original_key = self._buckaroo_get_post_authorize_params(transaction)
+        builder = PaymentService(client).create_payment(
+            self._buckaroo_get_sdk_service_name(), params,
+        )
+        return builder.cancelAuthorize(original_transaction_key=original_key)

@@ -1,16 +1,14 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from datetime import datetime
-
 from buckaroo.services.payment_service import PaymentService
 
 from odoo import fields, models
 
 from ..helpers.articles import get_order_articles
 from ..helpers.customer import (
-    get_billing_partner,
-    get_customer_data,
-    get_shipping_partner,
+    resolve_birthdate,
+    resolve_bnpl_customer_data,
+    sanitize_phone,
 )
 
 
@@ -19,10 +17,6 @@ class PaymentMethodBillink(models.Model):
 
     @staticmethod
     def _format_billink_articles(articles):
-        """Map generic article dicts to Billink's API article format.
-
-        Billink expects PascalCase keys and quantity as a string.
-        """
         return [
             {
                 'Identifier': a['identifier'],
@@ -37,7 +31,6 @@ class PaymentMethodBillink(models.Model):
 
     @staticmethod
     def _format_billink_customer(data):
-        """Map generic customer data to Billink's API customer format."""
         category = 'B2B' if data['is_b2b'] else 'B2C'
 
         customer = {
@@ -51,7 +44,7 @@ class PaymentMethodBillink(models.Model):
             'City': data['city'],
             'Country': data['country_code'],
             'Email': data['email'],
-            'MobilePhone': data['phone'],
+            'MobilePhone': sanitize_phone(data['phone']),
             'Salutation': 'Unknown',
         }
 
@@ -63,28 +56,7 @@ class PaymentMethodBillink(models.Model):
 
         return customer
 
-    @staticmethod
-    def _get_birthdate_from_session():
-        """Read and consume the Billink birthdate from the HTTP session.
-
-        Returns the date in DD-MM-YYYY format (Billink API), or ``''``.
-        """
-        from odoo.http import request as http_request  # noqa: PLC0415
-        if not http_request:
-            return ''
-        try:
-            birthdate = http_request.session.pop('buckaroo_billink_birthdate', None)
-        except RuntimeError:
-            return ''
-        if not birthdate:
-            return ''
-        try:
-            return datetime.strptime(birthdate, '%Y-%m-%d').strftime('%d-%m-%Y')
-        except ValueError:
-            return ''
-
     def _buckaroo_create_payment(self, transaction, client):
-        """Billink flow: add article and customer data, then .pay()."""
         if self.code != 'billink':
             return super()._buckaroo_create_payment(transaction, client)
 
@@ -93,24 +65,19 @@ class PaymentMethodBillink(models.Model):
             self._buckaroo_get_sdk_service_name(), params,
         )
 
-        # Articles
         articles = get_order_articles(transaction)
         if articles:
             builder.add_parameter('article', self._format_billink_articles(articles))
 
-        # Billing & shipping customer
-        billing_partner = get_billing_partner(transaction)
-        shipping_partner = get_shipping_partner(transaction)
-
-        billing_data = get_customer_data(billing_partner)
+        billing_data, shipping_data, _same = resolve_bnpl_customer_data(transaction)
         billing_customer = self._format_billink_customer(billing_data)
-        billing_customer['BirthDate'] = self._get_birthdate_from_session()
+        billing_customer['BirthDate'] = resolve_birthdate(
+            transaction,
+            'buckaroo_billink_birthdate',
+            'buckaroo_billink_birthdate',
+        )
         builder.add_parameter('billingCustomer', [billing_customer])
 
-        if shipping_partner == billing_partner:
-            shipping_data = billing_data
-        else:
-            shipping_data = get_customer_data(shipping_partner)
         shipping_customer = self._format_billink_customer(shipping_data)
         builder.add_parameter('shippingCustomer', [shipping_customer])
 

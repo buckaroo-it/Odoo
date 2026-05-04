@@ -250,3 +250,57 @@ class TestBuckarooExtractRedirectUrl(BuckarooOfficialCommon):
         response.required_action = None
         url = self.ideal._buckaroo_extract_redirect_url(response)
         self.assertIsNone(url)
+
+
+@tagged('post_install', '-at_install')
+class TestProcessingValuesSurfacesSdkError(BuckarooOfficialCommon):
+    """When the SDK response carries no redirect URL but the response
+    exposes an error via ``response.get_some_error()`` (SDK helper that
+    walks RequestErrors → ConsumerMessage → Message → SubCode), the
+    transaction-creation path lifts that text into the
+    ``ValidationError`` shown to the shopper."""
+
+    def test_processing_values_raises_with_sdk_error_text(self):
+        riverty_msg = (
+            'Authorize rejected. The following errors occurred: '
+            'File format is not supported.'
+        )
+        response = MagicMock()
+        response.get_redirect_url.return_value = None
+        response.required_action = None
+        response.key = 'TXN'
+        response.status_code = 200
+        response.redirect_url = None
+        response._raw_data = {}
+        response.get_some_error.return_value = riverty_msg
+        response.buckaroo_status_message = 'Validation failure'
+
+        tx = self._create_buckaroo_tx(reference='TX-RV-491')
+        PaymentMethod = type(tx.payment_method_id)
+        with patch.object(PaymentMethod, '_buckaroo_create_payment', return_value=response), \
+             patch.object(PaymentMethod, '_buckaroo_extract_redirect_url', return_value=None):
+            from odoo.exceptions import ValidationError  # noqa: PLC0415
+            with self.assertRaises(ValidationError) as ctx:
+                tx._get_specific_processing_values({})
+        self.assertIn(riverty_msg, str(ctx.exception))
+
+    def test_processing_values_raises_generic_when_sdk_has_no_error(self):
+        response = MagicMock()
+        response.get_redirect_url.return_value = None
+        response.required_action = None
+        response.key = 'TXN'
+        response.status_code = 200
+        response.redirect_url = None
+        response._raw_data = {}
+        response.get_some_error.return_value = ''
+        response.buckaroo_status_message = None
+
+        tx = self._create_buckaroo_tx(reference='TX-RV-NOERR')
+        PaymentMethod = type(tx.payment_method_id)
+        with patch.object(PaymentMethod, '_buckaroo_create_payment', return_value=response), \
+             patch.object(PaymentMethod, '_buckaroo_extract_redirect_url', return_value=None):
+            from odoo.exceptions import ValidationError  # noqa: PLC0415
+            with self.assertRaises(ValidationError) as ctx:
+                tx._get_specific_processing_values({})
+        # Generic fallback message lands when SDK has nothing useful.
+        self.assertIn('payment could not be initiated', str(ctx.exception))
