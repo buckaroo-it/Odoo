@@ -1,14 +1,12 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-import base64
 import logging
 
-import requests as req_lib
+from buckaroo.exceptions._buckaroo_error import BuckarooError
+from buckaroo.services.hosted_fields_service import HostedFieldsService
 
 from odoo import _, http
 from odoo.http import request
-
-from ..utils import const
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
@@ -62,26 +60,12 @@ class CreditCardController(http.Controller):
         if not client_id or not client_secret:
             return {'error': _("Hosted Fields credentials are not configured.")}
 
-        credentials = base64.b64encode(f'{client_id}:{client_secret}'.encode()).decode()
         try:
-            response = req_lib.post(
-                const.BUCKAROO_OAUTH_TOKEN_URL,
-                headers={
-                    'Authorization': f'Basic {credentials}',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                data={
-                    'scope': 'hostedfields:save',
-                    'grant_type': 'client_credentials',
-                },
-                timeout=10,
-            )
-            response.raise_for_status()
-            data = response.json()
+            data = HostedFieldsService(client_id, client_secret).get_token()
             return {
                 'access_token': data.get('access_token'),
                 'expires_in': data.get('expires_in'),
             }
-        except req_lib.RequestException:
+        except BuckarooError:
             _logger.exception("Failed to fetch Hosted Fields token from Buckaroo")
             return {'error': _("Failed to obtain Hosted Fields token.")}

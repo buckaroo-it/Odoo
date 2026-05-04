@@ -1,10 +1,10 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-import hmac
 import json
 import logging
 from dataclasses import dataclass
 
+from buckaroo.services.reply import HttpPost, Json
 from werkzeug.exceptions import Forbidden
 
 from . import const
@@ -24,7 +24,12 @@ class ParsedPush:
     transaction_key: str | None
     service_code: str | None
     signature: str | None
-    raw: dict  # preserved verbatim for signature verification
+    raw: dict
+    is_json: bool = False
+    auth_header: str | None = None
+    uri: str | None = None
+    method: str | None = None
+    body_bytes: bytes | None = None
 
     def is_success(self):
         return self._check('done')
@@ -59,12 +64,25 @@ def parse_push(request):
 
 def verify_signature(parsed, provider):
     """Raise :class:`werkzeug.exceptions.Forbidden` if signature missing or invalid."""
+    if parsed.is_json:
+        if not parsed.auth_header:
+            _logger.warning("Received Buckaroo Official JSON push with missing Authorization header")
+            raise Forbidden()
+        handler = Json(
+            provider.buckaroo_official_website_key,
+            provider.buckaroo_official_secret_key,
+        )
+        if not handler.validate(
+            parsed.auth_header, parsed.uri, parsed.method, parsed.body_bytes,
+        ):
+            _logger.warning("Received Buckaroo Official JSON push with invalid HMAC")
+            raise Forbidden()
+        return
     if not parsed.signature:
-        _logger.warning("Received Buckaroo Official data with missing signature")
+        _logger.warning("Received Buckaroo Official form push with missing signature")
         raise Forbidden()
-    expected = provider._buckaroo_official_generate_digital_sign(parsed.raw)
-    if not hmac.compare_digest(parsed.signature, expected):
-        _logger.warning("Received Buckaroo Official data with invalid signature")
+    if not HttpPost(provider.buckaroo_official_secret_key).validate(parsed.raw):
+        _logger.warning("Received Buckaroo Official form push with invalid signature")
         raise Forbidden()
 
 
@@ -92,9 +110,9 @@ def _parse_form(request):
 
 
 def _parse_json(request):
-    raw_body = request.httprequest.get_data(as_text=True)
+    body_bytes = request.httprequest.get_data() or b''
     try:
-        payload = json.loads(raw_body) if raw_body else {}
+        payload = json.loads(body_bytes) if body_bytes else {}
     except (json.JSONDecodeError, TypeError):
         _logger.warning("Buckaroo JSON push: invalid JSON body")
         payload = {}
@@ -119,6 +137,11 @@ def _parse_json(request):
     amount = data.get('AmountDebit')
     credit = data.get('AmountCredit')
 
+    headers = getattr(request.httprequest, 'headers', None)
+    auth_header = headers.get('Authorization') if headers else None
+    uri = getattr(request.httprequest, 'url', None)
+    method = getattr(request.httprequest, 'method', None)
+
     return ParsedPush(
         reference=data.get('Invoice') or data.get('Description'),
         amount=float(amount) if amount is not None else None,
@@ -127,8 +150,11 @@ def _parse_json(request):
         status_code=status_code,
         transaction_key=data.get('Key'),
         service_code=service_code,
-        signature=data.get('Signature') or (payload.get('Signature') if isinstance(payload, dict) else None),
-        # Signature is computed over the TOP-LEVEL payload, not the inner
-        # Transaction dict. Preserve that shape verbatim for verify_signature.
+        signature=None,
         raw=payload if isinstance(payload, dict) else {},
+        is_json=True,
+        auth_header=auth_header,
+        uri=uri,
+        method=method,
+        body_bytes=body_bytes or b'',
     )

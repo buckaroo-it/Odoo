@@ -7,8 +7,6 @@ PROVIDER_CODE = 'buckaroo_official'
 
 PICK_METHOD_CONTEXT_KEY = 'buckaroo_official_pick_method_id'
 
-BUCKAROO_OAUTH_TOKEN_URL = 'https://auth.buckaroo.io/oauth/token'
-
 DEFAULT_PAYMENT_METHOD_CODES = [
     'ideal',
     'bancontact',

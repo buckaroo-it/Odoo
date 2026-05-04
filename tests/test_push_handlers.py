@@ -3,6 +3,9 @@
 import json
 from unittest.mock import MagicMock
 
+from buckaroo.config.buckaroo_config import BuckarooConfig
+from buckaroo.http.client import BuckarooHttpClient
+from buckaroo.services.reply import HttpPost
 from werkzeug.exceptions import Forbidden
 
 from odoo.tests import BaseCase
@@ -13,13 +16,16 @@ from odoo.addons.payment_buckaroo_official.utils.push_handlers import (
     verify_signature,
 )
 
-from .common import parsed_from_form, parsed_from_json
+from .common import make_mock_request, parsed_from_form, parsed_from_json
 
 
 def _make_request(content_type='', form=None, json_body=None):
     """Build a minimal mock ``odoo.http.request`` for testing push parsing."""
     mock_request = MagicMock()
     mock_request.httprequest.content_type = content_type
+    mock_request.httprequest.headers = {}
+    mock_request.httprequest.url = None
+    mock_request.httprequest.method = None
 
     form_data = form or {}
     mock_request.httprequest.values = form_data
@@ -184,8 +190,8 @@ class TestParsedPushJson(BaseCase):
     def test_transaction_key(self):
         self.assertEqual(self._parsed().transaction_key, 'TXN_KEY')
 
-    def test_signature(self):
-        self.assertEqual(self._parsed().signature, 'json_sig')
+    def test_signature_field_is_unused_for_json(self):
+        self.assertIsNone(self._parsed().signature)
 
     def test_is_success(self):
         self.assertTrue(self._parsed(status_code=190).is_success())
@@ -263,28 +269,60 @@ class TestParsedPushJson(BaseCase):
 
 class TestVerifySignature(BaseCase):
 
-    def _provider(self, expected_sig):
+    SECRET = 'test_secret'
+    STORE = 'test_store'
+
+    def _provider(self):
         provider = MagicMock()
-        provider._buckaroo_official_generate_digital_sign.return_value = expected_sig
+        provider.buckaroo_official_secret_key = self.SECRET
+        provider.buckaroo_official_website_key = self.STORE
         return provider
 
-    def test_missing_signature_raises_forbidden(self):
+    def test_form_missing_signature_raises_forbidden(self):
         parsed = parsed_from_form({'brq_invoicenumber': 'TX-001'})
         with self.assertRaises(Forbidden):
-            verify_signature(parsed, self._provider('whatever'))
+            verify_signature(parsed, self._provider())
 
-    def test_invalid_signature_raises_forbidden(self):
+    def test_form_invalid_signature_raises_forbidden(self):
         parsed = parsed_from_form({
             'brq_invoicenumber': 'TX-001',
             'brq_signature': 'bad_sig',
         })
         with self.assertRaises(Forbidden):
-            verify_signature(parsed, self._provider('good_sig'))
+            verify_signature(parsed, self._provider())
 
-    def test_matching_signature_does_not_raise(self):
-        parsed = parsed_from_form({
-            'brq_invoicenumber': 'TX-001',
-            'brq_signature': 'good_sig',
-        })
-        # matching signature: verify_signature must not raise
-        self.assertIsNone(verify_signature(parsed, self._provider('good_sig')))
+    def _signed_json_request(self, body):
+        url = 'https://shop.example.com/payment/buckaroo_official/webhook'
+        header = BuckarooHttpClient(self.STORE, self.SECRET, BuckarooConfig())\
+            ._generate_hmac_signature('POST', url, body)['Authorization']
+        req = make_mock_request(content_type='application/json', body=body)
+        req.httprequest.headers = {'Authorization': header}
+        req.httprequest.url = url
+        req.httprequest.method = 'POST'
+        return req
+
+    def test_form_matching_signature_does_not_raise(self):
+        params = {'brq_invoicenumber': 'TX-001'}
+        sig = HttpPost(self.SECRET).compute_signature(params)
+        parsed = parsed_from_form({**params, 'brq_signature': sig})
+        self.assertIsNone(verify_signature(parsed, self._provider()))
+
+    def test_json_missing_authorization_raises_forbidden(self):
+        parsed = parsed_from_json({'Transaction': {'Invoice': 'TX-1'}})
+        with self.assertRaises(Forbidden):
+            verify_signature(parsed, self._provider())
+
+    def test_json_valid_hmac_does_not_raise(self):
+        body = '{"Transaction":{"Invoice":"TX-1","Status":{"Code":{"Code":190}}}}'
+        parsed = parse_push(self._signed_json_request(body))
+        self.assertIsNone(verify_signature(parsed, self._provider()))
+
+    def test_json_tampered_body_raises_forbidden(self):
+        signed_body = '{"Transaction":{"Status":{"Code":{"Code":190}}}}'
+        req = self._signed_json_request(signed_body)
+        # Replace the body after signing so the HMAC no longer matches.
+        tampered = b'{"Transaction":{"Status":{"Code":{"Code":690}}}}'
+        req.httprequest.get_data.return_value = tampered
+        parsed = parse_push(req)
+        with self.assertRaises(Forbidden):
+            verify_signature(parsed, self._provider())

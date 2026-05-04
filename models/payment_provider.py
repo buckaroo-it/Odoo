@@ -1,11 +1,9 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import logging
-from hashlib import sha1
 
 import requests as req_lib
 from buckaroo.http.client import BuckarooApiError
-from werkzeug import urls
 
 from odoo import _, fields, models
 from odoo.exceptions import UserError
@@ -105,24 +103,3 @@ class PaymentProvider(models.Model):
             },
         }
 
-    def _buckaroo_official_generate_digital_sign(self, values):
-        """Generate the SHA-1 signature for incoming Buckaroo push data.
-
-        Values are URL-decoded and brq_signature is excluded. Only keys
-        starting with add_, brq_, or cust_ are included. Keys are sorted
-        case-insensitively, concatenated as key=value pairs, and the secret
-        key is appended before hashing with SHA-1.
-        """
-        self.ensure_one()
-        items = [
-            (k, urls.url_unquote_plus(v)) for k, v in values.items()
-            if k.lower() != 'brq_signature'
-        ]
-        filtered_items = [
-            (k, v) for k, v in items
-            if any(k.lower().startswith(p) for p in ('add_', 'brq_', 'cust_'))
-        ]
-        sorted_items = sorted(filtered_items, key=lambda pair: pair[0].lower())
-        sign_string = ''.join(f'{k}={v or ""}' for k, v in sorted_items)
-        sign_string += self.buckaroo_official_secret_key
-        return sha1(sign_string.encode('utf-8')).hexdigest()

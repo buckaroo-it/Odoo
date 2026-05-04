@@ -203,12 +203,11 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
         self.creditcard.buckaroo_official_hosted_fields_client_id = 'my_client_id'
         self.creditcard.buckaroo_official_hosted_fields_client_secret = 'my_client_secret'
 
-        mock_http_response = MagicMock()
-        mock_http_response.json.return_value = {
+        mock_oauth = MagicMock()
+        mock_oauth.get_token.return_value = {
             'access_token': 'jwt-token-abc',
             'expires_in': 3600,
         }
-        mock_http_response.raise_for_status = MagicMock()
 
         controller = self._make_controller()
         mock_request = self._make_request_mock()
@@ -220,9 +219,9 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
             type(self.env['payment.method']), 'sudo',
             return_value=self.env['payment.method'],
         ), patch(
-            'odoo.addons.payment_buckaroo_official.controllers.creditcard.req_lib.post',
-            return_value=mock_http_response,
-        ) as mock_post, patch.object(
+            'odoo.addons.payment_buckaroo_official.controllers.creditcard.HostedFieldsService',
+            return_value=mock_oauth,
+        ) as mock_cls, patch.object(
             odoo.http, 'request', mock_request,
         ), patch(
             'odoo.addons.payment_buckaroo_official.controllers.creditcard.request',
@@ -233,9 +232,8 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
                 payment_method_id=self.creditcard.id,
             )
 
-        mock_post.assert_called_once()
-        call_kwargs = mock_post.call_args
-        self.assertIn('https://auth.buckaroo.io/oauth/token', call_kwargs[0])
+        mock_cls.assert_called_once_with('my_client_id', 'my_client_secret')
+        mock_oauth.get_token.assert_called_once_with()
         self.assertEqual(result['access_token'], 'jwt-token-abc')
         self.assertEqual(result['expires_in'], 3600)
 
@@ -261,18 +259,21 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
         self.assertIn('not configured', result['error'])
 
     def test_token_exchange_request_failure(self):
-        """When the HTTP request to Buckaroo fails, the endpoint returns an error."""
+        """When the OAuth token request fails, the endpoint returns an error."""
         import odoo.http
-        import requests
+        from buckaroo.exceptions._buckaroo_error import BuckarooError
         self.creditcard.buckaroo_official_hosted_fields_client_id = 'my_client_id'
         self.creditcard.buckaroo_official_hosted_fields_client_secret = 'my_client_secret'
 
         controller = self._make_controller()
         mock_request = self._make_request_mock()
 
+        mock_oauth = MagicMock()
+        mock_oauth.get_token.side_effect = BuckarooError("Connection refused")
+
         with patch(
-            'odoo.addons.payment_buckaroo_official.controllers.creditcard.req_lib.post',
-            side_effect=requests.RequestException("Connection refused"),
+            'odoo.addons.payment_buckaroo_official.controllers.creditcard.HostedFieldsService',
+            return_value=mock_oauth,
         ), patch.object(odoo.http, 'request', mock_request), patch(
             'odoo.addons.payment_buckaroo_official.controllers.creditcard.request',
             new=mock_request,

@@ -11,12 +11,17 @@ from ..utils.const import BUCKAROO_STATUS_CODES_MAPPING
 from ..utils.push_handlers import parse_push
 
 
-def _make_mock_request(content_type='application/x-www-form-urlencoded',
-                       body=None, values=None):
+def make_mock_request(content_type='application/x-www-form-urlencoded',
+                      body=None, values=None):
     """Build a minimal mock ``odoo.http.request`` for testing push parsing."""
     req = MagicMock()
     req.httprequest.content_type = content_type
+    req.httprequest.headers = {}
+    req.httprequest.url = None
+    req.httprequest.method = None
     if body is not None:
+        if isinstance(body, str):
+            body = body.encode('utf-8')
         req.httprequest.get_data.return_value = body
     if values is not None:
         req.httprequest.values = values
@@ -25,7 +30,7 @@ def _make_mock_request(content_type='application/x-www-form-urlencoded',
 
 def parsed_from_form(raw):
     """Build a :class:`ParsedPush` from a raw ``brq_*`` dict via the production parser."""
-    return parse_push(_make_mock_request(
+    return parse_push(make_mock_request(
         content_type='application/x-www-form-urlencoded',
         values=raw,
     ))
@@ -33,7 +38,7 @@ def parsed_from_form(raw):
 
 def parsed_from_json(payload):
     """Build a :class:`ParsedPush` from a Buckaroo JSON-push payload via the production parser."""
-    return parse_push(_make_mock_request(
+    return parse_push(make_mock_request(
         content_type='application/json',
         body=_json.dumps(payload),
     ))
