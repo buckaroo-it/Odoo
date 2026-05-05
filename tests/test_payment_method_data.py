@@ -57,6 +57,7 @@ METHOD_DATA = [
     ('przelewy24',  {'EUR', 'PLN'},                       set()),
     ('blik',        {'PLN'},                              set()),
     ('twint',       {'CHF'},                              set()),
+    ('googlepay',   {'EUR'},                              set()),
     ('billink',     {'EUR'},                              set()),
     ('creditcard',  _MULTI_CURRENCY,                      set()),
     ('klarna',      {'EUR', 'CHF', 'DKK', 'NOK', 'SEK', 'PLN', 'GBP'},

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="googlepay_inline_form"
+              name="Buckaroo Google Pay Inline Form"
+              inherit_id="payment.method_form">
+        <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
+            <t t-if="pm_sudo.code == 'googlepay'">
+                <t t-set="gp_partner"
+                   t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id) or request.env['res.partner']"/>
+                <t t-set="gp_country"
+                   t-value="(gp_partner and gp_partner.country_id) or provider_sudo.company_id.country_id"/>
+                <div id="o_buckaroo_googlepay_container"
+                     class="d-none"
+                     t-att-data-environment="provider_sudo.state == 'enabled' and 'PRODUCTION' or 'TEST'"
+                     t-att-data-merchant-guid="pm_sudo.buckaroo_official_googlepay_merchant_guid or ''"
+                     t-att-data-google-merchant-id="pm_sudo.buckaroo_official_googlepay_google_merchant_id or ''"
+                     t-att-data-merchant-name="provider_sudo.company_id.name or ''"
+                     t-att-data-total-amount="amount"
+                     t-att-data-currency-code="currency and currency.name or ''"
+                     t-att-data-country-code="gp_country and gp_country.code or ''"/>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

@@ -1,12 +1,12 @@
 # Translation of Odoo Server.
 # This file contains the translation of the following modules:
 # 	* payment_buckaroo_official
-# 
+#
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-04 09:33+0000\n"
+"POT-Creation-Date: 2026-05-05 13:10+0000\n"
 "PO-Revision-Date: 2026-04-03 09:58+0000\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -100,6 +100,11 @@ msgid "Buckaroo Max Amount (EUR)"
 msgstr "Buckaroo Höchstbetrag (EUR)"
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_merchant_guid
+msgid "Buckaroo Merchant GUID"
+msgstr "Buckaroo Merchant GUID"
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_min_amount
 msgid "Buckaroo Min Amount (EUR)"
 msgstr "Buckaroo Mindestbetrag (EUR)"
@@ -146,6 +151,20 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_transaction.py:0
 msgid "Buckaroo: %(operation)s request failed: %(error)s"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_transaction.py:0
+msgid "Buckaroo: %s"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_transaction.py:0
+msgid ""
+"Buckaroo: payment could not be initiated (no redirect URL received and no "
+"error message provided)."
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -330,6 +349,7 @@ msgstr ""
 #. module: payment_buckaroo_official
 #. odoo-javascript
 #: code:addons/payment_buckaroo_official/static/src/js/payment_form_creditcard.js:0
+#: code:addons/payment_buckaroo_official/static/src/js/payment_form_googlepay.js:0
 msgid "Error"
 msgstr ""
 
@@ -348,6 +368,55 @@ msgstr "Hosted Fields-Token konnte nicht abgerufen werden."
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_transaction__buckaroo_official_payment_action
 msgid "Frozen at creation time so push notifications use a stable value."
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_google_merchant_id
+msgid "Google Merchant ID"
+msgstr "Google Merchant ID"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_googlepay
+msgid "Google Pay"
+msgstr "Google Pay"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.payment_method_form_buckaroo_official
+msgid "Google Pay Settings"
+msgstr "Google Pay-Einstellungen"
+
+#. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/payment_form_googlepay.js:0
+#, fuzzy
+msgid "Google Pay is not ready. Please reload the page and try again."
+msgstr ""
+"Google Pay-Zahlung konnte nicht verarbeitet werden. Bitte versuchen Sie es "
+"erneut."
+
+#. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/payment_form_googlepay.js:0
+msgid "Google Pay payment could not be processed. Please try again."
+msgstr ""
+"Google Pay-Zahlung konnte nicht verarbeitet werden. Bitte versuchen Sie es "
+"erneut."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_googlepay.py:0
+msgid "Google Pay payment token is missing. Please retry the Google Pay flow."
+msgstr ""
+"Google Pay-Zahlungstoken fehlt. Bitte starten Sie den Google Pay-Vorgang "
+"erneut."
+
+#. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/payment_form_googlepay.js:0
+#, fuzzy
+msgid "Google Pay returned an incomplete response. Please try again."
+msgstr ""
+"Google Pay-Zahlung konnte nicht verarbeitet werden. Bitte versuchen Sie es "
+"erneut."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_klarna_gender__1
@@ -636,6 +705,7 @@ msgstr "Bitte geben Sie Ihr Geburtsdatum ein, um mit Riverty fortzufahren."
 
 #. module: payment_buckaroo_official
 #. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/riverty.py:0
 #: code:addons/payment_buckaroo_official/models/payment_method_riverty.py:0
 #, fuzzy
 msgid "Please select a salutation to proceed with Riverty."
@@ -817,9 +887,27 @@ msgid ""
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_merchant_guid
+msgid ""
+"The Merchant GUID issued by Buckaroo for Google Pay. Find this in Buckaroo "
+"Plaza under your Google Pay configuration."
+msgstr ""
+"Die von Buckaroo für Google Pay ausgegebene Merchant GUID. Sie finden diese "
+"in Buckaroo Plaza unter Ihrer Google Pay-Konfiguration."
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
 msgid "The key used to identify the website with Buckaroo Official."
 msgstr "Der Schlüssel zur Identifizierung der Website bei Buckaroo Official."
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_google_merchant_id
+msgid ""
+"The merchant identifier issued by Google in the Google Pay & Wallet Console. "
+"Required for production Google Pay sessions."
+msgstr ""
+"Die von Google in der Google Pay & Wallet Console ausgegebene "
+"Händlerkennung. Erforderlich für produktive Google Pay-Sitzungen."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_provider__code
@@ -935,6 +1023,32 @@ msgstr ""
 #: model:payment.method,name:payment_buckaroo_official.payment_method_ideal
 msgid "iDEAL | Wero"
 msgstr ""
+
+#~ msgid "Black"
+#~ msgstr "Schwarz"
+
+#~ msgid "Button Style"
+#~ msgstr "Schaltflächenstil"
+
+#~ msgid ""
+#~ "Color theme for the Google Pay button rendered on checkout. Pick the "
+#~ "variant that contrasts best with your storefront."
+#~ msgstr ""
+#~ "Farbschema der Google Pay-Schaltfläche im Checkout. Wählen Sie die "
+#~ "Variante, die den besten Kontrast zu Ihrem Shop bietet."
+
+#~ msgid "Could not initialize Google Pay. Please try again."
+#~ msgstr ""
+#~ "Google Pay konnte nicht initialisiert werden. Bitte versuchen Sie es "
+#~ "erneut."
+
+#~ msgid "Google Pay is unavailable. Please try a different payment method."
+#~ msgstr ""
+#~ "Google Pay ist nicht verfügbar. Bitte wählen Sie eine andere "
+#~ "Zahlungsmethode."
+
+#~ msgid "White"
+#~ msgstr "Weiß"
 
 #~ msgid "The Buckaroo maximum amount cannot be negative."
 #~ msgstr "Der Buckaroo-Höchstbetrag darf nicht negativ sein."

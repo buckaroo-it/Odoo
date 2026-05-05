@@ -28,6 +28,7 @@
                    ref('payment_buckaroo_official.payment_method_przelewy24'),
                    ref('payment_buckaroo_official.payment_method_blik'),
                    ref('payment_buckaroo_official.payment_method_twint'),
+                   ref('payment_buckaroo_official.payment_method_googlepay'),
                    ref('payment_buckaroo_official.payment_method_billink'),
                    ref('payment_buckaroo_official.payment_method_klarna'),
                    ref('payment_buckaroo_official.payment_method_riverty'),

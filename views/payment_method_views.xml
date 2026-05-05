@@ -30,6 +30,11 @@
                        invisible="not buckaroo_official_is_linked or code != 'riverty'">
                     <field name="buckaroo_official_riverty_authorize"/>
                 </group>
+                <group string="Google Pay Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'googlepay'">
+                    <field name="buckaroo_official_googlepay_merchant_guid"/>
+                    <field name="buckaroo_official_googlepay_google_merchant_id"/>
+                </group>
             </field>
         </field>
     </record>

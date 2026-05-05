@@ -27,6 +27,7 @@ DEFAULT_PAYMENT_METHOD_CODES = [
     'przelewy24',
     'blik',
     'twint',
+    'googlepay',
     'billink',
     'creditcard',
 ]
