@@ -32,7 +32,7 @@
             'payment_buckaroo_official/static/src/js/payment_form_klarna.js',
             'payment_buckaroo_official/static/src/js/payment_form_riverty.js',
             'payment_buckaroo_official/static/src/js/payment_form_creditcard.js',
-            'payment_buckaroo_official/static/src/js/payment_form_googlepay.js',
+            'payment_buckaroo_official/static/src/js/payment_googlepay.js',
             'payment_buckaroo_official/static/src/js/payment_form_surcharge.js',
         ],
     },

@@ -35,6 +35,13 @@
                     <field name="buckaroo_official_googlepay_merchant_guid"/>
                     <field name="buckaroo_official_googlepay_google_merchant_id"/>
                 </group>
+                <group string="Google Pay Placement &amp; Display"
+                       invisible="not buckaroo_official_is_linked or code != 'googlepay'">
+                    <field name="buckaroo_official_googlepay_show_on_product"/>
+                    <field name="buckaroo_official_googlepay_show_on_cart"/>
+                    <field name="buckaroo_official_googlepay_show_on_checkout"/>
+                    <field name="buckaroo_official_googlepay_button_style"/>
+                </group>
             </field>
         </field>
     </record>

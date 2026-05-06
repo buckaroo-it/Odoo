@@ -23,4 +23,63 @@
         </xpath>
     </template>
 
+    <template id="googlepay_express_form"
+              name="Buckaroo Google Pay Express Form">
+        <t t-set="gp_method" t-value="provider_sudo.payment_method_ids.filtered(lambda m: m.code == 'googlepay' and m.buckaroo_official_googlepay_show_on_cart and m._buckaroo_googlepay_is_configured())[:1]"/>
+        <t t-if="gp_method">
+            <t t-set="gp_partner"
+               t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id) or request.env['res.partner']"/>
+            <t t-set="gp_country"
+               t-value="(gp_partner and gp_partner.country_id) or provider_sudo.company_id.country_id"/>
+            <div name="o_express_checkout_container"
+                 t-attf-id="o_buckaroo_googlepay_express_container_{{provider_sudo.id}}"
+                 class="o_buckaroo_googlepay_express_container w-100 mt-2"
+                 t-att-data-provider-id="provider_sudo.id"
+                 t-att-data-provider-code="provider_sudo.code"
+                 t-att-data-payment-method-id="gp_method.id"
+                 t-att-data-environment="provider_sudo.state == 'enabled' and 'PRODUCTION' or 'TEST'"
+                 t-att-data-merchant-guid="gp_method.buckaroo_official_googlepay_merchant_guid"
+                 t-att-data-google-merchant-id="gp_method.buckaroo_official_googlepay_google_merchant_id or ''"
+                 t-att-data-merchant-name="provider_sudo.company_id.name or ''"
+                 t-att-data-country-code="gp_country and gp_country.code or ''"
+                 t-att-data-button-style="gp_method.buckaroo_official_googlepay_button_style or 'black'"/>
+        </t>
+    </template>
+
+    <template id="googlepay_express_product_page"
+              name="Buckaroo Google Pay Express on Product Page"
+              inherit_id="website_sale.cta_wrapper">
+        <xpath expr="//div[@id='add_to_cart_wrap']" position="before">
+            <t t-set="gp_provider" t-value="request.env['payment.provider'].sudo().search([('code', '=', 'buckaroo_official'), ('state', 'in', ['enabled', 'test']), ('allow_express_checkout', '=', True)], limit=1)"/>
+            <t t-set="gp_method" t-value="gp_provider and gp_provider.payment_method_ids.filtered(lambda m: m.code == 'googlepay' and m.active and m.buckaroo_official_googlepay_show_on_product and m._buckaroo_googlepay_is_configured())[:1]"/>
+            <t t-if="gp_provider and gp_method">
+                <t t-set="gp_country"
+                   t-value="gp_provider.company_id.country_id"/>
+                <t t-set="gp_currency"
+                   t-value="website.currency_id or gp_provider.company_id.currency_id"/>
+                <div name="o_express_checkout_container"
+                     class="o_buckaroo_googlepay_express_container o_buckaroo_googlepay_product_express w-100 mb-2"
+                     t-att-data-placement="'product'"
+                     t-att-data-provider-id="gp_provider.id"
+                     t-att-data-provider-code="gp_provider.code"
+                     t-att-data-payment-method-id="gp_method.id"
+                     t-att-data-environment="gp_provider.state == 'enabled' and 'PRODUCTION' or 'TEST'"
+                     t-att-data-merchant-guid="gp_method.buckaroo_official_googlepay_merchant_guid or ''"
+                     t-att-data-google-merchant-id="gp_method.buckaroo_official_googlepay_google_merchant_id or ''"
+                     t-att-data-merchant-name="gp_provider.company_id.name or ''"
+                     t-att-data-country-code="gp_country and gp_country.code or ''"
+                     t-att-data-currency-code="gp_currency and gp_currency.name or ''"
+                     t-att-data-currency-name="gp_currency and gp_currency.name or ''"
+                     t-att-data-button-style="gp_method.buckaroo_official_googlepay_button_style or 'black'"
+                     t-att-data-amount="0"
+                     t-att-data-minor-amount="0"
+                     t-att-data-partner-id="-1"
+                     t-att-data-shipping-info-required="False"
+                     t-att-data-transaction-route="''"
+                     t-att-data-express-checkout-route="''"
+                     data-landing-route="/shop/payment/validate"/>
+            </t>
+        </xpath>
+    </template>
+
 </odoo>

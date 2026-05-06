@@ -7,3 +7,4 @@ from . import klarna
 from . import riverty
 from . import fee
 from . import googlepay
+from . import express_googlepay

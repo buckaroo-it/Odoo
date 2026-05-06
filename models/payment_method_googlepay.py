@@ -26,6 +26,37 @@ class PaymentMethodGooglepay(models.Model):
              "Wallet Console. Required for production Google Pay sessions.",
         copy=False,
     )
+    buckaroo_official_googlepay_show_on_cart = fields.Boolean(
+        string="Show on Cart",
+        default=True,
+        help="Display the Google Pay express button on the cart page.",
+        copy=False,
+    )
+    buckaroo_official_googlepay_show_on_product = fields.Boolean(
+        string="Show on Product",
+        default=False,
+        help="Display the Google Pay express button on product detail pages. "
+             "Tapping this button adds the chosen variant to the cart and "
+             "starts the Google Pay popup.",
+        copy=False,
+    )
+    buckaroo_official_googlepay_show_on_checkout = fields.Boolean(
+        string="Show on Checkout",
+        default=True,
+        help="Display Google Pay as a regular payment method on the checkout "
+             "page. When disabled, Google Pay is hidden from the inline payment "
+             "list (the cart-page express button is unaffected).",
+        copy=False,
+    )
+    buckaroo_official_googlepay_button_style = fields.Selection(
+        [('black', "Dark"), ('white', "Light")],
+        string="Button Style",
+        default='black',
+        help="Visual style of the Google Pay button. Dark works on most "
+             "storefronts; pick Light for dark-themed pages.",
+        required=True,
+        copy=False,
+    )
 
     def _get_compatible_payment_methods(
         self, provider_ids, partner_id, currency_id=None, force_tokenization=False,
@@ -38,7 +69,14 @@ class PaymentMethodGooglepay(models.Model):
         )
         return payment_methods.filtered(
             lambda pm: pm.code != 'googlepay'
-            or pm._buckaroo_googlepay_is_configured()
+            or (
+                pm._buckaroo_googlepay_is_configured()
+                and (
+                    pm.buckaroo_official_googlepay_show_on_cart
+                    if is_express_checkout
+                    else pm.buckaroo_official_googlepay_show_on_checkout
+                )
+            )
         )
 
     def _buckaroo_googlepay_is_configured(self):

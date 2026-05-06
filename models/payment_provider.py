@@ -49,6 +49,7 @@ class PaymentProvider(models.Model):
         self.filtered(lambda p: p.code == const.PROVIDER_CODE).update({
             'support_refund': 'partial',
             'support_manual_capture': 'full_only',
+            'support_express_checkout': True,
         })
 
     def _get_default_payment_method_codes(self):
