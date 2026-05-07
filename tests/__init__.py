@@ -17,3 +17,4 @@ from . import test_payment_method_creditcard
 from . import test_payment_method_googlepay
 from . import test_payment_method_sdk_contract
 from . import test_transaction_model_dispatch
+from . import test_account_move_refund

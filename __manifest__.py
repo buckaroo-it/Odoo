@@ -7,13 +7,14 @@
     'sequence': 350,
     'summary': "An official Buckaroo payment provider for Odoo 19.",
     'description': " ",
-    'depends': ['payment', 'website_sale'],
+    'depends': ['payment', 'website_sale', 'account_payment'],
     'external_dependencies': {
         'python': ['buckaroo'],
     },
     'data': [
         'views/payment_provider_views.xml',
         'views/payment_method_views.xml',
+        'views/account_move_views.xml',
         'views/payment_redirect_templates.xml',
         'views/payment_form_templates.xml',
         'views/payment_creditcard_templates.xml',
