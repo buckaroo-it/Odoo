@@ -51,6 +51,11 @@ msgid "Amount outside the Buckaroo payment method limits."
 msgstr "Betrag liegt außerhalb der Buckaroo-Zahlungsmethoden-Limits."
 
 #. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_applepay
+msgid "Apple Pay"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_creditcard_authorize__authorize
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_riverty_authorize__authorize
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_transaction__buckaroo_official_payment_action__authorize

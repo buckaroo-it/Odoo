@@ -178,6 +178,23 @@
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
 
+    <record id="payment_method_applepay" model="payment.method">
+        <field name="name">Apple Pay</field>
+        <field name="code">applepay</field>
+        <field name="sequence">1097</field>
+        <field name="active">True</field>
+        <field name="buckaroo_official_sdk_service_name">applepay</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/applepay.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_manual_capture">none</field>
+        <field name="support_refund">partial</field>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
+        <field name="supported_currency_ids"
+               eval="[Command.set([ref('base.EUR')])]"/>
+    </record>
+
     <record id="payment_method_bizum" model="payment.method">
         <field name="name">Bizum</field>
         <field name="code">bizum</field>

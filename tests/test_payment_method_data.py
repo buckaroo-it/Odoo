@@ -58,6 +58,7 @@ METHOD_DATA = [
     ('blik',        {'PLN'},                              set()),
     ('twint',       {'CHF'},                              set()),
     ('googlepay',   {'EUR'},                              set()),
+    ('applepay',    {'EUR'},                              set()),
     ('billink',     {'EUR'},                              set()),
     ('creditcard',  _MULTI_CURRENCY,                      set()),
     ('klarna',      {'EUR', 'CHF', 'DKK', 'NOK', 'SEK', 'PLN', 'GBP'},

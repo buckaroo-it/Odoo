@@ -28,6 +28,7 @@ DEFAULT_PAYMENT_METHOD_CODES = [
     'blik',
     'twint',
     'googlepay',
+    'applepay',
     'billink',
     'creditcard',
 ]
