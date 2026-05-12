@@ -2,7 +2,7 @@
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from buckaroo.services.reply import HttpPost, Json
 from werkzeug.exceptions import Forbidden
@@ -25,6 +25,7 @@ class ParsedPush:
     service_code: str | None
     signature: str | None
     raw: dict
+    service_parameters: dict = field(default_factory=dict)
     is_json: bool = False
     auth_header: str | None = None
     uri: str | None = None
@@ -42,6 +43,16 @@ class ParsedPush:
 
     def is_failed(self):
         return self._check('error')
+
+    def get_service_parameter(self, name):
+        """Case-insensitive lookup over ``service_parameters``. Mirrors
+        ``buckaroo.models.payment_response.PaymentResponse.get_service_parameter``
+        so SDK responses and push payloads expose the same surface."""
+        target = name.lower()
+        for key, value in self.service_parameters.items():
+            if key.lower() == target:
+                return value
+        return None
 
     def _check(self, group):
         return (
@@ -96,6 +107,7 @@ def _parse_form(request):
         status_code = int(status_code_raw) if status_code_raw else None
     except ValueError:
         status_code = None
+    service_code = data.get('brq_transaction_method') or data.get('brq_payment_method')
     return ParsedPush(
         reference=data.get('brq_invoicenumber') or data.get('brq_description'),
         amount=float(amount) if amount else None,
@@ -103,10 +115,31 @@ def _parse_form(request):
         currency=data.get('brq_currency'),
         status_code=status_code,
         transaction_key=data.get('brq_transactions'),
-        service_code=data.get('brq_transaction_method') or data.get('brq_payment_method'),
+        service_code=service_code,
         signature=data.get('brq_signature'),
         raw=raw,
+        service_parameters=_extract_form_service_parameters(raw, service_code),
     )
+
+
+def _extract_form_service_parameters(raw, service):
+    """Flatten ``brq_SERVICE_<service>_<name>=<value>`` form keys scoped
+    to *service* (the primary service code on this push). Scoping prevents
+    cross-service collisions (e.g. a surcharge sub-service shipped on the
+    same push overwriting the primary service's parameters) and tolerates
+    service names that contain underscores."""
+    if not service:
+        return {}
+    prefix = f'brq_service_{service.lower()}_'
+    plen = len(prefix)
+    out = {}
+    for key, value in raw.items():
+        if not value or len(key) <= plen:
+            continue
+        if key[:plen].lower() != prefix:
+            continue
+        out[key[plen:]] = value
+    return out
 
 
 def _parse_json(request):
@@ -123,16 +156,20 @@ def _parse_json(request):
     code = code_obj.get('Code') if isinstance(code_obj, dict) else code_obj
     status_code = int(code) if code is not None else None
 
-    service_code = None
-    services = data.get('Services') or []
-    if services and isinstance(services, list):
-        for svc in services:
-            name = svc.get('Name') if isinstance(svc, dict) else None
-            if name:
-                service_code = name
-                break
-    if not service_code:
-        service_code = data.get('ServiceCode')
+    primary_service = next(
+        (s for s in (data.get('Services') or [])
+         if isinstance(s, dict) and s.get('Name')),
+        None,
+    )
+    service_parameters = {}
+    if primary_service is not None:
+        for param in primary_service.get('Parameters') or []:
+            if not isinstance(param, dict):
+                continue
+            pname = param.get('Name')
+            if pname:
+                service_parameters[pname] = param.get('Value')
+    service_code = primary_service['Name'] if primary_service else data.get('ServiceCode')
 
     amount = data.get('AmountDebit')
     credit = data.get('AmountCredit')
@@ -152,6 +189,7 @@ def _parse_json(request):
         service_code=service_code,
         signature=None,
         raw=payload if isinstance(payload, dict) else {},
+        service_parameters=service_parameters,
         is_json=True,
         auth_header=auth_header,
         uri=uri,

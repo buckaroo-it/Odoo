@@ -10,6 +10,7 @@ from . import test_push_handlers
 from . import test_helpers
 from . import test_hosted_fields
 from . import test_payment_method_sdk
+from . import test_payment_method_bank_transfer
 from . import test_payment_method_billink
 from . import test_payment_method_klarna
 from . import test_payment_method_riverty

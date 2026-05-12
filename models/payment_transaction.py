@@ -66,6 +66,11 @@ class PaymentTransaction(models.Model):
 
         redirect_url = self.payment_method_id._buckaroo_extract_redirect_url(response)
         if not redirect_url:
+            fallback = self.payment_method_id._buckaroo_handle_no_redirect_response(
+                self, response,
+            )
+            if fallback is not None:
+                return fallback
             error_message = response.get_some_error()
             if error_message:
                 raise ValidationError(_("Buckaroo: %s", error_message))
@@ -243,6 +248,8 @@ class PaymentTransaction(models.Model):
         service_code = payment_data.service_code
         if service_code:
             self.buckaroo_official_service_code = service_code
+
+        self.payment_method_id._buckaroo_apply_push_metadata(self, payment_data)
 
         status_code = payment_data.status_code
         if status_code is None:

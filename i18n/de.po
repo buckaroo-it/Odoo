@@ -23,10 +23,24 @@ msgid "%s surcharge"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid ""
+"<strong>Note:</strong>\n"
+"                    Quote the payment reference in the description of your transfer to ensure it can be processed."
+msgstr ""
+"<strong>Hinweis:</strong>\n"
+"                    Geben Sie die Zahlungsreferenz im Verwendungszweck Ihrer Überweisung an, damit die Zahlung zugeordnet werden kann."
+
+#. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
 #, fuzzy
 msgid "<option value=\"\">Please select your gender</option>"
 msgstr "Bitte wählen Sie Ihr Geschlecht"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Account holder"
+msgstr "Kontoinhaber"
 
 #. module: payment_buckaroo_official
 #. odoo-javascript
@@ -43,6 +57,11 @@ msgstr ""
 #: model:payment.method,name:payment_buckaroo_official.payment_method_brand_amex
 msgid "American Express"
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Amount"
+msgstr "Betrag"
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -71,6 +90,11 @@ msgstr ""
 #: model:payment.method,name:payment_buckaroo_official.payment_method_bancontact
 msgid "Bancontact"
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_bank_transfer
+msgid "Bank Transfer"
+msgstr "Banküberweisung"
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_belfius
@@ -295,6 +319,11 @@ msgstr ""
 msgid ""
 "Could not read the product details. Please reload the page and try again."
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Complete your payment"
+msgstr "Schließen Sie Ihre Zahlung ab"
 
 #. module: payment_buckaroo_official
 #: model:ir.model,website_form_label:payment_buckaroo_official.model_res_partner
@@ -727,6 +756,11 @@ msgid "PayPal"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Payment reference"
+msgstr "Zahlungsreferenz"
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_payconiq
 msgid "Payconiq"
 msgstr ""
@@ -1016,6 +1050,11 @@ msgid "The Buckaroo maximum amount must be greater than the minimum amount."
 msgstr "Der Buckaroo-Höchstbetrag muss größer als der Mindestbetrag sein."
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "To complete your order, please transfer the outstanding amount"
+msgstr "Um Ihre Bestellung abzuschließen, überweisen Sie bitte den ausstehenden Betrag"
+
+#. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_method.py:0
 msgid ""
@@ -1185,6 +1224,11 @@ msgstr ""
 #: model:payment.method,name:payment_buckaroo_official.payment_method_ideal
 msgid "iDEAL | Wero"
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "using the bank details below."
+msgstr "unter Verwendung der unten stehenden Bankdaten."
 
 #~ msgid "Black"
 #~ msgstr "Schwarz"

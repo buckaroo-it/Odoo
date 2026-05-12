@@ -266,6 +266,74 @@ class TestParsedPushJson(BaseCase):
         self.assertEqual(parsed.raw, payload)
 
 
+class TestServiceParameters(BaseCase):
+
+    def test_form_extracts_service_params(self):
+        parsed = parsed_from_form({
+            'brq_amount': '50.00',
+            'brq_payment_method': 'transfer',
+            'brq_SERVICE_transfer_IBAN': 'NL05RABO0121503038',
+            'brq_SERVICE_transfer_BIC': 'RABONL2U',
+        })
+        self.assertEqual(parsed.service_parameters['IBAN'], 'NL05RABO0121503038')
+        self.assertEqual(parsed.service_parameters['BIC'], 'RABONL2U')
+
+    def test_form_ignores_other_services(self):
+        """Secondary services on the same push must not bleed into the
+        primary service's parameter dict."""
+        parsed = parsed_from_form({
+            'brq_amount': '50.00',
+            'brq_payment_method': 'transfer',
+            'brq_SERVICE_transfer_IBAN': 'NL05RABO0121503038',
+            'brq_SERVICE_surcharge_PaymentReference': 'BAD_CLOBBER',
+        })
+        self.assertEqual(parsed.service_parameters, {'IBAN': 'NL05RABO0121503038'})
+
+    def test_form_ignores_non_service_keys(self):
+        parsed = parsed_from_form({
+            'brq_amount': '50.00',
+            'brq_payment_method': 'transfer',
+        })
+        self.assertEqual(parsed.service_parameters, {})
+
+    def test_form_no_service_code_yields_empty(self):
+        """Without a primary service identified, extraction is skipped."""
+        parsed = parsed_from_form({'brq_SERVICE_transfer_IBAN': 'X'})
+        self.assertEqual(parsed.service_parameters, {})
+
+    def test_form_get_service_parameter_case_insensitive(self):
+        parsed = parsed_from_form({
+            'brq_payment_method': 'transfer',
+            'brq_SERVICE_transfer_IBAN': 'NL05RABO0121503038',
+        })
+        self.assertEqual(parsed.get_service_parameter('iban'), 'NL05RABO0121503038')
+        self.assertEqual(parsed.get_service_parameter('IBAN'), 'NL05RABO0121503038')
+        self.assertIsNone(parsed.get_service_parameter('Missing'))
+
+    def test_json_extracts_service_params(self):
+        parsed = parsed_from_json({
+            'Transaction': {
+                'Status': {'Code': {'Code': 792}},
+                'Services': [{
+                    'Name': 'transfer',
+                    'Parameters': [
+                        {'Name': 'IBAN', 'Value': 'NL05RABO0121503038'},
+                        {'Name': 'BIC', 'Value': 'RABONL2U'},
+                        {'Name': 'AccountHolderName', 'Value': 'Buckaroo'},
+                        {'Name': 'PaymentReference', 'Value': '14256252'},
+                    ],
+                }],
+            },
+        })
+        self.assertEqual(parsed.service_parameters['IBAN'], 'NL05RABO0121503038')
+        self.assertEqual(parsed.service_parameters['BIC'], 'RABONL2U')
+        self.assertEqual(parsed.service_parameters['AccountHolderName'], 'Buckaroo')
+        self.assertEqual(parsed.service_parameters['PaymentReference'], '14256252')
+
+    def test_json_empty_services_yields_empty_params(self):
+        parsed = parsed_from_json({'Transaction': {'Status': {'Code': {'Code': 190}}}})
+        self.assertEqual(parsed.service_parameters, {})
+
 
 class TestVerifySignature(BaseCase):
 

@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0-20260324\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-08 07:46+0000\n"
-"PO-Revision-Date: 2026-05-08 07:46+0000\n"
+"POT-Creation-Date: 2026-05-12 07:11+0000\n"
+"PO-Revision-Date: 2026-05-12 07:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -27,6 +27,18 @@ msgid "<option value=\"\">Please select your gender</option>"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid ""
+"<strong>Note:</strong>\n"
+"                    Quote the payment reference in the description of your transfer to ensure it can be processed."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Account holder"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #. odoo-javascript
 #: code:addons/payment_buckaroo_official/static/src/js/payment_googlepay.js:0
 msgid "Address update failed. Please try again."
@@ -40,6 +52,11 @@ msgstr ""
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_brand_amex
 msgid "American Express"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Amount"
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -61,6 +78,11 @@ msgid "Authorize"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "BIC"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_blik
 msgid "BLIK"
 msgstr ""
@@ -68,6 +90,31 @@ msgstr ""
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_bancontact
 msgid "Bancontact"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_bank_transfer
+msgid "Bank Transfer"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__buckaroo_official_bank_account_holder
+msgid "Bank Transfer Account Holder"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__buckaroo_official_bank_bic
+msgid "Bank Transfer BIC"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__buckaroo_official_bank_iban
+msgid "Bank Transfer IBAN"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__buckaroo_official_bank_payment_reference
+msgid "Bank Transfer Payment Reference"
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -240,6 +287,11 @@ msgstr ""
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__code
 msgid "Code"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Complete your payment"
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -474,6 +526,11 @@ msgstr ""
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.billink_inline_form
 msgid "I agree to the"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "IBAN"
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -717,6 +774,11 @@ msgstr ""
 #. odoo-python
 #: code:addons/payment_buckaroo_official/controllers/creditcard.py:0
 msgid "Payment method is not a credit card."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Payment reference"
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -999,6 +1061,11 @@ msgid "This will send a test request to the Buckaroo API. Continue?"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "To complete your order, please transfer the outstanding amount"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_transaction_description
 msgid "Transaction Description"
 msgstr ""
@@ -1113,4 +1180,9 @@ msgstr ""
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_ideal
 msgid "iDEAL | Wero"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "using the bank details below."
 msgstr ""

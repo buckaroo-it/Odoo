@@ -31,6 +31,7 @@ DEFAULT_PAYMENT_METHOD_CODES = [
     'applepay',
     'billink',
     'creditcard',
+    'bank_transfer',
 ]
 
 # Buckaroo status code groupings — addon-owned mapping, kept in sync

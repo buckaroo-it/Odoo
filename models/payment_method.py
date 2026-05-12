@@ -243,6 +243,20 @@ class PaymentMethod(models.Model):
             redirect_url = response.required_action.redirect_url
         return redirect_url
 
+    def _buckaroo_handle_no_redirect_response(self, transaction, response):
+        """Hook for methods that legitimately return no external redirect
+        (e.g. Bank Transfer's merchant-display mode). Return ``None`` to
+        fall through to the default error path, or a dict like
+        ``{'api_url': '...'}`` to short-circuit ``_get_specific_processing_values``."""
+        self.ensure_one()
+        return None
+
+    def _buckaroo_apply_push_metadata(self, transaction, payment_data):
+        """Hook for methods that ship method-specific data in pushes
+        (e.g. Bank Transfer's IBAN / BIC). Default no-op."""
+        self.ensure_one()
+        return
+
     def _buckaroo_get_refund_params(self, source_tx, refund_tx):
         self.ensure_one()
         provider = refund_tx.provider_id

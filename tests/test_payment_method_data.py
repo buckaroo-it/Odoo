@@ -60,6 +60,7 @@ METHOD_DATA = [
     ('googlepay',   {'EUR'},                              set()),
     ('applepay',    {'EUR'},                              set()),
     ('billink',     {'EUR'},                              set()),
+    ('bank_transfer', {'EUR'},                            set()),
     ('creditcard',  _MULTI_CURRENCY,                      set()),
     ('klarna',      {'EUR', 'CHF', 'DKK', 'NOK', 'SEK', 'PLN', 'GBP'},
         # ``base.uk`` resolves to country code 'GB' in Odoo (United
@@ -73,7 +74,7 @@ METHOD_DATA = [
 
 @tagged('post_install', '-at_install')
 class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
-    """Verify that all 21 payment.method XML records are correctly installed.
+    """Verify that all 22 payment.method XML records are correctly installed.
 
     Checks record existence, support_refund, and per-method code/currency/country
     restrictions as defined in ``data/payment_method_data.xml``.

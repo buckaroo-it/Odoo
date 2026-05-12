@@ -22,6 +22,7 @@
         'views/payment_googlepay_templates.xml',
         'views/payment_klarna_templates.xml',
         'views/payment_riverty_templates.xml',
+        'views/payment_bank_transfer_templates.xml',
         'data/payment_method_data.xml',
         'data/payment_provider_data.xml',
         'data/product_buckaroo_surcharge.xml',
