@@ -30,6 +30,8 @@ DEFAULT_PAYMENT_METHOD_CODES = [
     "googlepay",
     "applepay",
     "billink",
+    "klarna",
+    "riverty",
     "creditcard",
     "bank_transfer",
 ]

@@ -7,17 +7,9 @@ from .common import BuckarooOfficialCommon
 from ..utils import const
 
 
-# Methods present in the data XML but NOT auto-enabled on the provider —
-# merchants opt in via Configuration > Payment Methods. Klarna and Riverty
-# require BNPL onboarding (T&C, KYC, BirthDate collection); shipping them
-# enabled by default would leak partial flows to merchants who never
-# requested BNPL.
-OPT_IN_PAYMENT_METHOD_CODES = ["klarna", "riverty"]
-
-ALL_PAYMENT_METHOD_CODES = const.DEFAULT_PAYMENT_METHOD_CODES + OPT_IN_PAYMENT_METHOD_CODES
-
 ALL_XML_IDS = [
-    f"payment_buckaroo_official.payment_method_{code}" for code in ALL_PAYMENT_METHOD_CODES
+    f"payment_buckaroo_official.payment_method_{code}"
+    for code in const.DEFAULT_PAYMENT_METHOD_CODES
 ]
 
 
@@ -175,20 +167,6 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
                     currency_id=currency.id,
                 )
                 self.assertIn(pm, methods)
-
-    def test_opt_in_methods_not_linked_by_default(self):
-        # Klarna and Riverty require BNPL onboarding (T&C, KYC,
-        # BirthDate / Salutation collection); merchants opt in via
-        # Configuration > Payment Methods rather than getting them
-        # exposed automatically when they enable the provider.
-        linked_codes = set(self.buckaroo.payment_method_ids.mapped("code"))
-        for code in OPT_IN_PAYMENT_METHOD_CODES:
-            with self.subTest(code=code):
-                self.assertNotIn(
-                    code,
-                    linked_codes,
-                    "Opt-in method %s must not be linked by default" % code,
-                )
 
     def test_mbway_excluded_for_non_eur_currency(self):
         mbway = self.env.ref("payment_buckaroo_official.payment_method_mbway")
