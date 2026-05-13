@@ -19,7 +19,7 @@ from odoo.addons.payment_buckaroo_official.utils.push_handlers import (
 from .common import make_mock_request, parsed_from_form, parsed_from_json
 
 
-def _make_request(content_type='', form=None, json_body=None):
+def _make_request(content_type="", form=None, json_body=None):
     """Build a minimal mock ``odoo.http.request`` for testing push parsing."""
     mock_request = MagicMock()
     mock_request.httprequest.content_type = content_type
@@ -31,68 +31,66 @@ def _make_request(content_type='', form=None, json_body=None):
     mock_request.httprequest.values = form_data
     mock_request.httprequest.form = form_data
 
-    raw_json = json.dumps(json_body) if json_body is not None else ''
+    raw_json = json.dumps(json_body) if json_body is not None else ""
     mock_request.httprequest.get_data.return_value = raw_json
     return mock_request
 
 
-
 class TestParsePush(BaseCase):
-
     def test_json_content_type_returns_parsed_push(self):
         req = _make_request(
-            content_type='application/json',
-            json_body={'Transaction': {'Invoice': 'INV-1'}},
+            content_type="application/json",
+            json_body={"Transaction": {"Invoice": "INV-1"}},
         )
         parsed = parse_push(req)
         self.assertIsInstance(parsed, ParsedPush)
-        self.assertEqual(parsed.reference, 'INV-1')
+        self.assertEqual(parsed.reference, "INV-1")
 
     def test_form_content_type_returns_parsed_push(self):
         req = _make_request(
-            content_type='application/x-www-form-urlencoded',
-            form={'brq_invoicenumber': 'TX-001'},
+            content_type="application/x-www-form-urlencoded",
+            form={"brq_invoicenumber": "TX-001"},
         )
         parsed = parse_push(req)
         self.assertIsInstance(parsed, ParsedPush)
-        self.assertEqual(parsed.reference, 'TX-001')
+        self.assertEqual(parsed.reference, "TX-001")
 
     def test_empty_content_type_falls_back_to_form(self):
-        parsed = parse_push(_make_request(
-            content_type='',
-            form={'brq_invoicenumber': 'TX-001'},
-        ))
-        self.assertEqual(parsed.reference, 'TX-001')
+        parsed = parse_push(
+            _make_request(
+                content_type="",
+                form={"brq_invoicenumber": "TX-001"},
+            )
+        )
+        self.assertEqual(parsed.reference, "TX-001")
 
     def test_none_content_type_falls_back_to_form(self):
         mock_req = MagicMock()
         mock_req.httprequest.content_type = None
-        mock_req.httprequest.values = {'brq_invoicenumber': 'TX-001'}
+        mock_req.httprequest.values = {"brq_invoicenumber": "TX-001"}
         parsed = parse_push(mock_req)
         self.assertIsInstance(parsed, ParsedPush)
-        self.assertEqual(parsed.reference, 'TX-001')
-
+        self.assertEqual(parsed.reference, "TX-001")
 
 
 class TestParsedPushForm(BaseCase):
-
     def _parsed(self, **overrides):
         raw = {
-            'brq_invoicenumber': 'TX-001',
-            'brq_amount': '50.00',
-            'brq_currency': 'EUR',
-            'brq_statuscode': '190',
-            'brq_transactions': 'KEY_123',
-            'brq_signature': 'abc',
+            "brq_invoicenumber": "TX-001",
+            "brq_amount": "50.00",
+            "brq_currency": "EUR",
+            "brq_statuscode": "190",
+            "brq_transactions": "KEY_123",
+            "brq_signature": "abc",
         }
         raw.update(overrides)
         return parsed_from_form(raw)
 
     def test_reference(self):
-        self.assertEqual(self._parsed().reference, 'TX-001')
+        self.assertEqual(self._parsed().reference, "TX-001")
 
     def test_reference_fallback_to_description(self):
-        self.assertEqual(parsed_from_form({'brq_description': 'DESC-001'}).reference, 'DESC-001')
+        self.assertEqual(parsed_from_form({"brq_description": "DESC-001"}).reference, "DESC-001")
 
     def test_amount(self):
         self.assertEqual(self._parsed().amount, 50.0)
@@ -101,71 +99,70 @@ class TestParsedPushForm(BaseCase):
         self.assertIsNone(parsed_from_form({}).amount)
 
     def test_currency(self):
-        self.assertEqual(self._parsed().currency, 'EUR')
+        self.assertEqual(self._parsed().currency, "EUR")
 
     def test_status_code(self):
         self.assertEqual(self._parsed().status_code, 190)
 
     def test_status_code_invalid(self):
-        self.assertIsNone(parsed_from_form({'brq_statuscode': 'bad'}).status_code)
+        self.assertIsNone(parsed_from_form({"brq_statuscode": "bad"}).status_code)
 
     def test_transaction_key(self):
-        self.assertEqual(self._parsed().transaction_key, 'KEY_123')
+        self.assertEqual(self._parsed().transaction_key, "KEY_123")
 
     def test_signature(self):
-        self.assertEqual(self._parsed().signature, 'abc')
+        self.assertEqual(self._parsed().signature, "abc")
 
     def test_raw_preserves_case(self):
-        raw = {'BRQ_AMOUNT': '10.00', 'brq_currency': 'EUR'}
+        raw = {"BRQ_AMOUNT": "10.00", "brq_currency": "EUR"}
         self.assertEqual(parsed_from_form(raw).raw, raw)
 
     def test_is_success(self):
-        self.assertTrue(self._parsed(brq_statuscode='190').is_success())
-        self.assertFalse(self._parsed(brq_statuscode='890').is_success())
+        self.assertTrue(self._parsed(brq_statuscode="190").is_success())
+        self.assertFalse(self._parsed(brq_statuscode="890").is_success())
 
     def test_is_pending(self):
-        self.assertTrue(self._parsed(brq_statuscode='790').is_pending())
+        self.assertTrue(self._parsed(brq_statuscode="790").is_pending())
 
     def test_is_cancelled(self):
-        self.assertTrue(self._parsed(brq_statuscode='890').is_cancelled())
+        self.assertTrue(self._parsed(brq_statuscode="890").is_cancelled())
 
     def test_is_failed(self):
-        self.assertTrue(self._parsed(brq_statuscode='490').is_failed())
+        self.assertTrue(self._parsed(brq_statuscode="490").is_failed())
 
     def test_parse_push_preserves_form_case_in_raw(self):
         form_data = {
-            'BRQ_INVOICENUMBER': 'TX-001',
-            'BRQ_AMOUNT': '50.00',
-            'brq_signature': 'sig',
+            "BRQ_INVOICENUMBER": "TX-001",
+            "BRQ_AMOUNT": "50.00",
+            "brq_signature": "sig",
         }
         req = _make_request(
-            content_type='application/x-www-form-urlencoded',
+            content_type="application/x-www-form-urlencoded",
             form=form_data,
         )
         parsed = parse_push(req)
-        self.assertEqual(parsed.reference, 'TX-001')
+        self.assertEqual(parsed.reference, "TX-001")
         self.assertEqual(parsed.amount, 50.0)
-        self.assertEqual(parsed.signature, 'sig')
-        self.assertEqual(parsed.raw['BRQ_INVOICENUMBER'], 'TX-001')
-
+        self.assertEqual(parsed.signature, "sig")
+        self.assertEqual(parsed.raw["BRQ_INVOICENUMBER"], "TX-001")
 
 
 class TestParsedPushJson(BaseCase):
-
-    def _payload(self, status_code=190, key='TXN_KEY', invoice='TX-001',
-                 amount=50.0, currency='EUR'):
+    def _payload(
+        self, status_code=190, key="TXN_KEY", invoice="TX-001", amount=50.0, currency="EUR"
+    ):
         return {
-            'Transaction': {
-                'Key': key,
-                'Invoice': invoice,
-                'Currency': currency,
-                'AmountDebit': amount,
-                'Status': {
-                    'Code': {'Code': status_code, 'Description': 'Success'},
-                    'SubCode': {'Code': 'S001', 'Description': 'Approved'},
-                    'DateTime': '2025-01-01T12:00:00',
+            "Transaction": {
+                "Key": key,
+                "Invoice": invoice,
+                "Currency": currency,
+                "AmountDebit": amount,
+                "Status": {
+                    "Code": {"Code": status_code, "Description": "Success"},
+                    "SubCode": {"Code": "S001", "Description": "Approved"},
+                    "DateTime": "2025-01-01T12:00:00",
                 },
-                'Signature': 'json_sig',
+                "Signature": "json_sig",
             },
         }
 
@@ -173,7 +170,7 @@ class TestParsedPushJson(BaseCase):
         return parsed_from_json(self._payload(**kwargs))
 
     def test_reference(self):
-        self.assertEqual(self._parsed().reference, 'TX-001')
+        self.assertEqual(self._parsed().reference, "TX-001")
 
     def test_amount(self):
         self.assertEqual(self._parsed().amount, 50.0)
@@ -182,13 +179,13 @@ class TestParsedPushJson(BaseCase):
         self.assertIsNone(parsed_from_json({}).amount)
 
     def test_currency(self):
-        self.assertEqual(self._parsed().currency, 'EUR')
+        self.assertEqual(self._parsed().currency, "EUR")
 
     def test_status_code(self):
         self.assertEqual(self._parsed().status_code, 190)
 
     def test_transaction_key(self):
-        self.assertEqual(self._parsed().transaction_key, 'TXN_KEY')
+        self.assertEqual(self._parsed().transaction_key, "TXN_KEY")
 
     def test_signature_field_is_unused_for_json(self):
         self.assertIsNone(self._parsed().signature)
@@ -214,49 +211,49 @@ class TestParsedPushJson(BaseCase):
 
     def test_parse_push_json(self):
         payload = {
-            'Transaction': {
-                'Key': 'K1',
-                'Invoice': 'INV-1',
-                'AmountDebit': 25.0,
-                'Currency': 'EUR',
-                'Status': {'Code': {'Code': 190, 'Description': 'OK'}},
-                'Signature': 'sig',
+            "Transaction": {
+                "Key": "K1",
+                "Invoice": "INV-1",
+                "AmountDebit": 25.0,
+                "Currency": "EUR",
+                "Status": {"Code": {"Code": 190, "Description": "OK"}},
+                "Signature": "sig",
             },
         }
-        req = _make_request(content_type='application/json', json_body=payload)
+        req = _make_request(content_type="application/json", json_body=payload)
         parsed = parse_push(req)
-        self.assertEqual(parsed.reference, 'INV-1')
+        self.assertEqual(parsed.reference, "INV-1")
         self.assertEqual(parsed.amount, 25.0)
         self.assertTrue(parsed.is_success())
 
     def test_parse_push_empty_json_body(self):
-        req = _make_request(content_type='application/json')
-        req.httprequest.get_data.return_value = ''
+        req = _make_request(content_type="application/json")
+        req.httprequest.get_data.return_value = ""
         self.assertIsNone(parse_push(req).reference)
 
     def test_service_code_from_services_list(self):
         payload = self._payload()
-        payload['Transaction']['Services'] = [{'Name': 'ideal'}]
-        self.assertEqual(parsed_from_json(payload).service_code, 'ideal')
+        payload["Transaction"]["Services"] = [{"Name": "ideal"}]
+        self.assertEqual(parsed_from_json(payload).service_code, "ideal")
 
     def test_service_code_fallback_to_service_code(self):
         payload = self._payload()
-        payload['Transaction']['Services'] = []
-        payload['Transaction']['ServiceCode'] = 'ideal'
-        self.assertEqual(parsed_from_json(payload).service_code, 'ideal')
+        payload["Transaction"]["Services"] = []
+        payload["Transaction"]["ServiceCode"] = "ideal"
+        self.assertEqual(parsed_from_json(payload).service_code, "ideal")
 
     def test_service_code_missing(self):
         self.assertIsNone(parsed_from_json(self._payload()).service_code)
 
     def test_credit_amount(self):
         payload = self._payload()
-        payload['Transaction']['AmountCredit'] = 25.50
+        payload["Transaction"]["AmountCredit"] = 25.50
         self.assertEqual(parsed_from_json(payload).credit_amount, 25.5)
 
     def test_parse_push_invalid_json(self):
         req = MagicMock()
-        req.httprequest.content_type = 'application/json'
-        req.httprequest.get_data.return_value = 'not-json{'
+        req.httprequest.content_type = "application/json"
+        req.httprequest.get_data.return_value = "not-json{"
         self.assertIsNone(parse_push(req).reference)
 
     def test_json_raw_is_top_level_payload(self):
@@ -267,78 +264,88 @@ class TestParsedPushJson(BaseCase):
 
 
 class TestServiceParameters(BaseCase):
-
     def test_form_extracts_service_params(self):
-        parsed = parsed_from_form({
-            'brq_amount': '50.00',
-            'brq_payment_method': 'transfer',
-            'brq_SERVICE_transfer_IBAN': 'NL05RABO0121503038',
-            'brq_SERVICE_transfer_BIC': 'RABONL2U',
-        })
-        self.assertEqual(parsed.service_parameters['IBAN'], 'NL05RABO0121503038')
-        self.assertEqual(parsed.service_parameters['BIC'], 'RABONL2U')
+        parsed = parsed_from_form(
+            {
+                "brq_amount": "50.00",
+                "brq_payment_method": "transfer",
+                "brq_SERVICE_transfer_IBAN": "NL05RABO0121503038",
+                "brq_SERVICE_transfer_BIC": "RABONL2U",
+            }
+        )
+        self.assertEqual(parsed.service_parameters["IBAN"], "NL05RABO0121503038")
+        self.assertEqual(parsed.service_parameters["BIC"], "RABONL2U")
 
     def test_form_ignores_other_services(self):
         """Secondary services on the same push must not bleed into the
         primary service's parameter dict."""
-        parsed = parsed_from_form({
-            'brq_amount': '50.00',
-            'brq_payment_method': 'transfer',
-            'brq_SERVICE_transfer_IBAN': 'NL05RABO0121503038',
-            'brq_SERVICE_surcharge_PaymentReference': 'BAD_CLOBBER',
-        })
-        self.assertEqual(parsed.service_parameters, {'IBAN': 'NL05RABO0121503038'})
+        parsed = parsed_from_form(
+            {
+                "brq_amount": "50.00",
+                "brq_payment_method": "transfer",
+                "brq_SERVICE_transfer_IBAN": "NL05RABO0121503038",
+                "brq_SERVICE_surcharge_PaymentReference": "BAD_CLOBBER",
+            }
+        )
+        self.assertEqual(parsed.service_parameters, {"IBAN": "NL05RABO0121503038"})
 
     def test_form_ignores_non_service_keys(self):
-        parsed = parsed_from_form({
-            'brq_amount': '50.00',
-            'brq_payment_method': 'transfer',
-        })
+        parsed = parsed_from_form(
+            {
+                "brq_amount": "50.00",
+                "brq_payment_method": "transfer",
+            }
+        )
         self.assertEqual(parsed.service_parameters, {})
 
     def test_form_no_service_code_yields_empty(self):
         """Without a primary service identified, extraction is skipped."""
-        parsed = parsed_from_form({'brq_SERVICE_transfer_IBAN': 'X'})
+        parsed = parsed_from_form({"brq_SERVICE_transfer_IBAN": "X"})
         self.assertEqual(parsed.service_parameters, {})
 
     def test_form_get_service_parameter_case_insensitive(self):
-        parsed = parsed_from_form({
-            'brq_payment_method': 'transfer',
-            'brq_SERVICE_transfer_IBAN': 'NL05RABO0121503038',
-        })
-        self.assertEqual(parsed.get_service_parameter('iban'), 'NL05RABO0121503038')
-        self.assertEqual(parsed.get_service_parameter('IBAN'), 'NL05RABO0121503038')
-        self.assertIsNone(parsed.get_service_parameter('Missing'))
+        parsed = parsed_from_form(
+            {
+                "brq_payment_method": "transfer",
+                "brq_SERVICE_transfer_IBAN": "NL05RABO0121503038",
+            }
+        )
+        self.assertEqual(parsed.get_service_parameter("iban"), "NL05RABO0121503038")
+        self.assertEqual(parsed.get_service_parameter("IBAN"), "NL05RABO0121503038")
+        self.assertIsNone(parsed.get_service_parameter("Missing"))
 
     def test_json_extracts_service_params(self):
-        parsed = parsed_from_json({
-            'Transaction': {
-                'Status': {'Code': {'Code': 792}},
-                'Services': [{
-                    'Name': 'transfer',
-                    'Parameters': [
-                        {'Name': 'IBAN', 'Value': 'NL05RABO0121503038'},
-                        {'Name': 'BIC', 'Value': 'RABONL2U'},
-                        {'Name': 'AccountHolderName', 'Value': 'Buckaroo'},
-                        {'Name': 'PaymentReference', 'Value': '14256252'},
+        parsed = parsed_from_json(
+            {
+                "Transaction": {
+                    "Status": {"Code": {"Code": 792}},
+                    "Services": [
+                        {
+                            "Name": "transfer",
+                            "Parameters": [
+                                {"Name": "IBAN", "Value": "NL05RABO0121503038"},
+                                {"Name": "BIC", "Value": "RABONL2U"},
+                                {"Name": "AccountHolderName", "Value": "Buckaroo"},
+                                {"Name": "PaymentReference", "Value": "14256252"},
+                            ],
+                        }
                     ],
-                }],
-            },
-        })
-        self.assertEqual(parsed.service_parameters['IBAN'], 'NL05RABO0121503038')
-        self.assertEqual(parsed.service_parameters['BIC'], 'RABONL2U')
-        self.assertEqual(parsed.service_parameters['AccountHolderName'], 'Buckaroo')
-        self.assertEqual(parsed.service_parameters['PaymentReference'], '14256252')
+                },
+            }
+        )
+        self.assertEqual(parsed.service_parameters["IBAN"], "NL05RABO0121503038")
+        self.assertEqual(parsed.service_parameters["BIC"], "RABONL2U")
+        self.assertEqual(parsed.service_parameters["AccountHolderName"], "Buckaroo")
+        self.assertEqual(parsed.service_parameters["PaymentReference"], "14256252")
 
     def test_json_empty_services_yields_empty_params(self):
-        parsed = parsed_from_json({'Transaction': {'Status': {'Code': {'Code': 190}}}})
+        parsed = parsed_from_json({"Transaction": {"Status": {"Code": {"Code": 190}}}})
         self.assertEqual(parsed.service_parameters, {})
 
 
 class TestVerifySignature(BaseCase):
-
-    SECRET = 'test_secret'
-    STORE = 'test_store'
+    SECRET = "test_secret"
+    STORE = "test_store"
 
     def _provider(self):
         provider = MagicMock()
@@ -347,36 +354,39 @@ class TestVerifySignature(BaseCase):
         return provider
 
     def test_form_missing_signature_raises_forbidden(self):
-        parsed = parsed_from_form({'brq_invoicenumber': 'TX-001'})
+        parsed = parsed_from_form({"brq_invoicenumber": "TX-001"})
         with self.assertRaises(Forbidden):
             verify_signature(parsed, self._provider())
 
     def test_form_invalid_signature_raises_forbidden(self):
-        parsed = parsed_from_form({
-            'brq_invoicenumber': 'TX-001',
-            'brq_signature': 'bad_sig',
-        })
+        parsed = parsed_from_form(
+            {
+                "brq_invoicenumber": "TX-001",
+                "brq_signature": "bad_sig",
+            }
+        )
         with self.assertRaises(Forbidden):
             verify_signature(parsed, self._provider())
 
     def _signed_json_request(self, body):
-        url = 'https://shop.example.com/payment/buckaroo_official/webhook'
-        header = BuckarooHttpClient(self.STORE, self.SECRET, BuckarooConfig())\
-            ._generate_hmac_signature('POST', url, body)['Authorization']
-        req = make_mock_request(content_type='application/json', body=body)
-        req.httprequest.headers = {'Authorization': header}
+        url = "https://shop.example.com/payment/buckaroo_official/webhook"
+        header = BuckarooHttpClient(
+            self.STORE, self.SECRET, BuckarooConfig()
+        )._generate_hmac_signature("POST", url, body)["Authorization"]
+        req = make_mock_request(content_type="application/json", body=body)
+        req.httprequest.headers = {"Authorization": header}
         req.httprequest.url = url
-        req.httprequest.method = 'POST'
+        req.httprequest.method = "POST"
         return req
 
     def test_form_matching_signature_does_not_raise(self):
-        params = {'brq_invoicenumber': 'TX-001'}
+        params = {"brq_invoicenumber": "TX-001"}
         sig = HttpPost(self.SECRET).compute_signature(params)
-        parsed = parsed_from_form({**params, 'brq_signature': sig})
+        parsed = parsed_from_form({**params, "brq_signature": sig})
         self.assertIsNone(verify_signature(parsed, self._provider()))
 
     def test_json_missing_authorization_raises_forbidden(self):
-        parsed = parsed_from_json({'Transaction': {'Invoice': 'TX-1'}})
+        parsed = parsed_from_json({"Transaction": {"Invoice": "TX-1"}})
         with self.assertRaises(Forbidden):
             verify_signature(parsed, self._provider())
 

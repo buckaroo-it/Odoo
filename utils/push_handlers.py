@@ -33,16 +33,16 @@ class ParsedPush:
     body_bytes: bytes | None = None
 
     def is_success(self):
-        return self._check('done')
+        return self._check("done")
 
     def is_pending(self):
-        return self._check('pending')
+        return self._check("pending")
 
     def is_cancelled(self):
-        return self._check('cancel')
+        return self._check("cancel")
 
     def is_failed(self):
-        return self._check('error')
+        return self._check("error")
 
     def get_service_parameter(self, name):
         """Case-insensitive lookup over ``service_parameters``. Mirrors
@@ -67,8 +67,8 @@ def parse_push(request):
     Signature is NOT yet verified. Callers must invoke
     :func:`verify_signature` after resolving the transaction's provider.
     """
-    content_type = request.httprequest.content_type or ''
-    if 'application/json' in content_type:
+    content_type = request.httprequest.content_type or ""
+    if "application/json" in content_type:
         return _parse_json(request)
     return _parse_form(request)
 
@@ -77,14 +77,19 @@ def verify_signature(parsed, provider):
     """Raise :class:`werkzeug.exceptions.Forbidden` if signature missing or invalid."""
     if parsed.is_json:
         if not parsed.auth_header:
-            _logger.warning("Received Buckaroo Official JSON push with missing Authorization header")
+            _logger.warning(
+                "Received Buckaroo Official JSON push with missing Authorization header"
+            )
             raise Forbidden()
         handler = Json(
             provider.buckaroo_official_website_key,
             provider.buckaroo_official_secret_key,
         )
         if not handler.validate(
-            parsed.auth_header, parsed.uri, parsed.method, parsed.body_bytes,
+            parsed.auth_header,
+            parsed.uri,
+            parsed.method,
+            parsed.body_bytes,
         ):
             _logger.warning("Received Buckaroo Official JSON push with invalid HMAC")
             raise Forbidden()
@@ -100,23 +105,23 @@ def verify_signature(parsed, provider):
 def _parse_form(request):
     raw = dict(request.httprequest.values)
     data = {k.lower(): v for k, v in raw.items()}
-    amount = data.get('brq_amount')
-    credit = data.get('brq_amount_credit')
-    status_code_raw = data.get('brq_statuscode', '')
+    amount = data.get("brq_amount")
+    credit = data.get("brq_amount_credit")
+    status_code_raw = data.get("brq_statuscode", "")
     try:
         status_code = int(status_code_raw) if status_code_raw else None
     except ValueError:
         status_code = None
-    service_code = data.get('brq_transaction_method') or data.get('brq_payment_method')
+    service_code = data.get("brq_transaction_method") or data.get("brq_payment_method")
     return ParsedPush(
-        reference=data.get('brq_invoicenumber') or data.get('brq_description'),
+        reference=data.get("brq_invoicenumber") or data.get("brq_description"),
         amount=float(amount) if amount else None,
         credit_amount=float(credit) if credit else None,
-        currency=data.get('brq_currency'),
+        currency=data.get("brq_currency"),
         status_code=status_code,
-        transaction_key=data.get('brq_transactions'),
+        transaction_key=data.get("brq_transactions"),
         service_code=service_code,
-        signature=data.get('brq_signature'),
+        signature=data.get("brq_signature"),
         raw=raw,
         service_parameters=_extract_form_service_parameters(raw, service_code),
     )
@@ -130,7 +135,7 @@ def _extract_form_service_parameters(raw, service):
     service names that contain underscores."""
     if not service:
         return {}
-    prefix = f'brq_service_{service.lower()}_'
+    prefix = f"brq_service_{service.lower()}_"
     plen = len(prefix)
     out = {}
     for key, value in raw.items():
@@ -143,49 +148,48 @@ def _extract_form_service_parameters(raw, service):
 
 
 def _parse_json(request):
-    body_bytes = request.httprequest.get_data() or b''
+    body_bytes = request.httprequest.get_data() or b""
     try:
         payload = json.loads(body_bytes) if body_bytes else {}
     except (json.JSONDecodeError, TypeError):
         _logger.warning("Buckaroo JSON push: invalid JSON body")
         payload = {}
-    data = payload.get('Transaction', payload) if isinstance(payload, dict) else {}
+    data = payload.get("Transaction", payload) if isinstance(payload, dict) else {}
 
-    status = data.get('Status') or {}
-    code_obj = status.get('Code') or {}
-    code = code_obj.get('Code') if isinstance(code_obj, dict) else code_obj
+    status = data.get("Status") or {}
+    code_obj = status.get("Code") or {}
+    code = code_obj.get("Code") if isinstance(code_obj, dict) else code_obj
     status_code = int(code) if code is not None else None
 
     primary_service = next(
-        (s for s in (data.get('Services') or [])
-         if isinstance(s, dict) and s.get('Name')),
+        (s for s in (data.get("Services") or []) if isinstance(s, dict) and s.get("Name")),
         None,
     )
     service_parameters = {}
     if primary_service is not None:
-        for param in primary_service.get('Parameters') or []:
+        for param in primary_service.get("Parameters") or []:
             if not isinstance(param, dict):
                 continue
-            pname = param.get('Name')
+            pname = param.get("Name")
             if pname:
-                service_parameters[pname] = param.get('Value')
-    service_code = primary_service['Name'] if primary_service else data.get('ServiceCode')
+                service_parameters[pname] = param.get("Value")
+    service_code = primary_service["Name"] if primary_service else data.get("ServiceCode")
 
-    amount = data.get('AmountDebit')
-    credit = data.get('AmountCredit')
+    amount = data.get("AmountDebit")
+    credit = data.get("AmountCredit")
 
-    headers = getattr(request.httprequest, 'headers', None)
-    auth_header = headers.get('Authorization') if headers else None
-    uri = getattr(request.httprequest, 'url', None)
-    method = getattr(request.httprequest, 'method', None)
+    headers = getattr(request.httprequest, "headers", None)
+    auth_header = headers.get("Authorization") if headers else None
+    uri = getattr(request.httprequest, "url", None)
+    method = getattr(request.httprequest, "method", None)
 
     return ParsedPush(
-        reference=data.get('Invoice') or data.get('Description'),
+        reference=data.get("Invoice") or data.get("Description"),
         amount=float(amount) if amount is not None else None,
         credit_amount=float(credit) if credit is not None else None,
-        currency=data.get('Currency'),
+        currency=data.get("Currency"),
         status_code=status_code,
-        transaction_key=data.get('Key'),
+        transaction_key=data.get("Key"),
         service_code=service_code,
         signature=None,
         raw=payload if isinstance(payload, dict) else {},
@@ -194,5 +198,5 @@ def _parse_json(request):
         auth_header=auth_header,
         uri=uri,
         method=method,
-        body_bytes=body_bytes or b'',
+        body_bytes=body_bytes or b"",
     )

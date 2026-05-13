@@ -7,13 +7,13 @@ from ..utils import const
 
 
 class SaleOrderLine(models.Model):
-    _inherit = 'sale.order.line'
+    _inherit = "sale.order.line"
 
     is_buckaroo_surcharge = fields.Boolean(
         string="Is Buckaroo Surcharge",
         default=False,
         help="Marks this line as the Buckaroo payment surcharge so it can be "
-             "located and replaced when the customer changes payment method.",
+        "located and replaced when the customer changes payment method.",
     )
 
     def _show_in_cart(self):
@@ -22,19 +22,19 @@ class SaleOrderLine(models.Model):
 
 
 class SaleOrder(models.Model):
-    _inherit = 'sale.order'
+    _inherit = "sale.order"
 
     amount_buckaroo_surcharge = fields.Monetary(
         string="Buckaroo Surcharge Amount",
-        compute='_compute_amount_buckaroo_surcharge',
+        compute="_compute_amount_buckaroo_surcharge",
         store=True,
     )
 
-    @api.depends('order_line.price_total', 'order_line.is_buckaroo_surcharge')
+    @api.depends("order_line.price_total", "order_line.is_buckaroo_surcharge")
     def _compute_amount_buckaroo_surcharge(self):
         for order in self:
-            lines = order.order_line.filtered('is_buckaroo_surcharge')
-            order.amount_buckaroo_surcharge = sum(lines.mapped('price_total'))
+            lines = order.order_line.filtered("is_buckaroo_surcharge")
+            order.amount_buckaroo_surcharge = sum(lines.mapped("price_total"))
 
     def _apply_buckaroo_surcharge_line(self, payment_method):
         self.ensure_one()
@@ -42,7 +42,8 @@ class SaleOrder(models.Model):
             lambda l: not l.is_buckaroo_surcharge and not l.is_delivery
         )
         amount = payment_method._buckaroo_compute_surcharge_amount(
-            sum(siblings.mapped('price_subtotal')), self.currency_id,
+            sum(siblings.mapped("price_subtotal")),
+            self.currency_id,
         )
         if not amount:
             self._remove_buckaroo_surcharge_line()
@@ -51,27 +52,29 @@ class SaleOrder(models.Model):
         # Inherit VAT from sibling product line (Art. 73 VAT Directive).
         sibling_taxes = siblings[:1].tax_ids
         values = {
-            'name': payment_method._buckaroo_get_surcharge_line_name(),
-            'product_uom_qty': 1.0,
-            'price_unit': amount,
-            'tax_ids': [Command.set(sibling_taxes.ids)] if sibling_taxes else [Command.clear()],
+            "name": payment_method._buckaroo_get_surcharge_line_name(),
+            "product_uom_qty": 1.0,
+            "price_unit": amount,
+            "tax_ids": [Command.set(sibling_taxes.ids)] if sibling_taxes else [Command.clear()],
         }
-        existing = self.order_line.filtered('is_buckaroo_surcharge')
+        existing = self.order_line.filtered("is_buckaroo_surcharge")
         if existing:
             existing.write(values)
             return
 
-        product = self.env.ref('payment_buckaroo_official.product_buckaroo_surcharge')
-        self.env['sale.order.line'].create({
-            'order_id': self.id,
-            'product_id': product.id,
-            'is_buckaroo_surcharge': True,
-            **values,
-        })
+        product = self.env.ref("payment_buckaroo_official.product_buckaroo_surcharge")
+        self.env["sale.order.line"].create(
+            {
+                "order_id": self.id,
+                "product_id": product.id,
+                "is_buckaroo_surcharge": True,
+                **values,
+            }
+        )
 
     def _remove_buckaroo_surcharge_line(self):
         self.ensure_one()
-        self.order_line.filtered('is_buckaroo_surcharge').unlink()
+        self.order_line.filtered("is_buckaroo_surcharge").unlink()
 
     def _buckaroo_sync_surcharge_for_method(self, payment_method):
         self.ensure_one()
@@ -84,7 +87,7 @@ class SaleOrder(models.Model):
         # Runs under parent's FOR NO KEY UPDATE NOWAIT; concurrent picks serialise.
         pm_id = self.env.context.get(const.PICK_METHOD_CONTEXT_KEY)
         if pm_id:
-            pm = self.env['payment.method'].sudo().browse(pm_id).exists()
+            pm = self.env["payment.method"].sudo().browse(pm_id).exists()
             if pm:
                 for order in self:
                     order._buckaroo_sync_surcharge_for_method(pm)

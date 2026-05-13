@@ -10,34 +10,35 @@ from ..helpers.customer import get_customer_data
 # Buckaroo service-parameter name → tx field. Looked up via
 # ``get_service_parameter`` on both SDK responses and parsed pushes.
 _BANK_TRANSFER_PARAM_MAP = {
-    'IBAN': 'buckaroo_official_bank_iban',
-    'BIC': 'buckaroo_official_bank_bic',
-    'AccountHolderName': 'buckaroo_official_bank_account_holder',
-    'PaymentReference': 'buckaroo_official_bank_payment_reference',
+    "IBAN": "buckaroo_official_bank_iban",
+    "BIC": "buckaroo_official_bank_bic",
+    "AccountHolderName": "buckaroo_official_bank_account_holder",
+    "PaymentReference": "buckaroo_official_bank_payment_reference",
 }
 
 
 class PaymentMethodBankTransfer(models.Model):
-    _inherit = 'payment.method'
+    _inherit = "payment.method"
 
     def _buckaroo_create_payment(self, transaction, client):
-        if self.code != 'bank_transfer':
+        if self.code != "bank_transfer":
             return super()._buckaroo_create_payment(transaction, client)
 
         params = self._buckaroo_get_payment_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(), params,
+            self._buckaroo_get_sdk_service_name(),
+            params,
         )
 
         customer = get_customer_data(transaction.partner_id)
-        builder.add_parameter('customeremail', customer['email'])
-        builder.add_parameter('customerfirstname', customer['first_name'])
-        builder.add_parameter('customerlastname', customer['last_name'])
-        if customer['country_code']:
-            builder.add_parameter('customerCountry', customer['country_code'])
+        builder.add_parameter("customeremail", customer["email"])
+        builder.add_parameter("customerfirstname", customer["first_name"])
+        builder.add_parameter("customerlastname", customer["last_name"])
+        if customer["country_code"]:
+            builder.add_parameter("customerCountry", customer["country_code"])
         # Have Buckaroo email the bank details to the customer too — the
         # customer may close the browser before reading the on-page details.
-        builder.add_parameter('sendmail', 'true')
+        builder.add_parameter("sendmail", "true")
 
         return builder.pay()
 
@@ -47,7 +48,7 @@ class PaymentMethodBankTransfer(models.Model):
         Persist them, set the tx pending, and route the customer via
         ``/shop/payment/validate`` so they land on ``/shop/confirmation``
         with the order confirmed and the bank details rendered inline."""
-        if self.code != 'bank_transfer':
+        if self.code != "bank_transfer":
             return super()._buckaroo_handle_no_redirect_response(transaction, response)
         if not response.is_pending():
             return None
@@ -56,11 +57,11 @@ class PaymentMethodBankTransfer(models.Model):
             transaction.sudo().write(details)
         transaction.provider_reference = response.key
         transaction._set_pending()
-        base_url = transaction.provider_id.get_base_url().rstrip('/')
-        return {'api_url': f'{base_url}/shop/payment/validate'}
+        base_url = transaction.provider_id.get_base_url().rstrip("/")
+        return {"api_url": f"{base_url}/shop/payment/validate"}
 
     def _buckaroo_apply_push_metadata(self, transaction, payment_data):
-        if self.code != 'bank_transfer':
+        if self.code != "bank_transfer":
             return super()._buckaroo_apply_push_metadata(transaction, payment_data)
         details = self._buckaroo_collect_bank_details(payment_data)
         if details:
@@ -82,17 +83,21 @@ class PaymentMethodBankTransfer(models.Model):
 
 
 class PaymentTransaction(models.Model):
-    _inherit = 'payment.transaction'
+    _inherit = "payment.transaction"
 
     buckaroo_official_bank_iban = fields.Char(
-        string="Bank Transfer IBAN", readonly=True,
+        string="Bank Transfer IBAN",
+        readonly=True,
     )
     buckaroo_official_bank_bic = fields.Char(
-        string="Bank Transfer BIC", readonly=True,
+        string="Bank Transfer BIC",
+        readonly=True,
     )
     buckaroo_official_bank_account_holder = fields.Char(
-        string="Bank Transfer Account Holder", readonly=True,
+        string="Bank Transfer Account Holder",
+        readonly=True,
     )
     buckaroo_official_bank_payment_reference = fields.Char(
-        string="Bank Transfer Payment Reference", readonly=True,
+        string="Bank Transfer Payment Reference",
+        readonly=True,
     )

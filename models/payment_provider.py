@@ -14,11 +14,11 @@ _logger = logging.getLogger(__name__)
 
 
 class PaymentProvider(models.Model):
-    _inherit = 'payment.provider'
+    _inherit = "payment.provider"
 
     code = fields.Selection(
         selection_add=[(const.PROVIDER_CODE, "Buckaroo Official")],
-        ondelete={const.PROVIDER_CODE: 'set default'},
+        ondelete={const.PROVIDER_CODE: "set default"},
     )
     buckaroo_official_website_key = fields.Char(
         string="Website Key",
@@ -30,27 +30,30 @@ class PaymentProvider(models.Model):
         string="Secret Key",
         required_if_provider=const.PROVIDER_CODE,
         copy=False,
-        groups='base.group_system',
+        groups="base.group_system",
     )
     buckaroo_official_transaction_description = fields.Char(
         string="Transaction Description",
         help="Description sent with payment transactions. Supports placeholders: "
-             "{order_number}, {shop_name}. "
-             "Leave empty to use the transaction reference.",
+        "{order_number}, {shop_name}. "
+        "Leave empty to use the transaction reference.",
     )
     buckaroo_official_refund_description = fields.Char(
         string="Refund Description",
         help="Description sent with refund requests. Supports placeholders: "
-             "{order_number}, {shop_name}. "
-             "Leave empty to use the transaction description above.",
+        "{order_number}, {shop_name}. "
+        "Leave empty to use the transaction description above.",
     )
+
     def _compute_feature_support_fields(self):
         super()._compute_feature_support_fields()
-        self.filtered(lambda p: p.code == const.PROVIDER_CODE).update({
-            'support_refund': 'partial',
-            'support_manual_capture': 'full_only',
-            'support_express_checkout': True,
-        })
+        self.filtered(lambda p: p.code == const.PROVIDER_CODE).update(
+            {
+                "support_refund": "partial",
+                "support_manual_capture": "full_only",
+                "support_express_checkout": True,
+            }
+        )
 
     def _get_default_payment_method_codes(self):
         self.ensure_one()
@@ -63,14 +66,12 @@ class PaymentProvider(models.Model):
         self.ensure_one()
         from buckaroo._buckaroo_client import BuckarooClient
 
-        if self.state == 'test':
-            mode = 'test'
-        elif self.state == 'enabled':
-            mode = 'live'
+        if self.state == "test":
+            mode = "test"
+        elif self.state == "enabled":
+            mode = "live"
         else:
-            raise UserError(
-                _("Cannot process payment: the Buckaroo provider is disabled.")
-            )
+            raise UserError(_("Cannot process payment: the Buckaroo provider is disabled."))
         return BuckarooClient(
             self.buckaroo_official_website_key,
             self.buckaroo_official_secret_key,
@@ -87,20 +88,17 @@ class PaymentProvider(models.Model):
             raise UserError(_("Connection failed: %s", e))
 
         if not is_valid:
-            raise UserError(
-                _("Connection failed: the Website Key or Secret Key is incorrect.")
-            )
+            raise UserError(_("Connection failed: the Website Key or Secret Key is incorrect."))
 
         mode = self.state
         _logger.info("Buckaroo test connection successful (mode=%s).", mode)
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _("Connection successful!"),
-                'message': _("Your Buckaroo %s credentials are valid.", mode),
-                'type': 'success',
-                'sticky': False,
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Connection successful!"),
+                "message": _("Your Buckaroo %s credentials are valid.", mode),
+                "type": "success",
+                "sticky": False,
             },
         }
-

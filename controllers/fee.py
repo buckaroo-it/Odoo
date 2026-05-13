@@ -10,51 +10,56 @@ from ..utils import const
 
 
 class BuckarooFeePaymentPortal(PaymentPortal):
-
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
         if order_id:
             method_id = self._buckaroo_resolve_pick_method_id(
-                kwargs.get('token_id'), kwargs.get('payment_method_id'),
+                kwargs.get("token_id"),
+                kwargs.get("payment_method_id"),
             )
             if method_id:
                 request.update_context(**{const.PICK_METHOD_CONTEXT_KEY: method_id})
-        kwargs.pop('amount', None)
+        kwargs.pop("amount", None)
         return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
     @staticmethod
     def _buckaroo_resolve_pick_method_id(token_id, payment_method_id):
         # Token wins: form's payment_method_id may be stale from an earlier click.
         if token_id:
-            token = request.env['payment.token'].sudo().browse(int(token_id)).exists()
+            token = request.env["payment.token"].sudo().browse(int(token_id)).exists()
             return token.payment_method_id.id if token else None
         if payment_method_id:
             return int(payment_method_id)
         return None
 
     @http.route(
-        '/payment/buckaroo_official/set_method',
-        type='jsonrpc',
-        auth='public',
+        "/payment/buckaroo_official/set_method",
+        type="jsonrpc",
+        auth="public",
         website=True,
     )
     def buckaroo_official_set_method(
-        self, payment_method_id=None, token_id=None, **_kwargs,
+        self,
+        payment_method_id=None,
+        token_id=None,
+        **_kwargs,
     ):
-        if not (order := request.cart) or order.state not in ('draft', 'sent'):
+        if not (order := request.cart) or order.state not in ("draft", "sent"):
             return {}
         method_id = self._buckaroo_resolve_pick_method_id(token_id, payment_method_id)
         if method_id:
-            pm = request.env['payment.method'].sudo().browse(method_id).exists()
+            pm = request.env["payment.method"].sudo().browse(method_id).exists()
             if pm:
                 order._buckaroo_sync_surcharge_for_method(pm)
         env = request.env
         currency = order.currency_id
         return {
-            'amount_untaxed': formatLang(env, order.amount_untaxed, currency_obj=currency),
-            'amount_tax': formatLang(env, order.amount_tax, currency_obj=currency),
-            'amount_total': formatLang(env, order.amount_total, currency_obj=currency),
-            'amount_buckaroo_surcharge': formatLang(
-                env, order.amount_buckaroo_surcharge, currency_obj=currency,
+            "amount_untaxed": formatLang(env, order.amount_untaxed, currency_obj=currency),
+            "amount_tax": formatLang(env, order.amount_tax, currency_obj=currency),
+            "amount_total": formatLang(env, order.amount_total, currency_obj=currency),
+            "amount_buckaroo_surcharge": formatLang(
+                env,
+                order.amount_buckaroo_surcharge,
+                currency_obj=currency,
             ),
-            'has_buckaroo_surcharge': bool(order.amount_buckaroo_surcharge),
+            "has_buckaroo_surcharge": bool(order.amount_buckaroo_surcharge),
         }

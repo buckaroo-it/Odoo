@@ -12,23 +12,39 @@ from ..utils import const
 # require BNPL onboarding (T&C, KYC, BirthDate collection); shipping them
 # enabled by default would leak partial flows to merchants who never
 # requested BNPL.
-OPT_IN_PAYMENT_METHOD_CODES = ['klarna', 'riverty']
+OPT_IN_PAYMENT_METHOD_CODES = ["klarna", "riverty"]
 
-ALL_PAYMENT_METHOD_CODES = (
-    const.DEFAULT_PAYMENT_METHOD_CODES + OPT_IN_PAYMENT_METHOD_CODES
-)
+ALL_PAYMENT_METHOD_CODES = const.DEFAULT_PAYMENT_METHOD_CODES + OPT_IN_PAYMENT_METHOD_CODES
 
 ALL_XML_IDS = [
-    f'payment_buckaroo_official.payment_method_{code}'
-    for code in ALL_PAYMENT_METHOD_CODES
+    f"payment_buckaroo_official.payment_method_{code}" for code in ALL_PAYMENT_METHOD_CODES
 ]
 
 
 # Full currency set shared by PayPal and Credit Card (see data/payment_method_data.xml).
 _MULTI_CURRENCY = {
-    'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'HKD', 'SGD', 'SEK',
-    'DKK', 'NOK', 'NZD', 'THB', 'HUF', 'CZK', 'ILS', 'MXN', 'BRL', 'MYR',
-    'PHP', 'TWD',
+    "USD",
+    "EUR",
+    "GBP",
+    "CAD",
+    "AUD",
+    "JPY",
+    "CHF",
+    "HKD",
+    "SGD",
+    "SEK",
+    "DKK",
+    "NOK",
+    "NZD",
+    "THB",
+    "HUF",
+    "CZK",
+    "ILS",
+    "MXN",
+    "BRL",
+    "MYR",
+    "PHP",
+    "TWD",
 }
 
 
@@ -38,41 +54,59 @@ _MULTI_CURRENCY = {
 # BNPL methods (Klarna, Riverty) are the exception: they pin a country list
 # explicitly to keep BNPL only visible to shoppers from supported markets.
 METHOD_DATA = [
-    ('ideal',       {'EUR'},                              set()),
-    ('bancontact',  {'EUR'},                              set()),
-    ('wero',        {'EUR'},                              set()),
-    ('eps',         {'EUR'},                              set()),
-    ('belfius',     {'EUR'},                              set()),
-    ('kbc',         {'EUR'},                              set()),
-    ('alipay',      {'EUR'},                              set()),
-    ('wechatpay',   {'EUR'},                              set()),
-    ('payconiq',    {'EUR'},                              set()),
-    ('swish',       {'SEK'},                              set()),
-    ('bizum',       {'EUR'},                              set()),
-    ('mbway',       {'EUR'},                              set()),
-    ('multibanco',  {'EUR'},                              set()),
-    ('knaken',      {'EUR'},                              set()),
-    ('paypal',      _MULTI_CURRENCY,                      set()),
-    ('trustly',     {'EUR', 'SEK', 'NOK', 'DKK', 'GBP'},  set()),
-    ('przelewy24',  {'EUR', 'PLN'},                       set()),
-    ('blik',        {'PLN'},                              set()),
-    ('twint',       {'CHF'},                              set()),
-    ('googlepay',   {'EUR'},                              set()),
-    ('applepay',    {'EUR'},                              set()),
-    ('billink',     {'EUR'},                              set()),
-    ('bank_transfer', {'EUR'},                            set()),
-    ('creditcard',  _MULTI_CURRENCY,                      set()),
-    ('klarna',      {'EUR', 'CHF', 'DKK', 'NOK', 'SEK', 'PLN', 'GBP'},
+    ("ideal", {"EUR"}, set()),
+    ("bancontact", {"EUR"}, set()),
+    ("wero", {"EUR"}, set()),
+    ("eps", {"EUR"}, set()),
+    ("belfius", {"EUR"}, set()),
+    ("kbc", {"EUR"}, set()),
+    ("alipay", {"EUR"}, set()),
+    ("wechatpay", {"EUR"}, set()),
+    ("payconiq", {"EUR"}, set()),
+    ("swish", {"SEK"}, set()),
+    ("bizum", {"EUR"}, set()),
+    ("mbway", {"EUR"}, set()),
+    ("multibanco", {"EUR"}, set()),
+    ("knaken", {"EUR"}, set()),
+    ("paypal", _MULTI_CURRENCY, set()),
+    ("trustly", {"EUR", "SEK", "NOK", "DKK", "GBP"}, set()),
+    ("przelewy24", {"EUR", "PLN"}, set()),
+    ("blik", {"PLN"}, set()),
+    ("twint", {"CHF"}, set()),
+    ("googlepay", {"EUR"}, set()),
+    ("applepay", {"EUR"}, set()),
+    ("billink", {"EUR"}, set()),
+    ("bank_transfer", {"EUR"}, set()),
+    ("creditcard", _MULTI_CURRENCY, set()),
+    (
+        "klarna",
+        {"EUR", "CHF", "DKK", "NOK", "SEK", "PLN", "GBP"},
         # ``base.uk`` resolves to country code 'GB' in Odoo (United
         # Kingdom of Great Britain).
-        {'NL', 'BE', 'DE', 'AT', 'FI', 'FR', 'ES', 'IT', 'PT', 'IE',
-         'CH', 'DK', 'NO', 'SE', 'PL', 'GB'}),
-    ('riverty',     {'EUR'},
-        {'NL', 'BE', 'DE', 'AT', 'FI'}),
+        {
+            "NL",
+            "BE",
+            "DE",
+            "AT",
+            "FI",
+            "FR",
+            "ES",
+            "IT",
+            "PT",
+            "IE",
+            "CH",
+            "DK",
+            "NO",
+            "SE",
+            "PL",
+            "GB",
+        },
+    ),
+    ("riverty", {"EUR"}, {"NL", "BE", "DE", "AT", "FI"}),
 ]
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
     """Verify that all 22 payment.method XML records are correctly installed.
 
@@ -89,45 +123,53 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
     def test_methods_support_refund(self):
         # Riverty refund is full-only because Odoo's amount-based refund
         # flow can't supply the article-level breakdown Riverty requires.
-        full_only_codes = {'riverty'}
+        full_only_codes = {"riverty"}
         for xml_id in ALL_XML_IDS:
             with self.subTest(xml_id=xml_id):
                 record = self.env.ref(xml_id)
-                expected = 'full_only' if record.code in full_only_codes else 'partial'
+                expected = "full_only" if record.code in full_only_codes else "partial"
                 self.assertEqual(
-                    record.support_refund, expected,
-                    "Expected support_refund='%s' for %s, got '%s'" % (
-                        expected, xml_id, record.support_refund,
+                    record.support_refund,
+                    expected,
+                    "Expected support_refund='%s' for %s, got '%s'"
+                    % (
+                        expected,
+                        xml_id,
+                        record.support_refund,
                     ),
                 )
 
     def test_payment_method_xml_data(self):
         for code, currencies, countries in METHOD_DATA:
             with self.subTest(code=code):
-                method = self.env.ref(f'payment_buckaroo_official.payment_method_{code}')
+                method = self.env.ref(f"payment_buckaroo_official.payment_method_{code}")
                 self.assertEqual(method.code, code)
                 self.assertEqual(
-                    set(method.supported_country_ids.mapped('code')), countries,
+                    set(method.supported_country_ids.mapped("code")),
+                    countries,
                 )
                 self.assertEqual(
-                    set(method.supported_currency_ids.mapped('name')), currencies,
+                    set(method.supported_currency_ids.mapped("name")),
+                    currencies,
                 )
 
     def test_methods_available_for_nl_partner(self):
         for code, _currencies, _countries in METHOD_DATA:
-            pm = self.env.ref(f'payment_buckaroo_official.payment_method_{code}')
+            pm = self.env.ref(f"payment_buckaroo_official.payment_method_{code}")
             self.buckaroo.payment_method_ids = [Command.link(pm.id)]
 
-        nl_partner = self.env['res.partner'].create({
-            'name': 'Test NL Partner',
-            'country_id': self.env.ref('base.nl').id,
-        })
+        nl_partner = self.env["res.partner"].create(
+            {
+                "name": "Test NL Partner",
+                "country_id": self.env.ref("base.nl").id,
+            }
+        )
 
         for code, currencies, _countries in METHOD_DATA:
             with self.subTest(code=code):
-                pm = self.env.ref(f'payment_buckaroo_official.payment_method_{code}')
-                currency = self.env.ref(f'base.{next(iter(currencies))}')
-                methods = self.env['payment.method']._get_compatible_payment_methods(
+                pm = self.env.ref(f"payment_buckaroo_official.payment_method_{code}")
+                currency = self.env.ref(f"base.{next(iter(currencies))}")
+                methods = self.env["payment.method"]._get_compatible_payment_methods(
                     self.buckaroo.ids,
                     nl_partner.id,
                     currency_id=currency.id,
@@ -139,26 +181,29 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
         # BirthDate / Salutation collection); merchants opt in via
         # Configuration > Payment Methods rather than getting them
         # exposed automatically when they enable the provider.
-        linked_codes = set(self.buckaroo.payment_method_ids.mapped('code'))
+        linked_codes = set(self.buckaroo.payment_method_ids.mapped("code"))
         for code in OPT_IN_PAYMENT_METHOD_CODES:
             with self.subTest(code=code):
                 self.assertNotIn(
-                    code, linked_codes,
+                    code,
+                    linked_codes,
                     "Opt-in method %s must not be linked by default" % code,
                 )
 
     def test_mbway_excluded_for_non_eur_currency(self):
-        mbway = self.env.ref('payment_buckaroo_official.payment_method_mbway')
+        mbway = self.env.ref("payment_buckaroo_official.payment_method_mbway")
         self.buckaroo.payment_method_ids = [Command.link(mbway.id)]
 
-        nl_partner = self.env['res.partner'].create({
-            'name': 'Test NL Partner',
-            'country_id': self.env.ref('base.nl').id,
-        })
+        nl_partner = self.env["res.partner"].create(
+            {
+                "name": "Test NL Partner",
+                "country_id": self.env.ref("base.nl").id,
+            }
+        )
 
-        methods = self.env['payment.method']._get_compatible_payment_methods(
+        methods = self.env["payment.method"]._get_compatible_payment_methods(
             self.buckaroo.ids,
             nl_partner.id,
-            currency_id=self.env.ref('base.USD').id,
+            currency_id=self.env.ref("base.USD").id,
         )
         self.assertNotIn(mbway, methods)

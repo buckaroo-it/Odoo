@@ -5,28 +5,29 @@
 import re
 
 
-_RE_NUMBER_END = re.compile(r'^(.*?)\s+(\d+.*)$')
-_RE_NUMBER_START = re.compile(r'^(\d+\S*)\s+(.+)$')
-_RE_HOUSE_NUMBER = re.compile(r'^\s*(\d+)\s*([A-Za-z][\w\-/]*)?\s*$')
+_RE_NUMBER_END = re.compile(r"^(.*?)\s+(\d+.*)$")
+_RE_NUMBER_START = re.compile(r"^(\d+\S*)\s+(.+)$")
+_RE_HOUSE_NUMBER = re.compile(r"^\s*(\d+)\s*([A-Za-z][\w\-/]*)?\s*$")
 
 
 def sanitize_phone(value):
     """Strip non-digit characters; BNPL APIs reject ``+`` and whitespace."""
     if not value:
-        return ''
-    return re.sub(r'\D', '', str(value))
+        return ""
+    return re.sub(r"\D", "", str(value))
 
 
 def pop_session_value(key):
     """Read and consume a session value, ``''`` when no request context."""
     from odoo.http import request as http_request  # noqa: PLC0415
+
     if not http_request:
-        return ''
+        return ""
     try:
         value = http_request.session.pop(key, None)
     except RuntimeError:
-        return ''
-    return value or ''
+        return ""
+    return value or ""
 
 
 def is_at_least_age(dob, min_age, today=None):
@@ -37,10 +38,9 @@ def is_at_least_age(dob, min_age, today=None):
     day) tiebreak instead.
     """
     from datetime import date as _date  # noqa: PLC0415
+
     today = today or _date.today()
-    age = today.year - dob.year - (
-        (today.month, today.day) < (dob.month, dob.day)
-    )
+    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
     return age >= min_age
 
 
@@ -53,19 +53,21 @@ def resolve_birthdate(transaction, session_key, partner_field, *, missing_error=
     in which case :class:`ValidationError` is raised with that message.
     """
     from datetime import datetime as _datetime  # noqa: PLC0415
+
     raw = pop_session_value(session_key)
     if raw:
         try:
-            return _datetime.strptime(raw, '%Y-%m-%d').strftime('%d-%m-%Y')
+            return _datetime.strptime(raw, "%Y-%m-%d").strftime("%d-%m-%Y")
         except ValueError:
             pass
     partner_dob = getattr(transaction.partner_id, partner_field, None)
     if partner_dob:
-        return partner_dob.strftime('%d-%m-%Y')
+        return partner_dob.strftime("%d-%m-%Y")
     if missing_error is not None:
         from odoo.exceptions import ValidationError  # noqa: PLC0415
+
         raise ValidationError(missing_error)
-    return ''
+    return ""
 
 
 def split_house_number(raw):
@@ -75,11 +77,11 @@ def split_house_number(raw):
     (Riverty's ``StreetNumber``) require a non-empty first slot.
     """
     if not raw:
-        return ('', '')
+        return ("", "")
     match = _RE_HOUSE_NUMBER.match(str(raw))
     if not match:
-        return (str(raw).strip(), '')
-    return (match.group(1), match.group(2) or '')
+        return (str(raw).strip(), "")
+    return (match.group(1), match.group(2) or "")
 
 
 def parse_street(street):
@@ -89,7 +91,7 @@ def parse_street(street):
     ("10B Downing Street").
     """
     if not street:
-        return ('', '')
+        return ("", "")
     s = street.strip()
     match = _RE_NUMBER_END.search(s)
     if match:
@@ -97,67 +99,61 @@ def parse_street(street):
     match = _RE_NUMBER_START.search(s)
     if match:
         return (match.group(2).strip(), match.group(1).strip())
-    return (s, '')
+    return (s, "")
 
 
 def is_b2b(partner):
-    return bool(
-        partner.is_company
-        or getattr(partner, 'commercial_company_name', None)
-    )
+    return bool(partner.is_company or getattr(partner, "commercial_company_name", None))
 
 
 def get_customer_data(partner):
     """Snake_case dict of fields shared across BNPL methods."""
-    street_name, house_number = parse_street(partner.street or '')
-    if not house_number and getattr(partner, 'street2', None):
+    street_name, house_number = parse_street(partner.street or "")
+    if not house_number and getattr(partner, "street2", None):
         house_number = partner.street2.strip()
 
-    full_name = (partner.name or '').strip()
-    name_parts = full_name.split(' ', 1)
-    first_name = name_parts[0] if name_parts else ''
-    last_name = name_parts[1] if len(name_parts) > 1 else ''
-    initials = ''.join(p[0].upper() + '.' for p in full_name.split() if p)
+    full_name = (partner.name or "").strip()
+    name_parts = full_name.split(" ", 1)
+    first_name = name_parts[0] if name_parts else ""
+    last_name = name_parts[1] if len(name_parts) > 1 else ""
+    initials = "".join(p[0].upper() + "." for p in full_name.split() if p)
 
     b2b = is_b2b(partner)
 
     # Riverty NL/BE prefers ``MobilePhone``; fall back to landline.
-    phone = (
-        getattr(partner, 'mobile', None)
-        or partner.phone
-        or ''
-    )
+    phone = getattr(partner, "mobile", None) or partner.phone or ""
     data = {
-        'first_name': first_name,
-        'last_name': last_name,
-        'initials': initials,
-        'street_name': street_name,
-        'house_number': house_number,
-        'postal_code': partner.zip or '',
-        'city': partner.city or '',
-        'country_code': partner.country_id.code if partner.country_id else '',
-        'email': partner.email or '',
-        'phone': phone,
-        'is_b2b': b2b,
-        'company_name': '',
-        'chamber_of_commerce': '',
-        'vat_number': '',
+        "first_name": first_name,
+        "last_name": last_name,
+        "initials": initials,
+        "street_name": street_name,
+        "house_number": house_number,
+        "postal_code": partner.zip or "",
+        "city": partner.city or "",
+        "country_code": partner.country_id.code if partner.country_id else "",
+        "email": partner.email or "",
+        "phone": phone,
+        "is_b2b": b2b,
+        "company_name": "",
+        "chamber_of_commerce": "",
+        "vat_number": "",
     }
 
     if b2b:
-        data['company_name'] = (
-            getattr(partner, 'commercial_company_name', None)
-            or getattr(partner, 'company_name', None)
-            or ''
+        data["company_name"] = (
+            getattr(partner, "commercial_company_name", None)
+            or getattr(partner, "company_name", None)
+            or ""
         )
-        data['chamber_of_commerce'] = getattr(partner, 'company_registry', None) or ''
-        data['vat_number'] = getattr(partner, 'vat', None) or ''
+        data["chamber_of_commerce"] = getattr(partner, "company_registry", None) or ""
+        data["vat_number"] = getattr(partner, "vat", None) or ""
 
     return data
 
 
-def validate_bnpl_birthdate(kwargs, *, birthdate_kwarg, session_key,
-                            partner_field, missing_msg, invalid_msg, underage_msg):
+def validate_bnpl_birthdate(
+    kwargs, *, birthdate_kwarg, session_key, partner_field, missing_msg, invalid_msg, underage_msg
+):
     """Pop, parse and validate a BNPL birthdate from controller *kwargs*.
 
     Raises :class:`ValidationError` with the supplied messages on
@@ -174,7 +170,7 @@ def validate_bnpl_birthdate(kwargs, *, birthdate_kwarg, session_key,
     if not raw:
         raise ValidationError(missing_msg)
     try:
-        dob = _datetime.strptime(raw, '%Y-%m-%d').date()
+        dob = _datetime.strptime(raw, "%Y-%m-%d").date()
     except ValueError:
         raise ValidationError(invalid_msg)
     if not is_at_least_age(dob, 18):
@@ -211,8 +207,5 @@ def resolve_bnpl_customer_data(transaction):
     shipping_partner = get_shipping_partner(transaction)
     billing_data = get_customer_data(billing_partner)
     same_address = shipping_partner == billing_partner
-    shipping_data = (
-        billing_data if same_address
-        else get_customer_data(shipping_partner)
-    )
+    shipping_data = billing_data if same_address else get_customer_data(shipping_partner)
     return billing_data, shipping_data, same_address

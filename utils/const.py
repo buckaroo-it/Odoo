@@ -3,58 +3,64 @@
 from buckaroo.models.payment_response import BuckarooStatusCode
 
 
-PROVIDER_CODE = 'buckaroo_official'
+PROVIDER_CODE = "buckaroo_official"
 
-PICK_METHOD_CONTEXT_KEY = 'buckaroo_official_pick_method_id'
+PICK_METHOD_CONTEXT_KEY = "buckaroo_official_pick_method_id"
 
 DEFAULT_PAYMENT_METHOD_CODES = [
-    'ideal',
-    'bancontact',
-    'wero',
-    'eps',
-    'belfius',
-    'kbc',
-    'alipay',
-    'wechatpay',
-    'payconiq',
-    'swish',
-    'bizum',
-    'mbway',
-    'multibanco',
-    'knaken',
-    'paypal',
-    'trustly',
-    'przelewy24',
-    'blik',
-    'twint',
-    'googlepay',
-    'applepay',
-    'billink',
-    'creditcard',
-    'bank_transfer',
+    "ideal",
+    "bancontact",
+    "wero",
+    "eps",
+    "belfius",
+    "kbc",
+    "alipay",
+    "wechatpay",
+    "payconiq",
+    "swish",
+    "bizum",
+    "mbway",
+    "multibanco",
+    "knaken",
+    "paypal",
+    "trustly",
+    "przelewy24",
+    "blik",
+    "twint",
+    "googlepay",
+    "applepay",
+    "billink",
+    "creditcard",
+    "bank_transfer",
 ]
 
 # Buckaroo status code groupings — addon-owned mapping, kept in sync
 # with the gateway's documented codes. See
 # https://docs.buckaroo.io/docs/statuscodes
 BUCKAROO_STATUS_CODES_MAPPING = {
-    'done': frozenset({BuckarooStatusCode.SUCCESS}),
-    'pending': frozenset({
-        BuckarooStatusCode.PENDING_INPUT,
-        BuckarooStatusCode.PENDING_PROCESSING,
-        BuckarooStatusCode.PENDING_CONSUMER,
-        BuckarooStatusCode.AWAITING_TRANSFER,
-    }),
-    'cancel': frozenset({
-        BuckarooStatusCode.CANCELLED_BY_USER,
-        BuckarooStatusCode.CANCELLED_BY_MERCHANT,
-    }),
-    'error': frozenset({
-        BuckarooStatusCode.FAILED,
-        BuckarooStatusCode.VALIDATION_FAILURE,
-        BuckarooStatusCode.TECHNICAL_FAILURE,
-        BuckarooStatusCode.REJECTED,
-        BuckarooStatusCode.REJECTED_BY_USER,
-        BuckarooStatusCode.REJECTED_TECHNICAL,
-    }),
+    "done": frozenset({BuckarooStatusCode.SUCCESS}),
+    "pending": frozenset(
+        {
+            BuckarooStatusCode.PENDING_INPUT,
+            BuckarooStatusCode.PENDING_PROCESSING,
+            BuckarooStatusCode.PENDING_CONSUMER,
+            BuckarooStatusCode.AWAITING_TRANSFER,
+        }
+    ),
+    "cancel": frozenset(
+        {
+            BuckarooStatusCode.CANCELLED_BY_USER,
+            BuckarooStatusCode.CANCELLED_BY_MERCHANT,
+        }
+    ),
+    "error": frozenset(
+        {
+            BuckarooStatusCode.FAILED,
+            BuckarooStatusCode.VALIDATION_FAILURE,
+            BuckarooStatusCode.TECHNICAL_FAILURE,
+            BuckarooStatusCode.REJECTED,
+            BuckarooStatusCode.REJECTED_BY_USER,
+            BuckarooStatusCode.REJECTED_TECHNICAL,
+        }
+    ),
 }

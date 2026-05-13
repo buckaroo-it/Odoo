@@ -19,7 +19,7 @@ from odoo.addons.payment_buckaroo_official.helpers.customer import (
 )
 
 
-def make_tax(amount_type='percent', amount=21.0):
+def make_tax(amount_type="percent", amount=21.0):
     tax = MagicMock()
     tax.amount_type = amount_type
     tax.amount = amount
@@ -27,9 +27,9 @@ def make_tax(amount_type='percent', amount=21.0):
 
 
 def make_order_line(
-    product_default_code='PROD-1',
+    product_default_code="PROD-1",
     product_id_val=42,
-    name='Product One',
+    name="Product One",
     product_uom_qty=2.0,
     price_total=48.40,
     price_subtotal=40.0,
@@ -71,14 +71,14 @@ def make_transaction(amount=96.80, sale_orders=None, partner=None):
 
 
 def make_partner(
-    name='Jan de Vries',
-    street='Keizersgracht 424',
+    name="Jan de Vries",
+    street="Keizersgracht 424",
     street2=None,
-    zip_code='1016 GC',
-    city='Amsterdam',
-    country_code='NL',
-    email='jan@example.com',
-    phone='+31612345678',
+    zip_code="1016 GC",
+    city="Amsterdam",
+    country_code="NL",
+    email="jan@example.com",
+    phone="+31612345678",
     mobile=None,
     is_company=False,
     company_name=None,
@@ -107,38 +107,41 @@ def make_partner(
 
 
 class TestParseStreet(BaseCase):
-
     def test_simple_street_with_number(self):
-        self.assertEqual(parse_street('Keizersgracht 424'), ('Keizersgracht', '424'))
+        self.assertEqual(parse_street("Keizersgracht 424"), ("Keizersgracht", "424"))
 
     def test_street_with_number_and_suffix(self):
-        self.assertEqual(parse_street('Keizersgracht 424 A'), ('Keizersgracht', '424 A'))
+        self.assertEqual(parse_street("Keizersgracht 424 A"), ("Keizersgracht", "424 A"))
 
     def test_multi_word_street(self):
-        self.assertEqual(parse_street('Lange Leidse Dwarsstraat 2'), ('Lange Leidse Dwarsstraat', '2'))
+        self.assertEqual(
+            parse_street("Lange Leidse Dwarsstraat 2"), ("Lange Leidse Dwarsstraat", "2")
+        )
 
     def test_street_without_number(self):
-        self.assertEqual(parse_street('Herengracht'), ('Herengracht', ''))
+        self.assertEqual(parse_street("Herengracht"), ("Herengracht", ""))
 
     def test_empty_string(self):
-        self.assertEqual(parse_street(''), ('', ''))
+        self.assertEqual(parse_street(""), ("", ""))
 
     def test_none(self):
-        self.assertEqual(parse_street(None), ('', ''))
+        self.assertEqual(parse_street(None), ("", ""))
 
     def test_number_at_start(self):
-        self.assertEqual(parse_street('424 Keizersgracht'), ('Keizersgracht', '424'))
+        self.assertEqual(parse_street("424 Keizersgracht"), ("Keizersgracht", "424"))
 
     def test_number_with_suffix_at_start(self):
-        self.assertEqual(parse_street('10B Downing Street'), ('Downing Street', '10B'))
+        self.assertEqual(parse_street("10B Downing Street"), ("Downing Street", "10B"))
 
 
 class TestGetOrderArticles(BaseCase):
-
     def test_single_product(self):
         line = make_order_line(
-            product_default_code='SKU-001', name='Widget',
-            product_uom_qty=1.0, price_total=12.10, price_subtotal=10.0,
+            product_default_code="SKU-001",
+            name="Widget",
+            product_uom_qty=1.0,
+            price_total=12.10,
+            price_subtotal=10.0,
             taxes=[make_tax(amount=21.0)],
         )
         order = make_order(lines=[line])
@@ -146,68 +149,103 @@ class TestGetOrderArticles(BaseCase):
         articles = get_order_articles(tx)
         self.assertEqual(len(articles), 1)
         a = articles[0]
-        self.assertEqual(a['identifier'], 'SKU-001')
-        self.assertEqual(a['description'], 'Widget')
-        self.assertEqual(a['quantity'], 1.0)
-        self.assertAlmostEqual(a['unit_price_incl'], 12.10, places=2)
-        self.assertAlmostEqual(a['unit_price_excl'], 10.0, places=2)
-        self.assertAlmostEqual(a['vat_percentage'], 21.0, places=2)
-        self.assertAlmostEqual(a['vat_amount'], 2.10, places=2)
-        self.assertEqual(a['type'], 'product')
+        self.assertEqual(a["identifier"], "SKU-001")
+        self.assertEqual(a["description"], "Widget")
+        self.assertEqual(a["quantity"], 1.0)
+        self.assertAlmostEqual(a["unit_price_incl"], 12.10, places=2)
+        self.assertAlmostEqual(a["unit_price_excl"], 10.0, places=2)
+        self.assertAlmostEqual(a["vat_percentage"], 21.0, places=2)
+        self.assertAlmostEqual(a["vat_amount"], 2.10, places=2)
+        self.assertEqual(a["type"], "product")
 
     def test_identifier_falls_back_to_product_id(self):
         line = make_order_line(product_default_code=None, product_id_val=99)
         order = make_order(lines=[line])
         tx = make_transaction(amount=48.40, sale_orders=[order])
-        self.assertEqual(get_order_articles(tx)[0]['identifier'], '99')
+        self.assertEqual(get_order_articles(tx)[0]["identifier"], "99")
 
     def test_multi_product(self):
-        line1 = make_order_line(product_default_code='A', product_uom_qty=1.0,
-                                price_total=10.0, price_subtotal=10.0, taxes=[])
-        line2 = make_order_line(product_default_code='B', product_uom_qty=2.0,
-                                price_total=20.0, price_subtotal=20.0, taxes=[])
+        line1 = make_order_line(
+            product_default_code="A",
+            product_uom_qty=1.0,
+            price_total=10.0,
+            price_subtotal=10.0,
+            taxes=[],
+        )
+        line2 = make_order_line(
+            product_default_code="B",
+            product_uom_qty=2.0,
+            price_total=20.0,
+            price_subtotal=20.0,
+            taxes=[],
+        )
         order = make_order(lines=[line1, line2])
         tx = make_transaction(amount=30.0, sale_orders=[order])
         self.assertEqual(len(get_order_articles(tx)), 2)
 
     def test_vat_from_price_tax(self):
-        line = make_order_line(product_uom_qty=1.0, price_total=12.10,
-                               price_subtotal=10.0, taxes=[make_tax(amount=21.0)])
+        line = make_order_line(
+            product_uom_qty=1.0,
+            price_total=12.10,
+            price_subtotal=10.0,
+            taxes=[make_tax(amount=21.0)],
+        )
         order = make_order(lines=[line])
         tx = make_transaction(amount=12.10, sale_orders=[order])
-        self.assertAlmostEqual(get_order_articles(tx)[0]['vat_percentage'], 21.0, places=2)
+        self.assertAlmostEqual(get_order_articles(tx)[0]["vat_percentage"], 21.0, places=2)
 
     def test_vat_from_price_diff_fallback(self):
-        line = make_order_line(product_uom_qty=1.0, price_total=12.10,
-                               price_subtotal=10.0, taxes=[])
+        line = make_order_line(
+            product_uom_qty=1.0, price_total=12.10, price_subtotal=10.0, taxes=[]
+        )
         line.price_tax = None
         order = make_order(lines=[line])
         tx = make_transaction(amount=12.10, sale_orders=[order])
-        self.assertAlmostEqual(get_order_articles(tx)[0]['vat_percentage'], 21.0, places=1)
+        self.assertAlmostEqual(get_order_articles(tx)[0]["vat_percentage"], 21.0, places=1)
 
     def test_section_lines_skipped(self):
-        normal = make_order_line(product_default_code='X', product_uom_qty=1.0,
-                                 price_total=10.0, price_subtotal=10.0, taxes=[])
-        section = make_order_line(display_type='line_section')
+        normal = make_order_line(
+            product_default_code="X",
+            product_uom_qty=1.0,
+            price_total=10.0,
+            price_subtotal=10.0,
+            taxes=[],
+        )
+        section = make_order_line(display_type="line_section")
         order = make_order(lines=[normal, section])
         tx = make_transaction(amount=10.0, sale_orders=[order])
         self.assertEqual(len(get_order_articles(tx)), 1)
 
     def test_rounding_correction_when_mismatch(self):
-        line1 = make_order_line(product_default_code='R1', product_uom_qty=1.0,
-                                price_total=4.99, price_subtotal=4.99, taxes=[])
-        line2 = make_order_line(product_default_code='R2', product_uom_qty=1.0,
-                                price_total=5.00, price_subtotal=5.00, taxes=[])
+        line1 = make_order_line(
+            product_default_code="R1",
+            product_uom_qty=1.0,
+            price_total=4.99,
+            price_subtotal=4.99,
+            taxes=[],
+        )
+        line2 = make_order_line(
+            product_default_code="R2",
+            product_uom_qty=1.0,
+            price_total=5.00,
+            price_subtotal=5.00,
+            taxes=[],
+        )
         order = make_order(lines=[line1, line2])
         tx = make_transaction(amount=10.00, sale_orders=[order])
         articles = get_order_articles(tx)
         self.assertEqual(len(articles), 3)
-        self.assertEqual(articles[-1]['type'], 'rounding')
-        self.assertAlmostEqual(articles[-1]['unit_price_incl'], 0.01, places=2)
+        self.assertEqual(articles[-1]["type"], "rounding")
+        self.assertAlmostEqual(articles[-1]["unit_price_incl"], 0.01, places=2)
 
     def test_no_rounding_when_exact(self):
-        line = make_order_line(product_default_code='EXACT', product_uom_qty=2.0,
-                               price_total=20.00, price_subtotal=20.00, taxes=[])
+        line = make_order_line(
+            product_default_code="EXACT",
+            product_uom_qty=2.0,
+            price_total=20.00,
+            price_subtotal=20.00,
+            taxes=[],
+        )
         order = make_order(lines=[line])
         tx = make_transaction(amount=20.00, sale_orders=[order])
         self.assertEqual(len(get_order_articles(tx)), 1)
@@ -217,25 +255,40 @@ class TestGetOrderArticles(BaseCase):
         self.assertEqual(get_order_articles(tx), [])
 
     def test_shipping_line_type(self):
-        delivery = make_order_line(product_default_code=None, product_id_val=500,
-                                   name='Shipping', product_uom_qty=1.0,
-                                   price_total=5.00, price_subtotal=5.00,
-                                   taxes=[], is_delivery=True)
+        delivery = make_order_line(
+            product_default_code=None,
+            product_id_val=500,
+            name="Shipping",
+            product_uom_qty=1.0,
+            price_total=5.00,
+            price_subtotal=5.00,
+            taxes=[],
+            is_delivery=True,
+        )
         order = make_order(lines=[delivery])
         tx = make_transaction(amount=5.00, sale_orders=[order])
-        self.assertEqual(get_order_articles(tx)[0]['type'], 'shipping')
+        self.assertEqual(get_order_articles(tx)[0]["type"], "shipping")
 
     def test_multiple_orders_combined(self):
-        line1 = make_order_line(product_default_code='O1', product_uom_qty=1.0,
-                                price_total=5.0, price_subtotal=5.0, taxes=[])
-        line2 = make_order_line(product_default_code='O2', product_uom_qty=1.0,
-                                price_total=5.0, price_subtotal=5.0, taxes=[])
+        line1 = make_order_line(
+            product_default_code="O1",
+            product_uom_qty=1.0,
+            price_total=5.0,
+            price_subtotal=5.0,
+            taxes=[],
+        )
+        line2 = make_order_line(
+            product_default_code="O2",
+            product_uom_qty=1.0,
+            price_total=5.0,
+            price_subtotal=5.0,
+            taxes=[],
+        )
         tx = make_transaction(amount=10.0, sale_orders=[make_order([line1]), make_order([line2])])
         self.assertEqual(len(get_order_articles(tx)), 2)
 
 
 class TestIsB2B(BaseCase):
-
     def test_b2c(self):
         self.assertFalse(is_b2b(make_partner(is_company=False, commercial_company_name=None)))
 
@@ -243,128 +296,145 @@ class TestIsB2B(BaseCase):
         self.assertTrue(is_b2b(make_partner(is_company=True)))
 
     def test_b2b_commercial_name(self):
-        self.assertTrue(is_b2b(make_partner(is_company=False, commercial_company_name='Acme BV')))
+        self.assertTrue(is_b2b(make_partner(is_company=False, commercial_company_name="Acme BV")))
 
     def test_b2b_both(self):
-        self.assertTrue(is_b2b(make_partner(is_company=True, commercial_company_name='Acme')))
+        self.assertTrue(is_b2b(make_partner(is_company=True, commercial_company_name="Acme")))
 
 
 class TestGetCustomerData(BaseCase):
-
     def test_name_split(self):
-        data = get_customer_data(make_partner(name='Jan de Vries'))
-        self.assertEqual(data['first_name'], 'Jan')
-        self.assertEqual(data['last_name'], 'de Vries')
+        data = get_customer_data(make_partner(name="Jan de Vries"))
+        self.assertEqual(data["first_name"], "Jan")
+        self.assertEqual(data["last_name"], "de Vries")
 
     def test_single_word_name(self):
-        data = get_customer_data(make_partner(name='Jan'))
-        self.assertEqual(data['first_name'], 'Jan')
-        self.assertEqual(data['last_name'], '')
+        data = get_customer_data(make_partner(name="Jan"))
+        self.assertEqual(data["first_name"], "Jan")
+        self.assertEqual(data["last_name"], "")
 
     def test_initials(self):
-        data = get_customer_data(make_partner(name='Jan de Vries'))
-        self.assertEqual(data['initials'], 'J.D.V.')
+        data = get_customer_data(make_partner(name="Jan de Vries"))
+        self.assertEqual(data["initials"], "J.D.V.")
 
     def test_street_parsed(self):
-        data = get_customer_data(make_partner(street='Keizersgracht 424'))
-        self.assertEqual(data['street_name'], 'Keizersgracht')
-        self.assertEqual(data['house_number'], '424')
+        data = get_customer_data(make_partner(street="Keizersgracht 424"))
+        self.assertEqual(data["street_name"], "Keizersgracht")
+        self.assertEqual(data["house_number"], "424")
 
     def test_address_fields(self):
-        data = get_customer_data(make_partner(
-            zip_code='1016 GC', city='Amsterdam', country_code='NL',
-            email='jan@example.com',
-        ))
-        self.assertEqual(data['postal_code'], '1016 GC')
-        self.assertEqual(data['city'], 'Amsterdam')
-        self.assertEqual(data['country_code'], 'NL')
-        self.assertEqual(data['email'], 'jan@example.com')
+        data = get_customer_data(
+            make_partner(
+                zip_code="1016 GC",
+                city="Amsterdam",
+                country_code="NL",
+                email="jan@example.com",
+            )
+        )
+        self.assertEqual(data["postal_code"], "1016 GC")
+        self.assertEqual(data["city"], "Amsterdam")
+        self.assertEqual(data["country_code"], "NL")
+        self.assertEqual(data["email"], "jan@example.com")
 
     def test_phone(self):
-        self.assertEqual(get_customer_data(make_partner(phone='+31612345678'))['phone'], '+31612345678')
+        self.assertEqual(
+            get_customer_data(make_partner(phone="+31612345678"))["phone"], "+31612345678"
+        )
 
     def test_phone_empty(self):
-        self.assertEqual(get_customer_data(make_partner(phone=None))['phone'], '')
+        self.assertEqual(get_customer_data(make_partner(phone=None))["phone"], "")
 
     def test_phone_prefers_mobile_when_present(self):
         # Riverty NL/BE accept either MobilePhone or Phone; prefer the
         # dedicated mobile field so the customer's actual mobile flows
         # through and is reachable for SMS-based fraud verification.
-        data = get_customer_data(make_partner(
-            phone='+31201234567', mobile='+31612345678',
-        ))
-        self.assertEqual(data['phone'], '+31612345678')
+        data = get_customer_data(
+            make_partner(
+                phone="+31201234567",
+                mobile="+31612345678",
+            )
+        )
+        self.assertEqual(data["phone"], "+31612345678")
 
     def test_phone_falls_back_to_landline_when_mobile_empty(self):
-        data = get_customer_data(make_partner(phone='+31201234567', mobile=None))
-        self.assertEqual(data['phone'], '+31201234567')
+        data = get_customer_data(make_partner(phone="+31201234567", mobile=None))
+        self.assertEqual(data["phone"], "+31201234567")
 
     def test_missing_country(self):
         partner = make_partner()
         partner.country_id = None
-        self.assertEqual(get_customer_data(partner)['country_code'], '')
+        self.assertEqual(get_customer_data(partner)["country_code"], "")
 
     def test_b2b_company_fields(self):
-        data = get_customer_data(make_partner(
-            is_company=True, commercial_company_name='Acme BV',
-            company_registry='12345678', vat='NL123456789B01',
-        ))
-        self.assertTrue(data['is_b2b'])
-        self.assertEqual(data['company_name'], 'Acme BV')
-        self.assertEqual(data['chamber_of_commerce'], '12345678')
-        self.assertEqual(data['vat_number'], 'NL123456789B01')
+        data = get_customer_data(
+            make_partner(
+                is_company=True,
+                commercial_company_name="Acme BV",
+                company_registry="12345678",
+                vat="NL123456789B01",
+            )
+        )
+        self.assertTrue(data["is_b2b"])
+        self.assertEqual(data["company_name"], "Acme BV")
+        self.assertEqual(data["chamber_of_commerce"], "12345678")
+        self.assertEqual(data["vat_number"], "NL123456789B01")
 
     def test_b2c_empty_company_fields(self):
         data = get_customer_data(make_partner(is_company=False, commercial_company_name=None))
-        self.assertFalse(data['is_b2b'])
-        self.assertEqual(data['company_name'], '')
+        self.assertFalse(data["is_b2b"])
+        self.assertEqual(data["company_name"], "")
 
     def test_street2_fallback(self):
-        data = get_customer_data(make_partner(street='Herengracht', street2='42'))
-        self.assertEqual(data['house_number'], '42')
+        data = get_customer_data(make_partner(street="Herengracht", street2="42"))
+        self.assertEqual(data["house_number"], "42")
 
 
 class TestSanitizePhone(BaseCase):
-
     def test_strips_plus_and_whitespace(self):
-        self.assertEqual(sanitize_phone('+31 20 123 4567'), '31201234567')
+        self.assertEqual(sanitize_phone("+31 20 123 4567"), "31201234567")
 
     def test_strips_plus_only(self):
-        self.assertEqual(sanitize_phone('+31612345678'), '31612345678')
+        self.assertEqual(sanitize_phone("+31612345678"), "31612345678")
 
     def test_empty_string(self):
-        self.assertEqual(sanitize_phone(''), '')
+        self.assertEqual(sanitize_phone(""), "")
 
     def test_none(self):
-        self.assertEqual(sanitize_phone(None), '')
+        self.assertEqual(sanitize_phone(None), "")
 
     def test_strips_dashes_and_parens(self):
-        self.assertEqual(sanitize_phone('(020) 123-4567'), '0201234567')
+        self.assertEqual(sanitize_phone("(020) 123-4567"), "0201234567")
 
 
 class TestGetShippingPartner(BaseCase):
-
     def test_falls_back_to_billing(self):
-        billing = make_partner(city='Utrecht')
+        billing = make_partner(city="Utrecht")
         tx = make_transaction(partner=billing, sale_orders=[])
         self.assertEqual(get_shipping_partner(tx), billing)
 
     def test_falls_back_when_same(self):
-        billing = make_partner(city='Leiden')
-        tx = make_transaction(partner=billing, sale_orders=[make_order(partner_shipping_id=billing)])
+        billing = make_partner(city="Leiden")
+        tx = make_transaction(
+            partner=billing, sale_orders=[make_order(partner_shipping_id=billing)]
+        )
         self.assertEqual(get_shipping_partner(tx), billing)
 
     def test_uses_different_shipping(self):
-        billing = make_partner(city='Amsterdam')
-        shipping = make_partner(city='Rotterdam')
-        tx = make_transaction(partner=billing, sale_orders=[make_order(partner_shipping_id=shipping)])
+        billing = make_partner(city="Amsterdam")
+        shipping = make_partner(city="Rotterdam")
+        tx = make_transaction(
+            partner=billing, sale_orders=[make_order(partner_shipping_id=shipping)]
+        )
         self.assertEqual(get_shipping_partner(tx), shipping)
 
     def test_uses_first_different(self):
-        billing = make_partner(city='Amsterdam')
-        ship1 = make_partner(city='Rotterdam')
-        tx = make_transaction(partner=billing, sale_orders=[
-            make_order(partner_shipping_id=ship1),
-            make_order(partner_shipping_id=make_partner(city='Eindhoven')),
-        ])
+        billing = make_partner(city="Amsterdam")
+        ship1 = make_partner(city="Rotterdam")
+        tx = make_transaction(
+            partner=billing,
+            sale_orders=[
+                make_order(partner_shipping_id=ship1),
+                make_order(partner_shipping_id=make_partner(city="Eindhoven")),
+            ],
+        )
         self.assertEqual(get_shipping_partner(tx), ship1)

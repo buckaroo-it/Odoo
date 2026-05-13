@@ -8,26 +8,23 @@ from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
 
 class KlarnaPaymentPortal(PaymentPortal):
-
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
-        payment_method_id = kwargs.get('payment_method_id')
+        payment_method_id = kwargs.get("payment_method_id")
         if payment_method_id:
-            pm = request.env['payment.method'].sudo().browse(int(payment_method_id))
-            if pm.code == 'klarna':
-                gender = kwargs.pop('klarna_gender', None)
+            pm = request.env["payment.method"].sudo().browse(int(payment_method_id))
+            if pm.code == "klarna":
+                gender = kwargs.pop("klarna_gender", None)
                 try:
                     gender_int = int(gender) if gender is not None else None
                 except (TypeError, ValueError):
                     gender_int = None
                 if gender_int not in (1, 2):
-                    raise ValidationError(
-                        _("Please select your gender to proceed with Klarna.")
-                    )
+                    raise ValidationError(_("Please select your gender to proceed with Klarna."))
                 gender_str = str(gender_int)
-                request.session['buckaroo_klarna_gender'] = gender_str
+                request.session["buckaroo_klarna_gender"] = gender_str
                 # Persist on the user's partner so the next checkout can prefill.
                 user = request.env.user
                 if not user._is_public():
                     user.partner_id.sudo().buckaroo_klarna_gender = gender_str
-        kwargs.pop('klarna_gender', None)
+        kwargs.pop("klarna_gender", None)
         return super().shop_payment_transaction(order_id, access_token, **kwargs)

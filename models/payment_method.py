@@ -13,10 +13,10 @@ from ..utils import const
 
 
 class PaymentMethod(models.Model):
-    _inherit = 'payment.method'
+    _inherit = "payment.method"
 
     buckaroo_official_is_linked = fields.Boolean(
-        compute='_compute_buckaroo_official_is_linked',
+        compute="_compute_buckaroo_official_is_linked",
         store=True,
     )
 
@@ -27,7 +27,7 @@ class PaymentMethod(models.Model):
 
     buckaroo_official_min_amount = fields.Char(
         string="Buckaroo Min Amount (EUR)",
-        default='',
+        default="",
         help=(
             "Minimum order total in EUR for which this payment method is available with "
             "Buckaroo Official. Leave empty to disable the minimum limit."
@@ -35,7 +35,7 @@ class PaymentMethod(models.Model):
     )
     buckaroo_official_max_amount = fields.Char(
         string="Buckaroo Max Amount (EUR)",
-        default='',
+        default="",
         help=(
             "Maximum order total in EUR for which this payment method is available with "
             "Buckaroo Official. Leave empty to disable the maximum limit."
@@ -44,7 +44,7 @@ class PaymentMethod(models.Model):
 
     buckaroo_official_fee_amount = fields.Char(
         string="Payment fee",
-        default='',
+        default="",
         help=(
             "Per-method payment fee added to the order. Amount is in the order "
             "currency; no FX conversion is performed. Use a fixed amount like "
@@ -60,12 +60,12 @@ class PaymentMethod(models.Model):
             providers = providers.filtered(lambda p: p.id in provider_ids)
         return any(p.code == const.PROVIDER_CODE for p in providers)
 
-    @api.depends('provider_ids.code')
+    @api.depends("provider_ids.code")
     def _compute_buckaroo_official_is_linked(self):
         for pm in self:
             pm.buckaroo_official_is_linked = pm._is_linked_to_buckaroo()
 
-    @api.constrains('buckaroo_official_min_amount', 'buckaroo_official_max_amount')
+    @api.constrains("buckaroo_official_min_amount", "buckaroo_official_max_amount")
     def _check_buckaroo_official_amount_limits(self):
         for pm in self:
             min_v = pm._buckaroo_parse_amount_limit(pm.buckaroo_official_min_amount)
@@ -78,28 +78,32 @@ class PaymentMethod(models.Model):
     @staticmethod
     def _buckaroo_parse_amount_limit(value):
         """Empty → ``None`` (no limit); non-numeric → ValidationError."""
-        raw = (value or '').strip()
+        raw = (value or "").strip()
         if not raw:
             return None
-        if not re.match(r'^\d+(?:\.\d+)?$', raw):
-            raise ValidationError(_(
-                "The Buckaroo amount limit must be a positive number "
-                "(e.g. '100.00'). Leave empty for no limit."
-            ))
+        if not re.match(r"^\d+(?:\.\d+)?$", raw):
+            raise ValidationError(
+                _(
+                    "The Buckaroo amount limit must be a positive number "
+                    "(e.g. '100.00'). Leave empty for no limit."
+                )
+            )
         return float(raw)
 
-    @api.constrains('buckaroo_official_fee_amount')
+    @api.constrains("buckaroo_official_fee_amount")
     def _check_buckaroo_official_fee_amount(self):
         for payment_method in self:
-            value = (payment_method.buckaroo_official_fee_amount or '').strip()
-            if value == '':
+            value = (payment_method.buckaroo_official_fee_amount or "").strip()
+            if value == "":
                 continue
-            if not re.match(r'^\d+(?:\.\d+)?%?$', value):
-                raise ValidationError(_(
-                    "The Buckaroo surcharge must be a positive number "
-                    "(e.g. '1.50') or a percentage (e.g. '1%'). "
-                    "Leave empty or use '0' for no surcharge."
-                ))
+            if not re.match(r"^\d+(?:\.\d+)?%?$", value):
+                raise ValidationError(
+                    _(
+                        "The Buckaroo surcharge must be a positive number "
+                        "(e.g. '1.50') or a percentage (e.g. '1%'). "
+                        "Leave empty or use '0' for no surcharge."
+                    )
+                )
 
     def _buckaroo_official_is_amount_compatible(self, amount, provider_id_set):
         self.ensure_one()
@@ -114,17 +118,27 @@ class PaymentMethod(models.Model):
         return True
 
     def _get_compatible_payment_methods(
-        self, provider_ids, partner_id, currency_id=None, force_tokenization=False,
-        is_express_checkout=False, report=None, **kwargs
+        self,
+        provider_ids,
+        partner_id,
+        currency_id=None,
+        force_tokenization=False,
+        is_express_checkout=False,
+        report=None,
+        **kwargs,
     ):
         payment_methods = super()._get_compatible_payment_methods(
-            provider_ids, partner_id, currency_id=currency_id,
+            provider_ids,
+            partner_id,
+            currency_id=currency_id,
             force_tokenization=force_tokenization,
-            is_express_checkout=is_express_checkout, report=report, **kwargs
+            is_express_checkout=is_express_checkout,
+            report=report,
+            **kwargs,
         )
-        amount = kwargs.get('amount')
-        if amount is None and kwargs.get('sale_order_id'):
-            order = self.env['sale.order'].sudo().browse(kwargs['sale_order_id']).exists()
+        amount = kwargs.get("amount")
+        if amount is None and kwargs.get("sale_order_id"):
+            order = self.env["sale.order"].sudo().browse(kwargs["sale_order_id"]).exists()
             if order:
                 amount = order.amount_total
         if amount is None:
@@ -132,39 +146,39 @@ class PaymentMethod(models.Model):
 
         provider_id_set = set(provider_ids)
         # Batch prefetch provider codes before filtering one-by-one.
-        payment_methods.mapped('provider_ids.code')
+        payment_methods.mapped("provider_ids.code")
         unfiltered_payment_methods = payment_methods
         payment_methods = payment_methods.filtered(
             lambda pm: pm._buckaroo_official_is_amount_compatible(amount, provider_id_set)
         )
         payment_utils.add_to_report(
-            report, unfiltered_payment_methods - payment_methods,
+            report,
+            unfiltered_payment_methods - payment_methods,
             available=False,
             reason=_("Amount outside the Buckaroo payment method limits."),
         )
 
         return payment_methods
 
-
     def _buckaroo_parse_fee_amount(self):
         self.ensure_one()
-        raw = (self.buckaroo_official_fee_amount or '').strip()
+        raw = (self.buckaroo_official_fee_amount or "").strip()
         if not raw:
             return False, 0.0
-        is_percent = raw.endswith('%')
-        value = float(raw[:-1] or '0') if is_percent else float(raw)
+        is_percent = raw.endswith("%")
+        value = float(raw[:-1] or "0") if is_percent else float(raw)
         return is_percent, value
 
     def _buckaroo_get_label_suffix(self, currency):
         self.ensure_one()
         is_percent, value = self._buckaroo_parse_fee_amount()
         if value == 0.0:
-            return ''
+            return ""
         if is_percent:
-            return f' (+ {self.buckaroo_official_fee_amount.strip()[:-1]}%)'
+            return f" (+ {self.buckaroo_official_fee_amount.strip()[:-1]}%)"
         if not currency:
-            return ''
-        return f' (+ {format_amount(self.env, value, currency)})'
+            return ""
+        return f" (+ {format_amount(self.env, value, currency)})"
 
     def _buckaroo_compute_surcharge_amount(self, subtotal, currency):
         self.ensure_one()
@@ -174,7 +188,7 @@ class PaymentMethod(models.Model):
 
     def _buckaroo_get_surcharge_line_name(self):
         self.ensure_one()
-        return _('%s surcharge', self.name)
+        return _("%s surcharge", self.name)
 
     def _buckaroo_get_sdk_service_name(self):
         """Return ``buckaroo_official_sdk_service_name`` or ``self.code``."""
@@ -190,14 +204,14 @@ class PaymentMethod(models.Model):
         if not template:
             return transaction.reference
 
-        label = template.replace('{order_number}', transaction.reference or '')
+        label = template.replace("{order_number}", transaction.reference or "")
         label = label.replace(
-            '{shop_name}',
-            transaction.company_id.name if transaction.company_id else '',
+            "{shop_name}",
+            transaction.company_id.name if transaction.company_id else "",
         )
 
         # Strip unsupported placeholders left over from old templates.
-        label = re.sub(r'\{[a-z_]+\}', '', label).strip()
+        label = re.sub(r"\{[a-z_]+\}", "", label).strip()
 
         return label or transaction.reference
 
@@ -210,31 +224,36 @@ class PaymentMethod(models.Model):
         """Build the dict passed to ``PaymentService.create_payment().from_dict()``."""
         self.ensure_one()
         provider = transaction.provider_id
-        base_url = provider.get_base_url().rstrip('/')
+        base_url = provider.get_base_url().rstrip("/")
         return_url = f"{base_url}/payment/buckaroo_official/return"
         webhook_url = f"{base_url}/payment/buckaroo_official/webhook"
         if description_template is None:
             description_template = provider.buckaroo_official_transaction_description
         description = self._buckaroo_resolve_description(description_template, transaction)
         return {
-            'currency': transaction.currency_id.name,
-            'amount': transaction.amount,
-            'description': description,
-            'invoice': transaction.reference,
-            'return_url': return_url,
-            'return_url_cancel': return_url,
-            'return_url_error': return_url,
-            'return_url_reject': return_url,
-            'push_url': webhook_url,
-            'push_url_failure': webhook_url,
+            "currency": transaction.currency_id.name,
+            "amount": transaction.amount,
+            "description": description,
+            "invoice": transaction.reference,
+            "return_url": return_url,
+            "return_url_cancel": return_url,
+            "return_url_error": return_url,
+            "return_url_reject": return_url,
+            "push_url": webhook_url,
+            "push_url_failure": webhook_url,
         }
 
     def _buckaroo_create_payment(self, transaction, client):
         self.ensure_one()
         params = self._buckaroo_get_payment_params(transaction)
-        return PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(), params,
-        ).pay()
+        return (
+            PaymentService(client)
+            .create_payment(
+                self._buckaroo_get_sdk_service_name(),
+                params,
+            )
+            .pay()
+        )
 
     def _buckaroo_extract_redirect_url(self, response):
         self.ensure_one()
@@ -260,19 +279,26 @@ class PaymentMethod(models.Model):
     def _buckaroo_get_refund_params(self, source_tx, refund_tx):
         self.ensure_one()
         provider = refund_tx.provider_id
-        template = (provider.buckaroo_official_refund_description
-                    or provider.buckaroo_official_transaction_description)
+        template = (
+            provider.buckaroo_official_refund_description
+            or provider.buckaroo_official_transaction_description
+        )
         params = self._buckaroo_get_payment_params(refund_tx, description_template=template)
-        params['original_transaction_key'] = source_tx.provider_reference
-        params['refund_amount'] = abs(refund_tx.amount)
+        params["original_transaction_key"] = source_tx.provider_reference
+        params["refund_amount"] = abs(refund_tx.amount)
         return params
 
     def _buckaroo_create_refund(self, source_tx, refund_tx, client):
         self.ensure_one()
         params = self._buckaroo_get_refund_params(source_tx, refund_tx)
-        return PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(), params,
-        ).refund()
+        return (
+            PaymentService(client)
+            .create_payment(
+                self._buckaroo_get_sdk_service_name(),
+                params,
+            )
+            .refund()
+        )
 
     def _buckaroo_get_post_authorize_params(self, transaction):
         """Returns ``(params, original_transaction_key)`` for capture/void."""
@@ -288,7 +314,8 @@ class PaymentMethod(models.Model):
         self.ensure_one()
         params, original_key = self._buckaroo_get_post_authorize_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(), params,
+            self._buckaroo_get_sdk_service_name(),
+            params,
         )
         return builder.capture(original_transaction_key=original_key)
 
@@ -296,6 +323,7 @@ class PaymentMethod(models.Model):
         self.ensure_one()
         params, original_key = self._buckaroo_get_post_authorize_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(), params,
+            self._buckaroo_get_sdk_service_name(),
+            params,
         )
         return builder.cancelAuthorize(original_transaction_key=original_key)

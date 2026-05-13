@@ -12,18 +12,18 @@ from ..utils import const
 
 
 class PaymentMethodGooglepay(models.Model):
-    _inherit = 'payment.method'
+    _inherit = "payment.method"
 
     buckaroo_official_googlepay_merchant_guid = fields.Char(
         string="Buckaroo Merchant GUID",
         help="The Merchant GUID issued by Buckaroo for Google Pay. "
-             "Find this in Buckaroo Plaza under your Google Pay configuration.",
+        "Find this in Buckaroo Plaza under your Google Pay configuration.",
         copy=False,
     )
     buckaroo_official_googlepay_google_merchant_id = fields.Char(
         string="Google Merchant ID",
         help="The merchant identifier issued by Google in the Google Pay & "
-             "Wallet Console. Required for production Google Pay sessions.",
+        "Wallet Console. Required for production Google Pay sessions.",
         copy=False,
     )
     buckaroo_official_googlepay_show_on_cart = fields.Boolean(
@@ -36,45 +36,57 @@ class PaymentMethodGooglepay(models.Model):
         string="Show on Product",
         default=False,
         help="Display the Google Pay express button on product detail pages. "
-             "Tapping this button adds the chosen variant to the cart and "
-             "starts the Google Pay popup.",
+        "Tapping this button adds the chosen variant to the cart and "
+        "starts the Google Pay popup.",
         copy=False,
     )
     buckaroo_official_googlepay_show_on_checkout = fields.Boolean(
         string="Show on Checkout",
         default=True,
         help="Display Google Pay as a regular payment method on the checkout "
-             "page. When disabled, Google Pay is hidden from the inline payment "
-             "list (the cart-page express button is unaffected).",
+        "page. When disabled, Google Pay is hidden from the inline payment "
+        "list (the cart-page express button is unaffected).",
         copy=False,
     )
     buckaroo_official_googlepay_button_style = fields.Selection(
-        [('black', "Dark"), ('white', "Light")],
+        [("black", "Dark"), ("white", "Light")],
         string="Button Style",
-        default='black',
+        default="black",
         help="Visual style of the Google Pay button. Dark works on most "
-             "storefronts; pick Light for dark-themed pages.",
+        "storefronts; pick Light for dark-themed pages.",
         required=True,
         copy=False,
     )
 
     def _get_compatible_payment_methods(
-        self, provider_ids, partner_id, currency_id=None, force_tokenization=False,
-        is_express_checkout=False, report=None, **kwargs
+        self,
+        provider_ids,
+        partner_id,
+        currency_id=None,
+        force_tokenization=False,
+        is_express_checkout=False,
+        report=None,
+        **kwargs,
     ):
         payment_methods = super()._get_compatible_payment_methods(
-            provider_ids, partner_id, currency_id=currency_id,
+            provider_ids,
+            partner_id,
+            currency_id=currency_id,
             force_tokenization=force_tokenization,
-            is_express_checkout=is_express_checkout, report=report, **kwargs
+            is_express_checkout=is_express_checkout,
+            report=report,
+            **kwargs,
         )
         return payment_methods.filtered(
-            lambda pm: pm.code != 'googlepay'
-            or (
-                pm._buckaroo_googlepay_is_configured()
-                and (
-                    pm.buckaroo_official_googlepay_show_on_cart
-                    if is_express_checkout
-                    else pm.buckaroo_official_googlepay_show_on_checkout
+            lambda pm: (
+                pm.code != "googlepay"
+                or (
+                    pm._buckaroo_googlepay_is_configured()
+                    and (
+                        pm.buckaroo_official_googlepay_show_on_cart
+                        if is_express_checkout
+                        else pm.buckaroo_official_googlepay_show_on_checkout
+                    )
                 )
             )
         )
@@ -85,31 +97,31 @@ class PaymentMethodGooglepay(models.Model):
         if not self.buckaroo_official_googlepay_merchant_guid:
             return False
         prod_provider = self.provider_ids.filtered(
-            lambda p: p.code == const.PROVIDER_CODE and p.state == 'enabled'
+            lambda p: p.code == const.PROVIDER_CODE and p.state == "enabled"
         )
         if prod_provider and not self.buckaroo_official_googlepay_google_merchant_id:
             return False
         return True
 
     def _buckaroo_create_payment(self, transaction, client):
-        if self.code != 'googlepay':
+        if self.code != "googlepay":
             return super()._buckaroo_create_payment(transaction, client)
 
-        token = pop_session_value('buckaroo_googlepay_token')
-        customer_name = pop_session_value('buckaroo_googlepay_customer_name')
+        token = pop_session_value("buckaroo_googlepay_token")
+        customer_name = pop_session_value("buckaroo_googlepay_customer_name")
         if not token or not customer_name:
-            raise ValidationError(_(
-                "Google Pay payment token is missing. "
-                "Please retry the Google Pay flow."
-            ))
+            raise ValidationError(
+                _("Google Pay payment token is missing. Please retry the Google Pay flow.")
+            )
 
         # Buckaroo's API rejects the raw Google Pay token; it must be base64.
-        encoded_token = base64.b64encode(token.encode('utf-8')).decode('ascii')
+        encoded_token = base64.b64encode(token.encode("utf-8")).decode("ascii")
 
         params = self._buckaroo_get_payment_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(), params,
+            self._buckaroo_get_sdk_service_name(),
+            params,
         )
-        builder.add_parameter('PaymentData', encoded_token)
-        builder.add_parameter('CustomerCardName', customer_name)
+        builder.add_parameter("PaymentData", encoded_token)
+        builder.add_parameter("CustomerCardName", customer_name)
         return builder.pay()

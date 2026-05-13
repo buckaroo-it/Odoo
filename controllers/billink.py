@@ -10,24 +10,21 @@ from ..helpers.customer import validate_bnpl_birthdate
 
 
 class BillinkPaymentPortal(PaymentPortal):
-
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
-        payment_method_id = kwargs.get('payment_method_id')
+        payment_method_id = kwargs.get("payment_method_id")
         if not payment_method_id:
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
-        pm = request.env['payment.method'].sudo().browse(int(payment_method_id))
-        if pm.code != 'billink':
+        pm = request.env["payment.method"].sudo().browse(int(payment_method_id))
+        if pm.code != "billink":
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
-        if not kwargs.pop('billink_tc_accepted', False):
-            raise ValidationError(
-                _("Please accept the Billink Terms and Conditions to proceed.")
-            )
+        if not kwargs.pop("billink_tc_accepted", False):
+            raise ValidationError(_("Please accept the Billink Terms and Conditions to proceed."))
         validate_bnpl_birthdate(
             kwargs,
-            birthdate_kwarg='billink_birthdate',
-            session_key='buckaroo_billink_birthdate',
-            partner_field='buckaroo_billink_birthdate',
+            birthdate_kwarg="billink_birthdate",
+            session_key="buckaroo_billink_birthdate",
+            partner_field="buckaroo_billink_birthdate",
             missing_msg=_("Please enter your date of birth to proceed with Billink."),
             invalid_msg=_("Invalid date of birth."),
             underage_msg=_("You must be at least 18 years old to use Billink."),

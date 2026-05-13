@@ -7,46 +7,43 @@ from odoo.exceptions import ValidationError
 
 
 class PaymentMethodCreditCard(models.Model):
-    _inherit = 'payment.method'
-
+    _inherit = "payment.method"
 
     buckaroo_official_creditcard_authorize = fields.Selection(
         string="Payment Action",
-        selection=[('pay', "Pay"), ('authorize', "Authorize")],
-        default='pay',
+        selection=[("pay", "Pay"), ("authorize", "Authorize")],
+        default="pay",
         help="Choose whether to capture the payment immediately ('Pay') or "
-             "only authorize it for later manual capture ('Authorize').",
+        "only authorize it for later manual capture ('Authorize').",
     )
     buckaroo_official_creditcard_method = fields.Selection(
         string="Credit Card Method",
-        selection=[('redirect', "Redirect"), ('inline', "Inline (Hosted Fields)")],
-        default='redirect',
+        selection=[("redirect", "Redirect"), ("inline", "Inline (Hosted Fields)")],
+        default="redirect",
         help="Choose how credit card payments are handled. "
-             "'Redirect' sends the customer to Buckaroo's hosted payment page. "
-             "'Inline (Hosted Fields)' embeds card fields directly on your checkout page.",
+        "'Redirect' sends the customer to Buckaroo's hosted payment page. "
+        "'Inline (Hosted Fields)' embeds card fields directly on your checkout page.",
     )
     buckaroo_official_hosted_fields_client_id = fields.Char(
         string="Hosted Fields Client ID",
         help="OAuth Client ID for Hosted Fields. "
-             "Find this in Buckaroo Plaza > Settings > Token Registration.",
+        "Find this in Buckaroo Plaza > Settings > Token Registration.",
         copy=False,
     )
     buckaroo_official_hosted_fields_client_secret = fields.Char(
         string="Hosted Fields Client Secret",
         help="OAuth Client Secret for Hosted Fields. "
-             "Find this in Buckaroo Plaza > Settings > Token Registration.",
+        "Find this in Buckaroo Plaza > Settings > Token Registration.",
         copy=False,
-        groups='base.group_system',
+        groups="base.group_system",
     )
-
 
     def _buckaroo_get_payment_action(self):
         """Return 'authorize' for creditcard when configured; else delegate."""
         self.ensure_one()
-        if self.code == 'creditcard' and self.buckaroo_official_creditcard_authorize == 'authorize':
-            return 'authorize'
+        if self.code == "creditcard" and self.buckaroo_official_creditcard_authorize == "authorize":
+            return "authorize"
         return super()._buckaroo_get_payment_action()
-
 
     def _buckaroo_create_payment(self, transaction, client):
         """Credit card flow: 4-way routing on redirect/inline x pay/authorize.
@@ -58,52 +55,50 @@ class PaymentMethodCreditCard(models.Model):
         4. Inline + authorize   -> .authorizeWithToken() with HF session
         """
         self.ensure_one()
-        if self.code != 'creditcard':
+        if self.code != "creditcard":
             return super()._buckaroo_create_payment(transaction, client)
 
         from odoo.http import request  # noqa: PLC0415
 
-        hf_session_id = request.session.pop('buckaroo_hf_session_id', None) if request else None
-        hf_service = request.session.pop('buckaroo_hf_service', None) if request else None
+        hf_session_id = request.session.pop("buckaroo_hf_session_id", None) if request else None
+        hf_service = request.session.pop("buckaroo_hf_service", None) if request else None
         authorize = self.buckaroo_official_creditcard_authorize
 
         params = self._buckaroo_get_payment_params(transaction)
         if hf_session_id and hf_service:
-            params['brand'] = hf_service
+            params["brand"] = hf_service
 
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(), params,
+            self._buckaroo_get_sdk_service_name(),
+            params,
         )
 
         if hf_session_id:
-            builder.add_parameter('SessionId', hf_session_id)
-            if authorize == 'authorize':
+            builder.add_parameter("SessionId", hf_session_id)
+            if authorize == "authorize":
                 return builder.authorizeWithToken()
             return builder.payWithToken()
 
-        if authorize == 'authorize':
+        if authorize == "authorize":
             return builder.authorize()
         return builder.pay()
 
-
     def _buckaroo_get_refund_params(self, source_tx, refund_tx):
         """Add card brand to refund params for creditcard; delegate otherwise."""
-        if self.code != 'creditcard':
+        if self.code != "creditcard":
             return super()._buckaroo_get_refund_params(source_tx, refund_tx)
         params = super()._buckaroo_get_refund_params(source_tx, refund_tx)
-        params['brand'] = self._buckaroo_require_card_brand(source_tx)
+        params["brand"] = self._buckaroo_require_card_brand(source_tx)
         return params
-
 
     def _buckaroo_get_post_authorize_params(self, transaction):
         """Add card brand to capture/void params for creditcard; delegate otherwise."""
-        if self.code != 'creditcard':
+        if self.code != "creditcard":
             return super()._buckaroo_get_post_authorize_params(transaction)
         params, original_key = super()._buckaroo_get_post_authorize_params(transaction)
         source_tx = transaction.source_transaction_id or transaction
-        params['brand'] = self._buckaroo_require_card_brand(source_tx)
+        params["brand"] = self._buckaroo_require_card_brand(source_tx)
         return params, original_key
-
 
     def _buckaroo_require_card_brand(self, source_tx):
         """Return the card brand recorded on *source_tx* or any ancestor.
@@ -118,14 +113,20 @@ class PaymentMethodCreditCard(models.Model):
         tx = source_tx
         service_code = tx.buckaroo_official_service_code
         seen = {tx.id}
-        while not service_code and tx.source_transaction_id and tx.source_transaction_id.id not in seen:
+        while (
+            not service_code
+            and tx.source_transaction_id
+            and tx.source_transaction_id.id not in seen
+        ):
             tx = tx.source_transaction_id
             seen.add(tx.id)
             service_code = tx.buckaroo_official_service_code
         if not service_code:
-            raise ValidationError(_(
-                "Card brand unknown on the original transaction. The "
-                "authorization may have been created before service code "
-                "tracking was enabled."
-            ))
+            raise ValidationError(
+                _(
+                    "Card brand unknown on the original transaction. The "
+                    "authorization may have been created before service code "
+                    "tracking was enabled."
+                )
+            )
         return service_code
