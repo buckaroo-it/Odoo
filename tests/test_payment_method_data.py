@@ -146,9 +146,12 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
                 )
 
     def test_methods_available_for_nl_partner(self):
-        for code, _currencies, _countries in METHOD_DATA:
-            pm = self.env.ref(f"payment_buckaroo_official.payment_method_{code}")
-            self.buckaroo.payment_method_ids = [Command.link(pm.id)]
+        pm_ids = [
+            self.env.ref(f"payment_buckaroo_official.payment_method_{code}").id
+            for code, _c, _co in METHOD_DATA
+        ]
+        self.buckaroo.payment_method_ids = [Command.set(pm_ids)]
+        self.env.flush_all()
 
         nl_partner = self.env["res.partner"].create(
             {
