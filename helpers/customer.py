@@ -44,8 +44,10 @@ def is_at_least_age(dob, min_age, today=None):
     return age >= min_age
 
 
-def resolve_birthdate(transaction, session_key, partner_field, *, missing_error=None):
-    """Resolve a DD-MM-YYYY birthdate from session → partner.
+def resolve_birthdate(
+    transaction, session_key, partner_field, *, out_format="%d-%m-%Y", missing_error=None
+):
+    """Resolve a birthdate from session → partner, formatted as *out_format*.
 
     *session_key* is consumed via :func:`pop_session_value`; the partner
     fallback reads ``transaction.partner_id.<partner_field>``. Returns
@@ -57,12 +59,12 @@ def resolve_birthdate(transaction, session_key, partner_field, *, missing_error=
     raw = pop_session_value(session_key)
     if raw:
         try:
-            return _datetime.strptime(raw, "%Y-%m-%d").strftime("%d-%m-%Y")
+            return _datetime.strptime(raw, "%Y-%m-%d").strftime(out_format)
         except ValueError:
             pass
     partner_dob = getattr(transaction.partner_id, partner_field, None)
     if partner_dob:
-        return partner_dob.strftime("%d-%m-%Y")
+        return partner_dob.strftime(out_format)
     if missing_error is not None:
         from odoo.exceptions import ValidationError  # noqa: PLC0415
 

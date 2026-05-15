@@ -1,12 +1,12 @@
 # Translation of Odoo Server.
 # This file contains the translation of the following modules:
 # 	* payment_buckaroo_official
-#
+# 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-07 10:22+0000\n"
+"POT-Creation-Date: 2026-05-14 07:43+0000\n"
 "PO-Revision-Date: 2026-04-03 09:58+0000\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -23,19 +23,21 @@ msgid "%s surcharge"
 msgstr ""
 
 #. module: payment_buckaroo_official
-#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
-msgid ""
-"<strong>Note:</strong>\n"
-"                    Quote the payment reference in the description of your transfer to ensure it can be processed."
-msgstr ""
-"<strong>Remarque :</strong>\n"
-"                    Mentionnez la référence de paiement dans la description de votre virement afin qu'il puisse être traité."
-
-#. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
 #, fuzzy
 msgid "<option value=\"\">Please select your gender</option>"
 msgstr "Veuillez sélectionner votre genre"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid ""
+"<strong>Note:</strong>\n"
+"                    Quote the payment reference in the description of your "
+"transfer to ensure it can be processed."
+msgstr ""
+"<strong>Remarque :</strong>\n"
+"                    Mentionnez la référence de paiement dans la description "
+"de votre virement afin qu'il puisse être traité."
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
@@ -82,6 +84,11 @@ msgid "Authorize"
 msgstr "Autoriser"
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "BIC"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_blik
 msgid "BLIK"
 msgstr ""
@@ -95,6 +102,26 @@ msgstr ""
 #: model:payment.method,name:payment_buckaroo_official.payment_method_bank_transfer
 msgid "Bank Transfer"
 msgstr "Virement bancaire"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__buckaroo_official_bank_account_holder
+msgid "Bank Transfer Account Holder"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__buckaroo_official_bank_bic
+msgid "Bank Transfer BIC"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__buckaroo_official_bank_iban
+msgid "Bank Transfer IBAN"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_transaction__buckaroo_official_bank_payment_reference
+msgid "Bank Transfer Payment Reference"
+msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_belfius
@@ -282,6 +309,11 @@ msgid "Code"
 msgstr "Code"
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Complete your payment"
+msgstr "Finalisez votre paiement"
+
+#. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_provider.py:0
 msgid "Connection failed: %s"
@@ -317,11 +349,6 @@ msgstr ""
 msgid ""
 "Could not read the product details. Please reload the page and try again."
 msgstr ""
-
-#. module: payment_buckaroo_official
-#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
-msgid "Complete your payment"
-msgstr "Finalisez votre paiement"
 
 #. module: payment_buckaroo_official
 #: model:ir.model,website_form_label:payment_buckaroo_official.model_res_partner
@@ -361,6 +388,7 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.billink_inline_form
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.in3_inline_form
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.riverty_inline_form
 msgid "Date of birth"
 msgstr "Date de naissance"
@@ -532,6 +560,11 @@ msgid "I agree to the"
 msgstr "J'accepte les"
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "IBAN"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_account_move__id
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__id
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__id
@@ -543,6 +576,17 @@ msgid "ID"
 msgstr "ID"
 
 #. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_in3
+msgid "In3"
+msgstr "In3"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_partner__buckaroo_in3_birthdate
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_users__buckaroo_in3_birthdate
+msgid "In3 Date of Birth"
+msgstr "Date de naissance In3"
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_creditcard_method__inline
 msgid "Inline (Hosted Fields)"
 msgstr "Inline (Hosted Fields)"
@@ -550,6 +594,7 @@ msgstr "Inline (Hosted Fields)"
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/controllers/billink.py:0
+#: code:addons/payment_buckaroo_official/controllers/in3.py:0
 #: code:addons/payment_buckaroo_official/controllers/riverty.py:0
 msgid "Invalid date of birth."
 msgstr "Date de naissance invalide."
@@ -748,11 +793,6 @@ msgid "PayPal"
 msgstr ""
 
 #. module: payment_buckaroo_official
-#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
-msgid "Payment reference"
-msgstr "Référence de paiement"
-
-#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_payconiq
 msgid "Payconiq"
 msgstr ""
@@ -797,6 +837,11 @@ msgid "Payment method is not a credit card."
 msgstr "La méthode de paiement n'est pas une carte bancaire."
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "Payment reference"
+msgstr "Référence de paiement"
+
+#. module: payment_buckaroo_official
 #. odoo-javascript
 #: code:addons/payment_buckaroo_official/static/src/js/payment_form_creditcard.js:0
 msgid ""
@@ -822,6 +867,12 @@ msgstr "Veuillez accepter les Conditions Générales de Billink pour continuer."
 #: code:addons/payment_buckaroo_official/controllers/billink.py:0
 msgid "Please enter your date of birth to proceed with Billink."
 msgstr "Veuillez entrer votre date de naissance pour continuer avec Billink."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/in3.py:0
+msgid "Please enter your date of birth to proceed with In3."
+msgstr "Veuillez saisir votre date de naissance pour continuer avec In3."
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -872,12 +923,6 @@ msgstr ""
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_creditcard_method__redirect
 msgid "Redirect"
 msgstr "Redirection"
-
-#. module: payment_buckaroo_official
-#. odoo-python
-#: code:addons/payment_buckaroo_official/models/account_move.py:0
-msgid "Refund"
-msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_refund_description
@@ -957,6 +1002,12 @@ msgstr "Civilité"
 #: model:ir.model.fields,help:payment_buckaroo_official.field_res_users__buckaroo_billink_birthdate
 msgid "Saved from the last Billink checkout to prefill on next order."
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_in3_birthdate
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_users__buckaroo_in3_birthdate
+msgid "Saved from the last In3 checkout to prefill on next order."
+msgstr "Enregistré depuis le dernier paiement In3 pour préremplir la prochaine commande."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_klarna_gender
@@ -1040,11 +1091,6 @@ msgid "The Buckaroo maximum amount must be greater than the minimum amount."
 msgstr "Le montant maximum Buckaroo doit être supérieur au montant minimum."
 
 #. module: payment_buckaroo_official
-#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
-msgid "To complete your order, please transfer the outstanding amount"
-msgstr "Pour finaliser votre commande, veuillez transférer le montant restant dû"
-
-#. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_method.py:0
 msgid ""
@@ -1097,6 +1143,12 @@ msgstr "Ce paiement Buckaroo a déjà été entièrement remboursé."
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.payment_provider_form_buckaroo_official
 msgid "This will send a test request to the Buckaroo API. Continue?"
 msgstr "Cela enverra une requête de test à l'API Buckaroo. Continuer ?"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
+msgid "To complete your order, please transfer the outstanding amount"
+msgstr ""
+"Pour finaliser votre commande, veuillez transférer le montant restant dû"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_transaction_description
@@ -1156,6 +1208,12 @@ msgstr ""
 #: code:addons/payment_buckaroo_official/controllers/billink.py:0
 msgid "You must be at least 18 years old to use Billink."
 msgstr "Vous devez avoir au moins 18 ans pour utiliser Billink."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/in3.py:0
+msgid "You must be at least 18 years old to use In3."
+msgstr "Vous devez avoir au moins 18 ans pour utiliser In3."
 
 #. module: payment_buckaroo_official
 #. odoo-python

@@ -3,6 +3,7 @@
 from . import main
 from . import creditcard
 from . import billink
+from . import in3
 from . import klarna
 from . import riverty
 from . import fee

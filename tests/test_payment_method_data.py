@@ -68,6 +68,7 @@ METHOD_DATA = [
     ("googlepay", {"EUR"}, set()),
     ("applepay", {"EUR"}, set()),
     ("billink", {"EUR"}, set()),
+    ("in3", {"EUR"}, {"NL"}),
     ("bank_transfer", {"EUR"}, set()),
     ("creditcard", _MULTI_CURRENCY, set()),
     (

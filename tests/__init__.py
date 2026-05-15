@@ -12,6 +12,7 @@ from . import test_hosted_fields
 from . import test_payment_method_sdk
 from . import test_payment_method_bank_transfer
 from . import test_payment_method_billink
+from . import test_payment_method_in3
 from . import test_payment_method_klarna
 from . import test_payment_method_riverty
 from . import test_payment_method_creditcard

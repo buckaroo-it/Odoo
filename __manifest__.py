@@ -19,6 +19,7 @@
         "views/payment_form_templates.xml",
         "views/payment_creditcard_templates.xml",
         "views/payment_billink_templates.xml",
+        "views/payment_in3_templates.xml",
         "views/payment_googlepay_templates.xml",
         "views/payment_klarna_templates.xml",
         "views/payment_riverty_templates.xml",
@@ -31,6 +32,7 @@
         "web.assets_frontend": [
             "payment_buckaroo_official/static/src/css/creditcard.css",
             "payment_buckaroo_official/static/src/js/payment_form_billink.js",
+            "payment_buckaroo_official/static/src/js/payment_form_in3.js",
             "payment_buckaroo_official/static/src/js/payment_form_klarna.js",
             "payment_buckaroo_official/static/src/js/payment_form_riverty.js",
             "payment_buckaroo_official/static/src/js/payment_form_creditcard.js",
