@@ -56,4 +56,10 @@ class BuckarooOfficialController(http.Controller):
         )
         if tx_sudo:
             verify_signature(parsed, tx_sudo.provider_id)
-            tx_sudo._process("buckaroo_official", parsed)
+            remainder_tx = tx_sudo._buckaroo_split_remainder_push(parsed)
+            target = remainder_tx or tx_sudo
+            target._process("buckaroo_official", parsed)
+            if remainder_tx and remainder_tx.state == "done":
+                # Spawned siblings skip the framework's status-poll route, so
+                # post-processing won't fire on its own.
+                remainder_tx._post_process()

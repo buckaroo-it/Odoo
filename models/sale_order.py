@@ -83,6 +83,18 @@ class SaleOrder(models.Model):
             return
         self._apply_buckaroo_surcharge_line(payment_method)
 
+    def _buckaroo_partial_payment_remainder(self):
+        """``amount_total - amount_paid`` when partly paid (>0 paid, < total);
+        ``0.0`` otherwise. Single source of truth for the partial-payment
+        predicate used in controllers, sale_order helpers, and QWeb."""
+        self.ensure_one()
+        currency = self.currency_id
+        if currency.compare_amounts(self.amount_paid, 0) <= 0:
+            return 0.0
+        if currency.compare_amounts(self.amount_paid, self.amount_total) >= 0:
+            return 0.0
+        return self.amount_total - self.amount_paid
+
     def _check_cart_is_ready_to_be_paid(self):
         # Runs under parent's FOR NO KEY UPDATE NOWAIT; concurrent picks serialise.
         pm_id = self.env.context.get(const.PICK_METHOD_CONTEXT_KEY)

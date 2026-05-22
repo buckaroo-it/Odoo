@@ -42,8 +42,8 @@ class PaymentTransaction(models.Model):
                 )
             )
 
-        # Freeze the action so _apply_updates uses a stable value even
-        # if the merchant flips the setting between checkout and push.
+        # Freeze the action so the merchant flipping the setting between
+        # checkout and push doesn't change the tx behaviour mid-flight.
         action = self.payment_method_id._buckaroo_get_payment_action()
         if action == "authorize":
             self.buckaroo_official_payment_action = "authorize"
@@ -83,6 +83,10 @@ class PaymentTransaction(models.Model):
                 )
             )
 
+        bounced = self.payment_method_id._buckaroo_handle_redirect_response(self, response)
+        if bounced is not None:
+            return bounced
+
         self.provider_reference = response.key
         return {"api_url": redirect_url}
 
@@ -90,12 +94,9 @@ class PaymentTransaction(models.Model):
         return self.provider_id._buckaroo_official_get_client()
 
     def _buckaroo_official_handle_response_status(self, response, operation, success_state="done"):
-        """Map a Buckaroo SDK ``PaymentResponse`` to a tx state.
-
-        Strict equality against ``BuckarooStatusCode.SUCCESS`` for the
-        done leg — SDK's ``is_successful`` reads ``is_successful_payment``
-        from raw_data and isn't reliable for refund / capture / void.
-        """
+        """Map a Buckaroo SDK PaymentResponse to a tx state. Strict equality
+        on SUCCESS: SDK's is_successful_payment isn't reliable for refund/
+        capture/void."""
         status_code = (
             response.status.code.code if response.status and response.status.code else None
         )
@@ -111,10 +112,43 @@ class PaymentTransaction(models.Model):
         elif response.is_cancelled():
             self._set_canceled()
         else:
-            self._set_error("Buckaroo: %s failed with status code: %s" % (operation, status_code))
+            self._set_error(
+                self._buckaroo_official_failure_message(response, operation, status_code)
+            )
+
+    def _buckaroo_is_intersolve_refund(self):
+        """Refund tx's source uses an Intersolve-backed giftcard brand."""
+        self.ensure_one()
+        source_tx = self.source_transaction_id
+        if not source_tx:
+            return False
+        return source_tx.payment_method_id.buckaroo_official_giftcard_backend == "intersolve"
+
+    def _buckaroo_official_failure_message(self, response, operation, status_code):
+        """state_message for a gateway rejection. Per-method hint from
+        _buckaroo_failure_message_hint; SDK gateway message appended."""
+        hint = self.payment_method_id._buckaroo_failure_message_hint(
+            self, response, operation, status_code
+        )
+        base = hint or _(
+            "Buckaroo: %(operation)s failed with status code: %(status)s",
+            operation=operation,
+            status=status_code,
+        )
+        try:
+            gateway_message = response.get_some_error() or ""
+        except Exception:  # noqa: BLE001 - SDK may raise on malformed responses
+            _logger.debug("Buckaroo: failed to read gateway error message", exc_info=True)
+            gateway_message = ""
+        if gateway_message:
+            return _(
+                "%(base)s Gateway message: %(message)s",
+                base=base,
+                message=gateway_message,
+            )
+        return base
 
     def _buckaroo_official_send_sdk_request(self, operation, sdk_call, success_state="done"):
-        """Run *sdk_call(client)*, log, persist key, dispatch state."""
         client = self._buckaroo_official_get_client()
         try:
             response = sdk_call(client)
@@ -141,7 +175,6 @@ class PaymentTransaction(models.Model):
         )
 
     def _buckaroo_official_is_dispatchable(self, operation):
-        """``True`` when the tx may POST to Buckaroo; ``False`` to skip."""
         if self.state in ("draft", "error"):
             return True
         _logger.info(
@@ -219,43 +252,24 @@ class PaymentTransaction(models.Model):
         return ref
 
     def _extract_amount_data(self, payment_data):
-        """Returns ``None`` to skip framework amount/currency validation —
-        Klarna's "Reserve failed" pushes carry no amount or currency, and
-        returning ``{}`` would crash the framework's ``amount`` lookup.
-        """
         if self.provider_code != const.PROVIDER_CODE:
             return super()._extract_amount_data(payment_data)
+        return self.payment_method_id._buckaroo_extract_amount_data(self, payment_data)
 
-        credit_amount = payment_data.credit_amount
-        amount = payment_data.amount or (abs(credit_amount) if credit_amount else None)
-        currency = payment_data.currency
-        if amount is None or not currency:
-            return None
-        return {
-            "amount": amount,
-            "currency_code": currency,
-        }
+    def _buckaroo_split_remainder_push(self, payment_data):
+        """Delegate to the payment method. Tx-level shim for the push controller."""
+        self.ensure_one()
+        return self.payment_method_id._buckaroo_split_remainder_push(self, payment_data)
 
     def _apply_updates(self, payment_data):
         if self.provider_code != const.PROVIDER_CODE:
             return super()._apply_updates(payment_data)
 
         if self.state in ("done", "cancel", "error"):
-            _logger.info(
-                "Skipping duplicate Buckaroo callback for transaction %s (state=%s)",
-                self.reference,
-                self.state,
-            )
+            self.payment_method_id._buckaroo_handle_duplicate_push(self, payment_data)
             return
 
-        txn_key = payment_data.transaction_key
-        if txn_key:
-            self.provider_reference = txn_key
-
-        service_code = payment_data.service_code
-        if service_code:
-            self.buckaroo_official_service_code = service_code
-
+        self.payment_method_id._buckaroo_apply_push_identity(self, payment_data)
         self.payment_method_id._buckaroo_apply_push_metadata(self, payment_data)
 
         status_code = payment_data.status_code
@@ -264,6 +278,7 @@ class PaymentTransaction(models.Model):
             return
 
         if payment_data.is_success():
+            self.payment_method_id._buckaroo_adjust_amount_on_success(self, payment_data)
             if self.buckaroo_official_payment_action == "authorize":
                 self._set_authorized()
             else:

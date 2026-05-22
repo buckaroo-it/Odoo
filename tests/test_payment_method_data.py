@@ -8,7 +8,7 @@ from ..utils import const
 
 
 ALL_XML_IDS = [
-    f"payment_buckaroo_official.payment_method_{code}"
+    f"payment_buckaroo_official.payment_method_{code.removeprefix('buckaroo_')}"
     for code in const.DEFAULT_PAYMENT_METHOD_CODES
 ]
 
@@ -116,7 +116,7 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
     def test_methods_support_refund(self):
         # Riverty refund is full-only because Odoo's amount-based refund
         # flow can't supply the article-level breakdown Riverty requires.
-        full_only_codes = {"riverty"}
+        full_only_codes = {"buckaroo_riverty"}
         for xml_id in ALL_XML_IDS:
             with self.subTest(xml_id=xml_id):
                 record = self.env.ref(xml_id)
@@ -136,7 +136,7 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
         for code, currencies, countries in METHOD_DATA:
             with self.subTest(code=code):
                 method = self.env.ref(f"payment_buckaroo_official.payment_method_{code}")
-                self.assertEqual(method.code, code)
+                self.assertEqual(method.code, f"buckaroo_{code}")
                 self.assertEqual(
                     set(method.supported_country_ids.mapped("code")),
                     countries,

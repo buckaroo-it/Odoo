@@ -1,5 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import logging
 import re
 
 from buckaroo.services.payment_service import PaymentService
@@ -10,6 +11,8 @@ from odoo.exceptions import ValidationError
 from odoo.tools.misc import format_amount
 
 from ..utils import const
+
+_logger = logging.getLogger(__name__)
 
 
 class PaymentMethod(models.Model):
@@ -22,7 +25,7 @@ class PaymentMethod(models.Model):
 
     buckaroo_official_sdk_service_name = fields.Char(
         string="SDK Service Name",
-        help="PascalCase service name used by the Buckaroo SDK (e.g. 'Visa', 'Mastercard', 'AMEX').",
+        help="Service name used by the Buckaroo SDK (e.g. 'ideal', 'Visa', 'transfer', 'giftcards').",
     )
 
     buckaroo_official_min_amount = fields.Char(
@@ -190,11 +193,6 @@ class PaymentMethod(models.Model):
         self.ensure_one()
         return _("%s surcharge", self.name)
 
-    def _buckaroo_get_sdk_service_name(self):
-        """Return ``buckaroo_official_sdk_service_name`` or ``self.code``."""
-        self.ensure_one()
-        return self.buckaroo_official_sdk_service_name or self.code
-
     @staticmethod
     def _buckaroo_resolve_description(template, transaction):
         """Substitute ``{order_number}`` and ``{shop_name}`` in *template*.
@@ -249,7 +247,7 @@ class PaymentMethod(models.Model):
         return (
             PaymentService(client)
             .create_payment(
-                self._buckaroo_get_sdk_service_name(),
+                self.buckaroo_official_sdk_service_name,
                 params,
             )
             .pay()
@@ -270,11 +268,71 @@ class PaymentMethod(models.Model):
         self.ensure_one()
         return None
 
+    def _buckaroo_handle_redirect_response(self, transaction, response):
+        self.ensure_one()
+        return None
+
     def _buckaroo_apply_push_metadata(self, transaction, payment_data):
-        """Hook for methods that ship method-specific data in pushes
-        (e.g. Bank Transfer's IBAN / BIC). Default no-op."""
         self.ensure_one()
         return
+
+    def _buckaroo_extract_amount_data(self, transaction, payment_data):
+        self.ensure_one()
+        credit_amount = payment_data.credit_amount
+        amount = payment_data.amount or (abs(credit_amount) if credit_amount else None)
+        currency = payment_data.currency
+        if amount is None or not currency:
+            return None
+        return {
+            "amount": amount,
+            "currency_code": currency,
+        }
+
+    def _buckaroo_apply_push_identity(self, transaction, payment_data):
+        self.ensure_one()
+        txn_key = payment_data.transaction_key
+        if txn_key:
+            transaction.provider_reference = txn_key
+        service_code = payment_data.service_code
+        if service_code:
+            transaction.buckaroo_official_service_code = service_code
+
+    def _buckaroo_handle_duplicate_push(self, transaction, payment_data):
+        self.ensure_one()
+        _logger.info(
+            "Skipping duplicate Buckaroo callback for transaction %s (state=%s)",
+            transaction.reference,
+            transaction.state,
+        )
+
+    def _buckaroo_adjust_amount_on_success(self, transaction, payment_data):
+        self.ensure_one()
+        return
+
+    def _buckaroo_split_remainder_push(self, transaction, payment_data):
+        self.ensure_one()
+        return transaction.browse()
+
+    def _buckaroo_failure_message_hint(self, transaction, response, operation, status_code):
+        self.ensure_one()
+        return None
+
+    def _buckaroo_require_service_code(self, source_tx, missing_message):
+        self.ensure_one()
+        tx = source_tx
+        service_code = tx.buckaroo_official_service_code
+        seen = {tx.id}
+        while (
+            not service_code
+            and tx.source_transaction_id
+            and tx.source_transaction_id.id not in seen
+        ):
+            tx = tx.source_transaction_id
+            seen.add(tx.id)
+            service_code = tx.buckaroo_official_service_code
+        if not service_code:
+            raise ValidationError(missing_message)
+        return service_code
 
     def _buckaroo_get_refund_params(self, source_tx, refund_tx):
         self.ensure_one()
@@ -294,7 +352,7 @@ class PaymentMethod(models.Model):
         return (
             PaymentService(client)
             .create_payment(
-                self._buckaroo_get_sdk_service_name(),
+                self.buckaroo_official_sdk_service_name,
                 params,
             )
             .refund()
@@ -314,7 +372,7 @@ class PaymentMethod(models.Model):
         self.ensure_one()
         params, original_key = self._buckaroo_get_post_authorize_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
         return builder.capture(original_transaction_key=original_key)
@@ -323,7 +381,7 @@ class PaymentMethod(models.Model):
         self.ensure_one()
         params, original_key = self._buckaroo_get_post_authorize_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
         return builder.cancelAuthorize(original_transaction_key=original_key)

@@ -11,7 +11,7 @@ patch(PaymentForm.prototype, {
         if (!radio || radio.dataset.providerCode !== 'buckaroo_official') {
             return params;
         }
-        if (radio.dataset.paymentMethodCode === 'riverty') {
+        if (radio.dataset.paymentMethodCode === 'buckaroo_riverty') {
             const birthdate = document.querySelector('.o_buckaroo_riverty_birthdate');
             if (birthdate && birthdate.value) {
                 params.riverty_birthdate = birthdate.value;

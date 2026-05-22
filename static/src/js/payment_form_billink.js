@@ -11,7 +11,7 @@ patch(PaymentForm.prototype, {
         if (!radio || radio.dataset.providerCode !== 'buckaroo_official') {
             return params;
         }
-        if (radio.dataset.paymentMethodCode === 'billink') {
+        if (radio.dataset.paymentMethodCode === 'buckaroo_billink') {
             const cb = document.querySelector('.o_buckaroo_billink_tc');
             params.billink_tc_accepted = !!(cb && cb.checked);
             const birthdate = document.querySelector('.o_buckaroo_billink_birthdate');

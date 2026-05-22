@@ -1,12 +1,12 @@
 # Translation of Odoo Server.
 # This file contains the translation of the following modules:
 # 	* payment_buckaroo_official
-# 
+#
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-14 07:43+0000\n"
+"POT-Creation-Date: 2026-05-21 08:52+0000\n"
 "PO-Revision-Date: 2026-04-03 09:58+0000\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -32,12 +32,10 @@ msgstr "Veuillez sélectionner votre genre"
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
 msgid ""
 "<strong>Note:</strong>\n"
-"                    Quote the payment reference in the description of your "
-"transfer to ensure it can be processed."
+"                    Quote the payment reference in the description of your transfer to ensure it can be processed."
 msgstr ""
 "<strong>Remarque :</strong>\n"
-"                    Mentionnez la référence de paiement dans la description "
-"de votre virement afin qu'il puisse être traité."
+"                    Mentionnez la référence de paiement dans la description de votre virement afin qu'il puisse être traité."
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
@@ -54,6 +52,11 @@ msgstr ""
 #: model:payment.method,name:payment_buckaroo_official.payment_method_alipay
 msgid "Alipay"
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.cart_total_buckaroo_giftcard
+msgid "Already Paid"
+msgstr "Déjà payé"
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_brand_amex
@@ -151,6 +154,11 @@ msgid "Bizum"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.giftcard_inline_form
+msgid "Brand"
+msgstr "Marque"
+
+#. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.view_partner_form_buckaroo_official
 #, fuzzy
 msgid "Buckaroo BNPL"
@@ -211,8 +219,8 @@ msgid ""
 "Buckaroo payment method %(payment_method)s is not available for this order "
 "total."
 msgstr ""
-"La méthode de paiement Buckaroo %(payment_method)s n'est pas disponible pour "
-"ce montant de commande."
+"La méthode de paiement Buckaroo %(payment_method)s n'est pas disponible pour"
+" ce montant de commande."
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -258,10 +266,11 @@ msgid ""
 "Card brand unknown on the original transaction. The authorization may have "
 "been created before service code tracking was enabled."
 msgstr ""
-"Marque de carte inconnue sur la transaction d'origine. L'autorisation a peut-"
-"être été créée avant l'activation du suivi des codes de service."
+"Marque de carte inconnue sur la transaction d'origine. L'autorisation a "
+"peut-être été créée avant l'activation du suivi des codes de service."
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.giftcard_inline_form
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.hosted_fields_inline_form
 msgid "Card number"
 msgstr "Numéro de carte"
@@ -292,6 +301,18 @@ msgstr ""
 "'Redirection' envoie le client vers la page de paiement hébergée de "
 "Buckaroo. 'Inline (Hosted Fields)' intègre les champs de carte directement "
 "sur votre page de paiement."
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_giftcard_method
+msgid ""
+"Choose how giftcard payments are handled. 'Redirect' sends the customer to "
+"Buckaroo's hosted page. 'Inline' collects the card number and PIN directly "
+"on the checkout page."
+msgstr ""
+"Choisissez comment les paiements par carte cadeau sont traités. "
+"'Redirection' envoie le client vers la page hébergée par Buckaroo. 'En "
+"ligne' collecte le numéro de carte et le PIN directement sur la page de "
+"paiement."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_creditcard_authorize
@@ -458,9 +479,10 @@ msgstr ""
 #. module: payment_buckaroo_official
 #. odoo-javascript
 #: code:addons/payment_buckaroo_official/static/src/js/payment_form_creditcard.js:0
+#: code:addons/payment_buckaroo_official/static/src/js/payment_form_giftcard.js:0
 #: code:addons/payment_buckaroo_official/static/src/js/payment_googlepay.js:0
 msgid "Error"
-msgstr ""
+msgstr "Erreur"
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.hosted_fields_inline_form
@@ -477,6 +499,40 @@ msgstr "Échec de l'obtention du jeton Hosted Fields."
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_transaction__buckaroo_official_payment_action
 msgid "Frozen at creation time so push notifications use a stable value."
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_giftcard_method
+msgid "Giftcard Method"
+msgstr "Méthode de carte cadeau"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.payment_method_form_buckaroo_official
+msgid "Giftcard Settings"
+msgstr "Paramètres de carte cadeau"
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_giftcard.py:0
+msgid ""
+"Giftcard brand unknown on the original transaction. The original may have "
+"been recorded before service-code tracking was enabled."
+msgstr ""
+"Marque de carte cadeau inconnue sur la transaction d'origine. La transaction"
+" d'origine a peut-être été enregistrée avant l'activation du suivi du code "
+"de service."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_giftcard.py:0
+msgid "Giftcard details missing. Please re-enter the card number and PIN."
+msgstr ""
+"Informations de carte cadeau manquantes. Veuillez ressaisir le numéro de "
+"carte et le PIN."
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_giftcard
+msgid "Giftcards"
+msgstr "Cartes cadeaux"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_google_merchant_id
@@ -585,6 +641,21 @@ msgstr "In3"
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_users__buckaroo_in3_birthdate
 msgid "In3 Date of Birth"
 msgstr "Date de naissance In3"
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_in3.py:0
+msgid ""
+"In3 requires order articles. Create the transaction from a sale order with "
+"at least one line."
+msgstr ""
+"In3 nécessite des articles de commande. Créez la transaction à partir d'un "
+"bon de commande avec au moins une ligne."
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_giftcard_method__inline
+msgid "Inline"
+msgstr "En ligne"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_creditcard_method__inline
@@ -774,11 +845,21 @@ msgstr ""
 "Paramètres > Enregistrement de jeton."
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.giftcard_inline_form
+msgid "PIN"
+msgstr "PIN"
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_sdk_service_name
 msgid ""
-"PascalCase service name used by the Buckaroo SDK (e.g. 'Visa', 'Mastercard', "
-"'AMEX')."
+"PascalCase service name used by the Buckaroo SDK (e.g. 'Visa', 'Mastercard',"
+" 'AMEX')."
 msgstr ""
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.cart_total_buckaroo_giftcard
+msgid "Paid with"
+msgstr "Payé avec"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_creditcard_authorize__pay
@@ -883,10 +964,22 @@ msgstr "Veuillez entrer votre date de naissance pour continuer avec Riverty."
 
 #. module: payment_buckaroo_official
 #. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_in3.py:0
+msgid "Please provide a date of birth to proceed with In3."
+msgstr "Veuillez fournir une date de naissance pour continuer avec In3."
+
+#. module: payment_buckaroo_official
+#. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_method_riverty.py:0
 #, fuzzy
 msgid "Please provide a date of birth to proceed with Riverty."
 msgstr "Veuillez entrer votre date de naissance pour continuer avec Riverty."
+
+#. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/payment_form_giftcard.js:0
+msgid "Please enter the giftcard number and PIN."
+msgstr "Veuillez saisir le numéro de carte cadeau et le PIN."
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -921,6 +1014,7 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_creditcard_method__redirect
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_giftcard_method__redirect
 msgid "Redirect"
 msgstr "Redirection"
 
@@ -928,6 +1022,11 @@ msgstr "Redirection"
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_refund_description
 msgid "Refund Description"
 msgstr "Description de remboursement"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.cart_total_buckaroo_giftcard
+msgid "Remaining Amount"
+msgstr "Montant restant"
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_riverty
@@ -964,8 +1063,8 @@ msgstr "Paramètres de carte de crédit"
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_method_riverty.py:0
 msgid ""
-"Riverty partial refunds are not supported via Odoo. For partial refunds, use "
-"Buckaroo Plaza."
+"Riverty partial refunds are not supported via Odoo. For partial refunds, use"
+" Buckaroo Plaza."
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -1007,7 +1106,9 @@ msgstr ""
 #: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_in3_birthdate
 #: model:ir.model.fields,help:payment_buckaroo_official.field_res_users__buckaroo_in3_birthdate
 msgid "Saved from the last In3 checkout to prefill on next order."
-msgstr "Enregistré depuis le dernier paiement In3 pour préremplir la prochaine commande."
+msgstr ""
+"Enregistré depuis le dernier paiement In3 pour préremplir la prochaine "
+"commande."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_klarna_gender
@@ -1104,8 +1205,8 @@ msgid ""
 "The Merchant GUID issued by Buckaroo for Google Pay. Find this in Buckaroo "
 "Plaza under your Google Pay configuration."
 msgstr ""
-"Le Merchant GUID fourni par Buckaroo pour Google Pay. Vous le trouverez dans "
-"Buckaroo Plaza sous votre configuration Google Pay."
+"Le Merchant GUID fourni par Buckaroo pour Google Pay. Vous le trouverez dans"
+" Buckaroo Plaza sous votre configuration Google Pay."
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -1122,8 +1223,8 @@ msgstr ""
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_google_merchant_id
 msgid ""
-"The merchant identifier issued by Google in the Google Pay & Wallet Console. "
-"Required for production Google Pay sessions."
+"The merchant identifier issued by Google in the Google Pay & Wallet Console."
+" Required for production Google Pay sessions."
 msgstr ""
 "L'identifiant marchand attribué par Google dans la Google Pay & Wallet "
 "Console. Requis pour les sessions Google Pay en production."
@@ -1283,11 +1384,11 @@ msgstr "en utilisant les coordonnées bancaires ci-dessous."
 #~ msgstr "Noir"
 
 #~ msgid ""
-#~ "Color theme for the Google Pay button rendered on checkout. Pick the "
-#~ "variant that contrasts best with your storefront."
+#~ "Color theme for the Google Pay button rendered on checkout. Pick the variant"
+#~ " that contrasts best with your storefront."
 #~ msgstr ""
-#~ "Thème de couleur du bouton Google Pay affiché lors du paiement. "
-#~ "Choisissez la variante qui contraste le mieux avec votre boutique."
+#~ "Thème de couleur du bouton Google Pay affiché lors du paiement. Choisissez "
+#~ "la variante qui contraste le mieux avec votre boutique."
 
 #~ msgid "Could not initialize Google Pay. Please try again."
 #~ msgstr "Impossible d'initialiser Google Pay. Veuillez réessayer."
@@ -1305,3 +1406,81 @@ msgstr "en utilisant les coordonnées bancaires ci-dessous."
 
 #~ msgid "The Buckaroo minimum amount cannot be negative."
 #~ msgstr "Le montant minimum Buckaroo ne peut pas être négatif."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_transaction.py:0
+msgid "%(base)s Gateway message: %(message)s"
+msgstr "%(base)s Message de la passerelle : %(message)s"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_brand_boekenbon
+msgid "Boekenbon"
+msgstr "Boekenbon"
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_transaction.py:0
+msgid ""
+"Buckaroo Plaza rejected this refund (status 690). Intersolve giftcard "
+"refunds require: (a) Intersolve to enable partial-refund support on your "
+"merchant account (contact Buckaroo support), and (b) the refund request to "
+"include the cardholder's LastName and Email. Verify both are configured."
+msgstr ""
+"Buckaroo Plaza a rejeté ce remboursement (statut 690). Les "
+"remboursements de cartes cadeaux Intersolve nécessitent : (a) "
+"qu’Intersolve active la prise en charge des remboursements partiels "
+"sur votre compte marchand (contactez le support Buckaroo), et (b) "
+"que la demande de remboursement inclue le nom et l’e-mail du "
+"titulaire de la carte. Vérifiez que les deux sont configurés."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_transaction.py:0
+msgid "Buckaroo: %(operation)s failed with status code: %(status)s"
+msgstr "Buckaroo : %(operation)s a échoué avec le code de statut : %(status)s"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_brand_fashioncheque
+msgid "Fashioncheque"
+msgstr "Fashioncheque"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_brand_intersolve
+msgid "Intersolve"
+msgstr "Intersolve"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_brand_tcs
+msgid "TCS"
+msgstr "TCS"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_brand_vvvgiftcard
+msgid "VVV Giftcard"
+msgstr "VVV Giftcard"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_brand_webshopgiftcard
+msgid "Webshop Giftcard"
+msgstr "Webshop Giftcard"
+
+#. module: payment_buckaroo_official
+#: model:ir.model,name:payment_buckaroo_official.model_website
+msgid "Website"
+msgstr "Site web"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_brand_yourgift
+msgid "YourGift"
+msgstr "YourGift"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.cart_total_buckaroo_giftcard
+msgid "<span>Paid with</span>"
+msgstr "<span>Payé avec</span>"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.cart_total_buckaroo_giftcard
+msgid "<strong>Remaining Amount</strong>"
+msgstr "<strong>Montant restant</strong>"

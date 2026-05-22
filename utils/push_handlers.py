@@ -25,6 +25,7 @@ class ParsedPush:
     service_code: str | None
     signature: str | None
     raw: dict
+    lowered_keys: dict = field(default_factory=dict)
     service_parameters: dict = field(default_factory=dict)
     is_json: bool = False
     auth_header: str | None = None
@@ -53,6 +54,24 @@ class ParsedPush:
             if key.lower() == target:
                 return value
         return None
+
+    def get_partial_payment_relation(self):
+        """Return the source transaction key for a ``PartialPayment`` relation,
+        or ``None``. Bridges form (``brq_relatedtransaction_partialpayment``)
+        and JSON (``Transaction.RelatedTransactions[]``) push shapes so the
+        remainder-split detector handles both wire formats uniformly."""
+        if self.is_json:
+            data = self.raw.get("Transaction", self.raw) if isinstance(self.raw, dict) else {}
+            related = data.get("RelatedTransactions") or []
+            for rel in related:
+                if not isinstance(rel, dict):
+                    continue
+                if (rel.get("RelationType") or "").lower() == "partialpayment":
+                    key = rel.get("RelatedTransactionKey")
+                    if key:
+                        return key
+            return None
+        return self.lowered_keys.get("brq_relatedtransaction_partialpayment") or None
 
     def _check(self, group):
         return (
@@ -123,6 +142,7 @@ def _parse_form(request):
         service_code=service_code,
         signature=data.get("brq_signature"),
         raw=raw,
+        lowered_keys=data,
         service_parameters=_extract_form_service_parameters(raw, service_code),
     )
 

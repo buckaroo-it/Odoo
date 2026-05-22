@@ -491,24 +491,24 @@ _SKIP_REASON = (
 
 # The 18 new payment methods added alongside iDEAL.
 _NEW_METHODS = [
-    "bancontact",
-    "wero",
-    "paypal",
-    "eps",
-    "belfius",
-    "kbc",
-    "przelewy24",
-    "trustly",
-    "alipay",
-    "wechatpay",
-    "payconiq",
-    "swish",
-    "blik",
-    "bizum",
-    "mbway",
-    "multibanco",
-    "twint",
-    "knaken",
+    "buckaroo_bancontact",
+    "buckaroo_wero",
+    "buckaroo_paypal",
+    "buckaroo_eps",
+    "buckaroo_belfius",
+    "buckaroo_kbc",
+    "buckaroo_przelewy24",
+    "buckaroo_trustly",
+    "buckaroo_alipay",
+    "buckaroo_wechatpay",
+    "buckaroo_payconiq",
+    "buckaroo_swish",
+    "buckaroo_blik",
+    "buckaroo_bizum",
+    "buckaroo_mbway",
+    "buckaroo_multibanco",
+    "buckaroo_twint",
+    "buckaroo_knaken",
 ]
 
 # Buckaroo status codes and their expected Odoo transaction states.
@@ -694,7 +694,7 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
 
     def test_e2e_create_payment_all_methods(self):
         """create_payment() returns a redirect URL for every registered method."""
-        for method_code in _NEW_METHODS + ["billink"]:
+        for method_code in _NEW_METHODS + ["buckaroo_billink"]:
             with self.subTest(method=method_code):
                 self._assert_create_payment_returns_redirect(method_code)
 
@@ -735,7 +735,7 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
 
     def test_e2e_create_refund_all_methods(self):
         """create_refund() returns a valid refund response for every registered method."""
-        for method_code in _NEW_METHODS + ["billink"]:
+        for method_code in _NEW_METHODS + ["buckaroo_billink"]:
             with self.subTest(method=method_code):
                 self._assert_create_refund_returns_valid_response(method_code)
 
@@ -805,7 +805,7 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
             for method in _NEW_METHODS
             for code, state in self._STANDARD_STATUS_MATRIX
         ]
-        cases += [("billink", code, state) for code, state in self._BILLINK_STATUS_MATRIX]
+        cases += [("buckaroo_billink", code, state) for code, state in self._BILLINK_STATUS_MATRIX]
 
         for method_code, status_code, expected_state in cases:
             with self.subTest(method=method_code, status=status_code):

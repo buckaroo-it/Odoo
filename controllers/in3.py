@@ -14,7 +14,7 @@ class In3PaymentPortal(PaymentPortal):
         if not payment_method_id:
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
         pm = request.env["payment.method"].sudo().browse(int(payment_method_id))
-        if pm.code != "in3":
+        if pm.code != "buckaroo_in3":
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
         validate_bnpl_birthdate(

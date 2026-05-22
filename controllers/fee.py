@@ -11,6 +11,8 @@ from ..utils import const
 
 class BuckarooFeePaymentPortal(PaymentPortal):
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
+        if not self._buckaroo_official_request_for_buckaroo(kwargs):
+            return super().shop_payment_transaction(order_id, access_token, **kwargs)
         if order_id:
             method_id = self._buckaroo_resolve_pick_method_id(
                 kwargs.get("token_id"),
@@ -20,6 +22,25 @@ class BuckarooFeePaymentPortal(PaymentPortal):
                 request.update_context(**{const.PICK_METHOD_CONTEXT_KEY: method_id})
         kwargs.pop("amount", None)
         return super().shop_payment_transaction(order_id, access_token, **kwargs)
+
+    @staticmethod
+    def _buckaroo_official_request_for_buckaroo(kwargs):
+        """``True`` when the inbound request targets the Buckaroo provider.
+        Gates Buckaroo-only mutations (``amount`` pop, pick-method context)
+        so other providers' kwargs are passed through to super untouched."""
+        provider_id = kwargs.get("provider_id")
+        if provider_id:
+            provider = request.env["payment.provider"].sudo().browse(int(provider_id)).exists()
+            return bool(provider) and provider.code == const.PROVIDER_CODE
+        method_id = kwargs.get("payment_method_id")
+        if method_id:
+            method = request.env["payment.method"].sudo().browse(int(method_id)).exists()
+            return bool(method) and method._is_linked_to_buckaroo()
+        token_id = kwargs.get("token_id")
+        if token_id:
+            token = request.env["payment.token"].sudo().browse(int(token_id)).exists()
+            return bool(token) and token.provider_id.code == const.PROVIDER_CODE
+        return False
 
     @staticmethod
     def _buckaroo_resolve_pick_method_id(token_id, payment_method_id):

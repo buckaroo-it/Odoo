@@ -487,6 +487,20 @@ class TestSurchargeController(_SurchargeBase):
                 )
                 self.assertEqual(captured["kwargs"]["amount"], order.amount_total)
 
+    def test_non_buckaroo_provider_amount_kwarg_preserved(self):
+        """H2: the controller is global (extends ``website_sale.PaymentPortal``)
+        so it runs for every provider. Without a gate, ``kwargs.pop('amount')``
+        eats other providers' client-supplied amounts. The gate must keep
+        non-Buckaroo amounts intact."""
+        order = self._make_order()
+        captured = self._invoke_controller(
+            order,
+            self.payment_method,
+            provider_id=self.provider.id,
+            amount=99.99,
+        )
+        self.assertEqual(captured["kwargs"]["amount"], 99.99)
+
 
 @tagged("post_install", "-at_install")
 class TestSurchargeSetMethodRoute(_SurchargeBase):

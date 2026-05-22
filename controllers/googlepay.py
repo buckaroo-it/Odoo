@@ -13,7 +13,7 @@ class GooglepayPaymentPortal(PaymentPortal):
         if not payment_method_id:
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
         pm = request.env["payment.method"].sudo().browse(int(payment_method_id))
-        if pm.code != "googlepay":
+        if pm.code != "buckaroo_googlepay":
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
         token = self._buckaroo_sanitize_token(kwargs.pop("buckaroo_googlepay_token", None))

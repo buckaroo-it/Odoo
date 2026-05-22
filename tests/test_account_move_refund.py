@@ -1,9 +1,10 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+from unittest.mock import patch
+
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Command
 from odoo.tests import tagged
-from odoo.tools import mute_logger
 
 from odoo.addons.payment_buckaroo_official.tests.common import BuckarooOfficialCommon
 
@@ -112,15 +113,67 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
         with self.assertRaises(ValidationError):
             wizard.amount_to_refund = self.tx.amount + 1.0
 
-    @mute_logger("odoo.addons.payment.models.payment_transaction")
-    def test_action_raises_when_multiple_buckaroo_transactions(self):
-        extra_tx = self._make_buckaroo_tx("ACCMOVE-TX-2")
+    def _add_second_buckaroo_tx(self, reference="ACCMOVE-TX-2", amount=50.0, payment_method=None):
+        pm = payment_method or self.ideal
+        extra_tx = self.env["payment.transaction"].create(
+            {
+                "provider_id": self.buckaroo.id,
+                "payment_method_id": pm.id,
+                "reference": reference,
+                "amount": amount,
+                "currency_id": self.currency_euro.id,
+                "partner_id": self.partner.id,
+                "operation": "online_redirect",
+            }
+        )
         extra_tx.invoice_ids = [Command.link(self.invoice.id)]
         extra_tx._set_done()
         extra_tx._post_process()
-        with self.assertRaises(UserError) as cm:
+        return extra_tx
+
+    def _make_giftcard_tx_for_invoice(self, reference="ACCMOVE-GC-1", amount=50.0):
+        giftcard = self.env.ref("payment_buckaroo_official.payment_method_brand_intersolve")
+        self.buckaroo.payment_method_ids = [Command.link(giftcard.id)]
+        return self._add_second_buckaroo_tx(reference=reference, amount=amount, payment_method=giftcard)
+
+    def test_action_returns_notification_for_multi_giftcard_transactions(self):
+        self._make_giftcard_tx_for_invoice()
+        called_on = []
+
+        def fake_send(self):
+            called_on.append(self.source_transaction_id)
+
+        with patch.object(
+            type(self.env["payment.transaction"]), "_send_refund_request", fake_send
+        ):
+            action = self.credit_note.action_buckaroo_official_refund()
+        self.assertEqual(action["type"], "ir.actions.client")
+        self.assertEqual(action["tag"], "display_notification")
+
+    def test_action_raises_for_multi_non_giftcard_transactions(self):
+        """No giftcard among the txns → raise. Two creditcard payments on
+        one order must be refunded individually so the admin chooses which
+        leg is debited."""
+        self._add_second_buckaroo_tx()
+        with self.assertRaises(UserError):
             self.credit_note.action_buckaroo_official_refund()
-        self.assertIn("Buckaroo Plaza", str(cm.exception))
+
+    def test_multi_tx_refund_total_matches_cn_amount(self):
+        """Greedy distribution across giftcard + remainder: total refund
+        equals CN amount, not the sum of source tx amounts."""
+        self._make_giftcard_tx_for_invoice()
+        refund_amounts = []
+
+        def fake_send(self):
+            refund_amounts.append(abs(self.amount))
+
+        with patch.object(
+            type(self.env["payment.transaction"]), "_send_refund_request", fake_send
+        ):
+            self.credit_note.action_buckaroo_official_refund()
+        self.assertAlmostEqual(
+            sum(refund_amounts), abs(self.credit_note.amount_total), places=2,
+        )
 
     def test_existing_refund_tx_does_not_count_as_multi(self):
         refund_tx = self.tx._create_child_transaction(self.tx.amount, is_refund=True)

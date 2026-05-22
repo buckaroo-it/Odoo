@@ -3,9 +3,10 @@
 
     <record id="payment_method_ideal" model="payment.method">
         <field name="name">iDEAL | Wero</field>
-        <field name="code">ideal</field>
+        <field name="code">buckaroo_ideal</field>
         <field name="sequence">1000</field>
         <field name="active">True</field>
+        <field name="buckaroo_official_sdk_service_name">ideal</field>
         <field name="image" type="base64"
                file="payment_buckaroo_official/static/src/img/ideal.png"/>
         <field name="support_tokenization">False</field>
@@ -19,9 +20,10 @@
 
     <record id="payment_method_bancontact" model="payment.method">
         <field name="name">Bancontact</field>
-        <field name="code">bancontact</field>
+        <field name="code">buckaroo_bancontact</field>
         <field name="sequence">1010</field>
         <field name="active">True</field>
+        <field name="buckaroo_official_sdk_service_name">bancontact</field>
         <field name="image" type="base64"
                file="payment_buckaroo_official/static/src/img/bancontact.png"/>
         <field name="support_tokenization">False</field>
@@ -35,7 +37,8 @@
 
     <record id="payment_method_wero" model="payment.method">
         <field name="name">Wero</field>
-        <field name="code">wero</field>
+        <field name="code">buckaroo_wero</field>
+        <field name="buckaroo_official_sdk_service_name">wero</field>
         <field name="sequence">1020</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -51,7 +54,8 @@
 
     <record id="payment_method_eps" model="payment.method">
         <field name="name">EPS</field>
-        <field name="code">eps</field>
+        <field name="code">buckaroo_eps</field>
+        <field name="buckaroo_official_sdk_service_name">eps</field>
         <field name="sequence">1030</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -67,7 +71,8 @@
 
     <record id="payment_method_belfius" model="payment.method">
         <field name="name">Belfius</field>
-        <field name="code">belfius</field>
+        <field name="code">buckaroo_belfius</field>
+        <field name="buckaroo_official_sdk_service_name">belfius</field>
         <field name="sequence">1040</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -83,7 +88,8 @@
 
     <record id="payment_method_kbc" model="payment.method">
         <field name="name">KBC</field>
-        <field name="code">kbc</field>
+        <field name="code">buckaroo_kbc</field>
+        <field name="buckaroo_official_sdk_service_name">kbc</field>
         <field name="sequence">1050</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -99,7 +105,8 @@
 
     <record id="payment_method_alipay" model="payment.method">
         <field name="name">Alipay</field>
-        <field name="code">alipay</field>
+        <field name="code">buckaroo_alipay</field>
+        <field name="buckaroo_official_sdk_service_name">alipay</field>
         <field name="sequence">1060</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -115,7 +122,8 @@
 
     <record id="payment_method_wechatpay" model="payment.method">
         <field name="name">WeChat Pay</field>
-        <field name="code">wechatpay</field>
+        <field name="code">buckaroo_wechatpay</field>
+        <field name="buckaroo_official_sdk_service_name">wechatpay</field>
         <field name="sequence">1070</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -131,7 +139,8 @@
 
     <record id="payment_method_payconiq" model="payment.method">
         <field name="name">Payconiq</field>
-        <field name="code">payconiq</field>
+        <field name="code">buckaroo_payconiq</field>
+        <field name="buckaroo_official_sdk_service_name">payconiq</field>
         <field name="sequence">1080</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -147,7 +156,8 @@
 
     <record id="payment_method_swish" model="payment.method">
         <field name="name">Swish</field>
-        <field name="code">swish</field>
+        <field name="code">buckaroo_swish</field>
+        <field name="buckaroo_official_sdk_service_name">swish</field>
         <field name="sequence">1090</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -163,7 +173,7 @@
 
     <record id="payment_method_googlepay" model="payment.method">
         <field name="name">Google Pay</field>
-        <field name="code">googlepay</field>
+        <field name="code">buckaroo_googlepay</field>
         <field name="sequence">1095</field>
         <field name="active">True</field>
         <field name="buckaroo_official_sdk_service_name">googlepay</field>
@@ -180,7 +190,7 @@
 
     <record id="payment_method_applepay" model="payment.method">
         <field name="name">Apple Pay</field>
-        <field name="code">applepay</field>
+        <field name="code">buckaroo_applepay</field>
         <field name="sequence">1097</field>
         <field name="active">True</field>
         <field name="buckaroo_official_sdk_service_name">applepay</field>
@@ -197,7 +207,8 @@
 
     <record id="payment_method_bizum" model="payment.method">
         <field name="name">Bizum</field>
-        <field name="code">bizum</field>
+        <field name="code">buckaroo_bizum</field>
+        <field name="buckaroo_official_sdk_service_name">bizum</field>
         <field name="sequence">1100</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -213,7 +224,8 @@
 
     <record id="payment_method_mbway" model="payment.method">
         <field name="name">MB WAY</field>
-        <field name="code">mbway</field>
+        <field name="code">buckaroo_mbway</field>
+        <field name="buckaroo_official_sdk_service_name">mbway</field>
         <field name="sequence">1110</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -229,7 +241,8 @@
 
     <record id="payment_method_multibanco" model="payment.method">
         <field name="name">Multibanco</field>
-        <field name="code">multibanco</field>
+        <field name="code">buckaroo_multibanco</field>
+        <field name="buckaroo_official_sdk_service_name">multibanco</field>
         <field name="sequence">1120</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -245,7 +258,8 @@
 
     <record id="payment_method_knaken" model="payment.method">
         <field name="name">goSettle</field>
-        <field name="code">knaken</field>
+        <field name="code">buckaroo_knaken</field>
+        <field name="buckaroo_official_sdk_service_name">knaken</field>
         <field name="sequence">1130</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -261,7 +275,8 @@
 
     <record id="payment_method_paypal" model="payment.method">
         <field name="name">PayPal</field>
-        <field name="code">paypal</field>
+        <field name="code">buckaroo_paypal</field>
+        <field name="buckaroo_official_sdk_service_name">paypal</field>
         <field name="sequence">1140</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -277,7 +292,8 @@
 
     <record id="payment_method_trustly" model="payment.method">
         <field name="name">Trustly</field>
-        <field name="code">trustly</field>
+        <field name="code">buckaroo_trustly</field>
+        <field name="buckaroo_official_sdk_service_name">trustly</field>
         <field name="sequence">1150</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -293,7 +309,8 @@
 
     <record id="payment_method_przelewy24" model="payment.method">
         <field name="name">Przelewy24</field>
-        <field name="code">przelewy24</field>
+        <field name="code">buckaroo_przelewy24</field>
+        <field name="buckaroo_official_sdk_service_name">przelewy24</field>
         <field name="sequence">1160</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -309,7 +326,8 @@
 
     <record id="payment_method_blik" model="payment.method">
         <field name="name">BLIK</field>
-        <field name="code">blik</field>
+        <field name="code">buckaroo_blik</field>
+        <field name="buckaroo_official_sdk_service_name">blik</field>
         <field name="sequence">1170</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -325,7 +343,8 @@
 
     <record id="payment_method_twint" model="payment.method">
         <field name="name">TWINT</field>
-        <field name="code">twint</field>
+        <field name="code">buckaroo_twint</field>
+        <field name="buckaroo_official_sdk_service_name">twint</field>
         <field name="sequence">1180</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -341,7 +360,8 @@
 
     <record id="payment_method_billink" model="payment.method">
         <field name="name">Billink</field>
-        <field name="code">billink</field>
+        <field name="code">buckaroo_billink</field>
+        <field name="buckaroo_official_sdk_service_name">billink</field>
         <field name="sequence">1190</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -357,7 +377,8 @@
 
     <record id="payment_method_klarna" model="payment.method">
         <field name="name">Klarna</field>
-        <field name="code">klarna</field>
+        <field name="code">buckaroo_klarna</field>
+        <field name="buckaroo_official_sdk_service_name">klarna</field>
         <field name="sequence">1200</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -374,7 +395,7 @@
 
     <record id="payment_method_bank_transfer" model="payment.method">
         <field name="name">Bank Transfer</field>
-        <field name="code">bank_transfer</field>
+        <field name="code">buckaroo_bank_transfer</field>
         <field name="sequence">1205</field>
         <field name="active">True</field>
         <field name="buckaroo_official_sdk_service_name">transfer</field>
@@ -391,7 +412,8 @@
 
     <record id="payment_method_in3" model="payment.method">
         <field name="name">In3</field>
-        <field name="code">in3</field>
+        <field name="code">buckaroo_in3</field>
+        <field name="buckaroo_official_sdk_service_name">in3</field>
         <field name="sequence">1215</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -406,9 +428,134 @@
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
 
+    <record id="payment_method_giftcard" model="payment.method">
+        <field name="name">Giftcards</field>
+        <field name="code">buckaroo_giftcard</field>
+        <field name="sequence">1220</field>
+        <field name="active">True</field>
+        <field name="buckaroo_official_sdk_service_name">giftcards</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/giftcard.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_manual_capture">none</field>
+        <field name="support_refund">partial</field>
+        <field name="supported_country_ids" eval="[Command.clear()]"/>
+        <field name="supported_currency_ids"
+               eval="[Command.set([ref('base.EUR')])]"/>
+    </record>
+
+    <!-- Giftcard brand child methods -->
+
+    <record id="payment_method_brand_vvvgiftcard" model="payment.method">
+        <field name="name">VVV Giftcard</field>
+        <field name="code">buckaroo_vvvgiftcard</field>
+        <field name="sequence">100</field>
+        <field name="active">True</field>
+        <field name="primary_payment_method_id" ref="payment_method_giftcard"/>
+        <field name="buckaroo_official_sdk_service_name">vvvgiftcard</field>
+        <field name="buckaroo_official_giftcard_backend">intersolve</field>
+        <field name="buckaroo_official_giftcard_cardnumber_param">IntersolveCardnumber</field>
+        <field name="buckaroo_official_giftcard_pin_param">IntersolvePIN</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/brand_vvvgiftcard.png"/>
+        <field name="support_refund">partial</field>
+    </record>
+
+    <record id="payment_method_brand_intersolve" model="payment.method">
+        <field name="name">Intersolve</field>
+        <field name="code">buckaroo_intersolve</field>
+        <field name="sequence">110</field>
+        <field name="active">True</field>
+        <field name="primary_payment_method_id" ref="payment_method_giftcard"/>
+        <field name="buckaroo_official_sdk_service_name">intersolve</field>
+        <field name="buckaroo_official_giftcard_backend">intersolve</field>
+        <field name="buckaroo_official_giftcard_cardnumber_param">IntersolveCardnumber</field>
+        <field name="buckaroo_official_giftcard_pin_param">IntersolvePIN</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/brand_intersolve.png"/>
+        <field name="support_refund">partial</field>
+    </record>
+
+    <record id="payment_method_brand_fashioncheque" model="payment.method">
+        <field name="name">Fashioncheque</field>
+        <field name="code">buckaroo_fashioncheque</field>
+        <field name="sequence">120</field>
+        <field name="active">True</field>
+        <field name="primary_payment_method_id" ref="payment_method_giftcard"/>
+        <field name="buckaroo_official_sdk_service_name">fashioncheque</field>
+        <field name="buckaroo_official_giftcard_backend">fashioncheque</field>
+        <field name="buckaroo_official_giftcard_cardnumber_param">FashionChequeCardNumber</field>
+        <field name="buckaroo_official_giftcard_pin_param">FashionChequePIN</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/brand_fashioncheque.png"/>
+        <field name="support_refund">partial</field>
+    </record>
+
+    <record id="payment_method_brand_tcs" model="payment.method">
+        <field name="name">TCS</field>
+        <field name="code">buckaroo_tcs</field>
+        <field name="sequence">130</field>
+        <field name="active">True</field>
+        <field name="primary_payment_method_id" ref="payment_method_giftcard"/>
+        <field name="buckaroo_official_sdk_service_name">tcs</field>
+        <field name="buckaroo_official_giftcard_backend">tcs</field>
+        <field name="buckaroo_official_giftcard_cardnumber_param">TCSCardnumber</field>
+        <field name="buckaroo_official_giftcard_pin_param">TCSValidationCode</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/brand_tcs.png"/>
+        <field name="support_refund">partial</field>
+    </record>
+
+    <record id="payment_method_brand_boekenbon" model="payment.method">
+        <field name="name">Boekenbon</field>
+        <field name="code">buckaroo_boekenbon</field>
+        <field name="sequence">140</field>
+        <field name="active">True</field>
+        <field name="primary_payment_method_id" ref="payment_method_giftcard"/>
+        <field name="buckaroo_official_sdk_service_name">boekenbon</field>
+        <field name="buckaroo_official_giftcard_backend">intersolve</field>
+        <field name="buckaroo_official_giftcard_cardnumber_param">IntersolveCardnumber</field>
+        <field name="buckaroo_official_giftcard_pin_param">IntersolvePIN</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/brand_boekenbon.png"/>
+        <field name="support_refund">partial</field>
+    </record>
+
+    <record id="payment_method_brand_webshopgiftcard" model="payment.method">
+        <field name="name">Webshop Giftcard</field>
+        <field name="code">buckaroo_webshopgiftcard</field>
+        <field name="sequence">150</field>
+        <field name="active">True</field>
+        <field name="primary_payment_method_id" ref="payment_method_giftcard"/>
+        <field name="buckaroo_official_sdk_service_name">webshopgiftcard</field>
+        <field name="buckaroo_official_giftcard_backend">intersolve</field>
+        <field name="buckaroo_official_giftcard_cardnumber_param">IntersolveCardnumber</field>
+        <field name="buckaroo_official_giftcard_pin_param">IntersolvePIN</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/brand_webshopgiftcard.png"/>
+        <field name="support_refund">partial</field>
+    </record>
+
+    <record id="payment_method_brand_yourgift" model="payment.method">
+        <field name="name">YourGift</field>
+        <field name="code">buckaroo_yourgift</field>
+        <field name="sequence">160</field>
+        <field name="active">True</field>
+        <field name="primary_payment_method_id" ref="payment_method_giftcard"/>
+        <field name="buckaroo_official_sdk_service_name">yourgift</field>
+        <field name="buckaroo_official_giftcard_backend">intersolve</field>
+        <field name="buckaroo_official_giftcard_cardnumber_param">IntersolveCardnumber</field>
+        <field name="buckaroo_official_giftcard_pin_param">IntersolvePIN</field>
+        <field name="image" type="base64"
+               file="payment_buckaroo_official/static/src/img/brand_yourgift.png"/>
+        <field name="support_refund">partial</field>
+    </record>
+
     <record id="payment_method_riverty" model="payment.method">
         <field name="name">Riverty</field>
-        <field name="code">riverty</field>
+        <field name="code">buckaroo_riverty</field>
+        <field name="buckaroo_official_sdk_service_name">riverty</field>
         <field name="sequence">1210</field>
         <field name="active">True</field>
         <field name="image" type="base64"
@@ -425,7 +572,7 @@
 
     <record id="payment_method_creditcard" model="payment.method">
         <field name="name">Credit Card</field>
-        <field name="code">creditcard</field>
+        <field name="code">buckaroo_creditcard</field>
         <field name="sequence">2000</field>
         <field name="active">True</field>
         <field name="buckaroo_official_sdk_service_name">creditcard</field>
@@ -444,7 +591,7 @@
 
     <record id="payment_method_brand_visa" model="payment.method">
         <field name="name">Visa</field>
-        <field name="code">visa</field>
+        <field name="code">buckaroo_visa</field>
         <field name="sequence">100</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -456,7 +603,7 @@
 
     <record id="payment_method_brand_mastercard" model="payment.method">
         <field name="name">Mastercard</field>
-        <field name="code">mastercard</field>
+        <field name="code">buckaroo_mastercard</field>
         <field name="sequence">110</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -468,7 +615,7 @@
 
     <record id="payment_method_brand_amex" model="payment.method">
         <field name="name">American Express</field>
-        <field name="code">amex</field>
+        <field name="code">buckaroo_amex</field>
         <field name="sequence">120</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -480,7 +627,7 @@
 
     <record id="payment_method_brand_maestro" model="payment.method">
         <field name="name">Maestro</field>
-        <field name="code">maestro</field>
+        <field name="code">buckaroo_maestro</field>
         <field name="sequence">130</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -492,7 +639,7 @@
 
     <record id="payment_method_brand_visaelectron" model="payment.method">
         <field name="name">Visa Electron</field>
-        <field name="code">visaelectron</field>
+        <field name="code">buckaroo_visaelectron</field>
         <field name="sequence">200</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -504,7 +651,7 @@
 
     <record id="payment_method_brand_vpay" model="payment.method">
         <field name="name">V PAY</field>
-        <field name="code">vpay</field>
+        <field name="code">buckaroo_vpay</field>
         <field name="sequence">210</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -516,7 +663,7 @@
 
     <record id="payment_method_brand_cartebancaire" model="payment.method">
         <field name="name">Carte Bancaire</field>
-        <field name="code">cartebancaire</field>
+        <field name="code">buckaroo_cartebancaire</field>
         <field name="sequence">220</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -528,7 +675,7 @@
 
     <record id="payment_method_brand_cartebleuevisa" model="payment.method">
         <field name="name">Carte Bleue Visa</field>
-        <field name="code">cartebleuevisa</field>
+        <field name="code">buckaroo_cartebleuevisa</field>
         <field name="sequence">230</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -540,7 +687,7 @@
 
     <record id="payment_method_brand_dankort" model="payment.method">
         <field name="name">Dankort</field>
-        <field name="code">dankort</field>
+        <field name="code">buckaroo_dankort</field>
         <field name="sequence">240</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -552,7 +699,7 @@
 
     <record id="payment_method_brand_nexi" model="payment.method">
         <field name="name">Nexi</field>
-        <field name="code">nexi</field>
+        <field name="code">buckaroo_nexi</field>
         <field name="sequence">250</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>
@@ -564,7 +711,7 @@
 
     <record id="payment_method_brand_postepay" model="payment.method">
         <field name="name">PostePay</field>
-        <field name="code">postepay</field>
+        <field name="code">buckaroo_postepay</field>
         <field name="sequence">260</field>
         <field name="active">True</field>
         <field name="primary_payment_method_id" ref="payment_method_creditcard"/>

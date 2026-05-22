@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="giftcard_inline_form"
+              name="Buckaroo Giftcard Inline Form"
+              inherit_id="payment.method_form">
+        <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
+            <t t-set="pm_giftcard_primary" t-value="pm_sudo._buckaroo_giftcard_primary()"/>
+            <t t-if="pm_giftcard_primary and pm_giftcard_primary.buckaroo_official_giftcard_method == 'inline' and pm_sudo.primary_payment_method_id">
+                <div class="o_buckaroo_giftcard_container mt-2"
+                     t-att-data-provider-id="provider_sudo.id"
+                     t-att-data-payment-method-id="pm_sudo.id"
+                     t-att-data-brand="pm_sudo.code">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label text-muted small mb-1">Brand</label>
+                            <div class="form-control-plaintext fw-semibold" t-esc="pm_sudo.name"/>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label text-muted small mb-1">Card number</label>
+                            <input type="text"
+                                   class="form-control o_buckaroo_giftcard_cardnumber"
+                                   autocomplete="off"
+                                   inputmode="numeric"
+                                   placeholder="0000000000000000001"/>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label text-muted small mb-1">PIN</label>
+                            <input type="password"
+                                   class="form-control o_buckaroo_giftcard_pin"
+                                   autocomplete="off"
+                                   inputmode="numeric"
+                                   placeholder="••••"/>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </xpath>
+    </template>
+</odoo>

@@ -58,7 +58,7 @@ class PaymentMethodIn3(models.Model):
         return customer
 
     def _buckaroo_create_payment(self, transaction, client):
-        if self.code != "in3":
+        if self.code != "buckaroo_in3":
             return super()._buckaroo_create_payment(transaction, client)
 
         articles = get_order_articles(transaction)
@@ -82,7 +82,7 @@ class PaymentMethodIn3(models.Model):
 
         params = self._buckaroo_get_payment_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
         builder.add_parameter("article", self._format_in3_articles(articles))

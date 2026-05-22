@@ -111,7 +111,7 @@ function _gpSnapshotProductDom() {
 patch(PaymentForm.prototype, {
 
     async _prepareInlineForm(_providerId, providerCode, _paymentOptionId, paymentMethodCode, _flow) {
-        if (providerCode !== 'buckaroo_official' || paymentMethodCode !== 'googlepay') {
+        if (providerCode !== 'buckaroo_official' || paymentMethodCode !== 'buckaroo_googlepay') {
             await super._prepareInlineForm(...arguments);
             return;
         }
@@ -130,7 +130,7 @@ patch(PaymentForm.prototype, {
     },
 
     async _initiatePaymentFlow(providerCode, _paymentOptionId, paymentMethodCode, _flow) {
-        if (providerCode !== 'buckaroo_official' || paymentMethodCode !== 'googlepay') {
+        if (providerCode !== 'buckaroo_official' || paymentMethodCode !== 'buckaroo_googlepay') {
             return super._initiatePaymentFlow(...arguments);
         }
         const container = this.el.querySelector('#o_buckaroo_googlepay_container');
@@ -202,7 +202,7 @@ patch(PaymentForm.prototype, {
         const radio = this.el.querySelector('input[name="o_payment_radio"]:checked');
         if (!radio
             || radio.dataset.providerCode !== 'buckaroo_official'
-            || radio.dataset.paymentMethodCode !== 'googlepay') {
+            || radio.dataset.paymentMethodCode !== 'buckaroo_googlepay') {
             return params;
         }
         if (this._buckarooGPToken) {

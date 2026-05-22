@@ -57,12 +57,12 @@ class PaymentMethodBillink(models.Model):
         return customer
 
     def _buckaroo_create_payment(self, transaction, client):
-        if self.code != "billink":
+        if self.code != "buckaroo_billink":
             return super()._buckaroo_create_payment(transaction, client)
 
         params = self._buckaroo_get_payment_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
 

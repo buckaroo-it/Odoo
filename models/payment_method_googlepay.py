@@ -79,7 +79,7 @@ class PaymentMethodGooglepay(models.Model):
         )
         return payment_methods.filtered(
             lambda pm: (
-                pm.code != "googlepay"
+                pm.code != "buckaroo_googlepay"
                 or (
                     pm._buckaroo_googlepay_is_configured()
                     and (
@@ -104,7 +104,7 @@ class PaymentMethodGooglepay(models.Model):
         return True
 
     def _buckaroo_create_payment(self, transaction, client):
-        if self.code != "googlepay":
+        if self.code != "buckaroo_googlepay":
             return super()._buckaroo_create_payment(transaction, client)
 
         token = pop_session_value("buckaroo_googlepay_token")
@@ -119,7 +119,7 @@ class PaymentMethodGooglepay(models.Model):
 
         params = self._buckaroo_get_payment_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
         builder.add_parameter("PaymentData", encoded_token)

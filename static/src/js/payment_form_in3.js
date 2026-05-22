@@ -11,7 +11,7 @@ patch(PaymentForm.prototype, {
         if (!radio || radio.dataset.providerCode !== 'buckaroo_official') {
             return params;
         }
-        if (radio.dataset.paymentMethodCode === 'in3') {
+        if (radio.dataset.paymentMethodCode === 'buckaroo_in3') {
             const birthdate = document.querySelector('.o_buckaroo_in3_birthdate');
             if (birthdate && birthdate.value) {
                 params.in3_birthdate = birthdate.value;

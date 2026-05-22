@@ -15,7 +15,7 @@ class RivertyPaymentPortal(PaymentPortal):
         if not payment_method_id:
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
         pm = request.env["payment.method"].sudo().browse(int(payment_method_id))
-        if pm.code != "riverty":
+        if pm.code != "buckaroo_riverty":
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
         salutation = kwargs.pop("riverty_salutation", None) or ""

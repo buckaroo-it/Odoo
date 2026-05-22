@@ -12,3 +12,4 @@ from . import payment_method_googlepay
 from . import payment_transaction
 from . import sale_order
 from . import account_move
+from . import payment_method_giftcard

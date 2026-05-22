@@ -377,10 +377,7 @@ class TestBankTransferCreatePaymentDispatch(BuckarooOfficialCommon):
         """SDK factory key is ``transfer`` (lowercase); the data record sets
         ``buckaroo_official_sdk_service_name=transfer`` so ``code=bank_transfer``
         still routes to ``TransferBuilder``."""
-        self.assertEqual(
-            self.bank_transfer._buckaroo_get_sdk_service_name(),
-            "transfer",
-        )
+        self.assertEqual(self.bank_transfer.buckaroo_official_sdk_service_name, "transfer")
 
 
 @tagged("post_install", "-at_install")

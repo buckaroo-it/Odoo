@@ -99,12 +99,12 @@ class PaymentMethodRiverty(models.Model):
 
     def _buckaroo_get_payment_action(self):
         self.ensure_one()
-        if self.code == "riverty" and self.buckaroo_official_riverty_authorize == "authorize":
+        if self.code == "buckaroo_riverty" and self.buckaroo_official_riverty_authorize == "authorize":
             return "authorize"
         return super()._buckaroo_get_payment_action()
 
     def _buckaroo_create_payment(self, transaction, client):
-        if self.code != "riverty":
+        if self.code != "buckaroo_riverty":
             return super()._buckaroo_create_payment(transaction, client)
 
         articles = get_order_articles(transaction)
@@ -135,7 +135,7 @@ class PaymentMethodRiverty(models.Model):
 
         params = self._buckaroo_get_payment_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
 
@@ -165,7 +165,7 @@ class PaymentMethodRiverty(models.Model):
         amount-based refund flow can't supply; raising early avoids a
         491 mid-checkout.
         """
-        if self.code != "riverty":
+        if self.code != "buckaroo_riverty":
             return super()._buckaroo_create_refund(source_tx, refund_tx, client)
         if round(abs(refund_tx.amount), 2) != round(source_tx.amount, 2):
             raise ValidationError(

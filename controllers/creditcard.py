@@ -43,14 +43,14 @@ class CreditCardController(http.Controller):
         if payment_method_id:
             pm_sudo = request.env["payment.method"].sudo().browse(int(payment_method_id))
         else:
-            pm_sudo = provider_sudo.payment_method_ids.filtered(lambda m: m.code == "creditcard")[
-                :1
-            ]
+            pm_sudo = provider_sudo.payment_method_ids.filtered(
+                lambda m: m.code == "buckaroo_creditcard"
+            )[:1]
         if not pm_sudo.exists():
             return {"error": _("Credit card payment method not found.")}
         if pm_sudo not in provider_sudo.payment_method_ids:
             return {"error": _("Invalid payment method for this provider.")}
-        if pm_sudo.code != "creditcard":
+        if pm_sudo.code != "buckaroo_creditcard":
             return {"error": _("Payment method is not a credit card.")}
 
         client_id = pm_sudo.buckaroo_official_hosted_fields_client_id

@@ -9,7 +9,7 @@ import { PaymentForm } from '@payment/interactions/payment_form';
 patch(PaymentForm.prototype, {
 
     async _prepareInlineForm(providerId, providerCode, paymentOptionId, paymentMethodCode, flow) {
-        if (providerCode !== 'buckaroo_official' || paymentMethodCode !== 'creditcard') {
+        if (providerCode !== 'buckaroo_official' || paymentMethodCode !== 'buckaroo_creditcard') {
             await super._prepareInlineForm(...arguments);
             return;
         }
@@ -115,7 +115,7 @@ patch(PaymentForm.prototype, {
     },
 
     async _initiatePaymentFlow(providerCode, paymentOptionId, paymentMethodCode, flow) {
-        if (providerCode !== 'buckaroo_official' || paymentMethodCode !== 'creditcard') {
+        if (providerCode !== 'buckaroo_official' || paymentMethodCode !== 'buckaroo_creditcard') {
             await super._initiatePaymentFlow(...arguments);
             return;
         }

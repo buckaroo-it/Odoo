@@ -12,7 +12,7 @@ class KlarnaPaymentPortal(PaymentPortal):
         payment_method_id = kwargs.get("payment_method_id")
         if payment_method_id:
             pm = request.env["payment.method"].sudo().browse(int(payment_method_id))
-            if pm.code == "klarna":
+            if pm.code == "buckaroo_klarna":
                 gender = kwargs.pop("klarna_gender", None)
                 try:
                     gender_int = int(gender) if gender is not None else None

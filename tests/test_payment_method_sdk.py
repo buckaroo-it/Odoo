@@ -10,21 +10,6 @@ from .common import BuckarooOfficialCommon, make_mock_response, make_mock_sdk_bu
 
 
 @tagged("post_install", "-at_install")
-class TestBuckarooGetSdkServiceName(BuckarooOfficialCommon):
-    """Test _buckaroo_get_sdk_service_name on payment.method model."""
-
-    def test_returns_code_when_no_sdk_service_name_set(self):
-        """When buckaroo_official_sdk_service_name is empty, falls back to self.code."""
-        self.ideal.buckaroo_official_sdk_service_name = False
-        self.assertEqual(self.ideal._buckaroo_get_sdk_service_name(), "ideal")
-
-    def test_returns_sdk_service_name_when_set(self):
-        """When buckaroo_official_sdk_service_name is set, returns it."""
-        self.ideal.buckaroo_official_sdk_service_name = "CustomIdeal"
-        self.assertEqual(self.ideal._buckaroo_get_sdk_service_name(), "CustomIdeal")
-
-
-@tagged("post_install", "-at_install")
 class TestBuckarooGetPaymentAction(BuckarooOfficialCommon):
     """Test _buckaroo_get_payment_action on payment.method model."""
 

@@ -21,12 +21,12 @@ class PaymentMethodBankTransfer(models.Model):
     _inherit = "payment.method"
 
     def _buckaroo_create_payment(self, transaction, client):
-        if self.code != "bank_transfer":
+        if self.code != "buckaroo_bank_transfer":
             return super()._buckaroo_create_payment(transaction, client)
 
         params = self._buckaroo_get_payment_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
 
@@ -48,7 +48,7 @@ class PaymentMethodBankTransfer(models.Model):
         Persist them, set the tx pending, and route the customer via
         ``/shop/payment/validate`` so they land on ``/shop/confirmation``
         with the order confirmed and the bank details rendered inline."""
-        if self.code != "bank_transfer":
+        if self.code != "buckaroo_bank_transfer":
             return super()._buckaroo_handle_no_redirect_response(transaction, response)
         if not response.is_pending():
             return None
@@ -61,7 +61,7 @@ class PaymentMethodBankTransfer(models.Model):
         return {"api_url": f"{base_url}/shop/payment/validate"}
 
     def _buckaroo_apply_push_metadata(self, transaction, payment_data):
-        if self.code != "bank_transfer":
+        if self.code != "buckaroo_bank_transfer":
             return super()._buckaroo_apply_push_metadata(transaction, payment_data)
         details = self._buckaroo_collect_bank_details(payment_data)
         if details:

@@ -15,7 +15,7 @@
                     <field name="buckaroo_official_fee_amount"/>
                 </group>
                 <group string="Credit Card Settings"
-                       invisible="not buckaroo_official_is_linked or code != 'creditcard'">
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_creditcard'">
                     <field name="buckaroo_official_creditcard_method"/>
                     <field name="buckaroo_official_creditcard_authorize"/>
                     <field name="buckaroo_official_hosted_fields_client_id"
@@ -26,17 +26,21 @@
                            required="buckaroo_official_creditcard_method == 'inline'"
                            password="True"/>
                 </group>
+                <group string="Giftcard Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_giftcard'">
+                    <field name="buckaroo_official_giftcard_method"/>
+                </group>
                 <group string="Riverty Settings"
-                       invisible="not buckaroo_official_is_linked or code != 'riverty'">
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_riverty'">
                     <field name="buckaroo_official_riverty_authorize"/>
                 </group>
                 <group string="Google Pay Settings"
-                       invisible="not buckaroo_official_is_linked or code != 'googlepay'">
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_googlepay'">
                     <field name="buckaroo_official_googlepay_merchant_guid"/>
                     <field name="buckaroo_official_googlepay_google_merchant_id"/>
                 </group>
                 <group string="Google Pay Placement &amp; Display"
-                       invisible="not buckaroo_official_is_linked or code != 'googlepay'">
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_googlepay'">
                     <field name="buckaroo_official_googlepay_show_on_product"/>
                     <field name="buckaroo_official_googlepay_show_on_cart"/>
                     <field name="buckaroo_official_googlepay_show_on_checkout"/>

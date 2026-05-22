@@ -457,16 +457,16 @@ class TestCreditCardBrandMethods(BuckarooOfficialCommon):
         )
         codes = set(children.mapped("code"))
         expected = {
-            "visa",
-            "mastercard",
-            "amex",
-            "maestro",
-            "visaelectron",
-            "vpay",
-            "cartebancaire",
-            "cartebleuevisa",
-            "dankort",
-            "nexi",
-            "postepay",
+            "buckaroo_visa",
+            "buckaroo_mastercard",
+            "buckaroo_amex",
+            "buckaroo_maestro",
+            "buckaroo_visaelectron",
+            "buckaroo_vpay",
+            "buckaroo_cartebancaire",
+            "buckaroo_cartebleuevisa",
+            "buckaroo_dankort",
+            "buckaroo_nexi",
+            "buckaroo_postepay",
         }
         self.assertEqual(codes, expected)

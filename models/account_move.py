@@ -55,12 +55,13 @@ class AccountMove(models.Model):
         if not transactions:
             raise UserError(_("No Buckaroo transaction is linked to this credit note."))
         if len(transactions) > 1:
-            raise UserError(
-                _(
-                    "Multiple Buckaroo transactions are linked with this invoice. "
-                    "Please refund manually from Buckaroo Plaza."
-                )
-            )
+            action = self._buckaroo_handle_multi_tx_refund(transactions)
+            if action:
+                return action
+            raise UserError(_(
+                "Multiple Buckaroo transactions are linked to this credit "
+                "note. Refund each payment record individually."
+            ))
         payment = transactions.payment_id
         if not payment:
             raise UserError(_("No payment record is linked to the Buckaroo transaction."))
@@ -69,3 +70,7 @@ class AccountMove(models.Model):
         action = payment.action_refund_wizard()
         action["context"] = {"active_id": payment.id}
         return action
+
+    def _buckaroo_handle_multi_tx_refund(self, transactions):
+        self.ensure_one()
+        return None

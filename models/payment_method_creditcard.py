@@ -41,7 +41,7 @@ class PaymentMethodCreditCard(models.Model):
     def _buckaroo_get_payment_action(self):
         """Return 'authorize' for creditcard when configured; else delegate."""
         self.ensure_one()
-        if self.code == "creditcard" and self.buckaroo_official_creditcard_authorize == "authorize":
+        if self.code == "buckaroo_creditcard" and self.buckaroo_official_creditcard_authorize == "authorize":
             return "authorize"
         return super()._buckaroo_get_payment_action()
 
@@ -55,7 +55,7 @@ class PaymentMethodCreditCard(models.Model):
         4. Inline + authorize   -> .authorizeWithToken() with HF session
         """
         self.ensure_one()
-        if self.code != "creditcard":
+        if self.code != "buckaroo_creditcard":
             return super()._buckaroo_create_payment(transaction, client)
 
         from odoo.http import request  # noqa: PLC0415
@@ -69,7 +69,7 @@ class PaymentMethodCreditCard(models.Model):
             params["brand"] = hf_service
 
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
 
@@ -85,7 +85,7 @@ class PaymentMethodCreditCard(models.Model):
 
     def _buckaroo_get_refund_params(self, source_tx, refund_tx):
         """Add card brand to refund params for creditcard; delegate otherwise."""
-        if self.code != "creditcard":
+        if self.code != "buckaroo_creditcard":
             return super()._buckaroo_get_refund_params(source_tx, refund_tx)
         params = super()._buckaroo_get_refund_params(source_tx, refund_tx)
         params["brand"] = self._buckaroo_require_card_brand(source_tx)
@@ -93,7 +93,7 @@ class PaymentMethodCreditCard(models.Model):
 
     def _buckaroo_get_post_authorize_params(self, transaction):
         """Add card brand to capture/void params for creditcard; delegate otherwise."""
-        if self.code != "creditcard":
+        if self.code != "buckaroo_creditcard":
             return super()._buckaroo_get_post_authorize_params(transaction)
         params, original_key = super()._buckaroo_get_post_authorize_params(transaction)
         source_tx = transaction.source_transaction_id or transaction
@@ -101,32 +101,10 @@ class PaymentMethodCreditCard(models.Model):
         return params, original_key
 
     def _buckaroo_require_card_brand(self, source_tx):
-        """Return the card brand recorded on *source_tx* or any ancestor.
-
-        Used by capture/void and refund: both flows need the original brand
-        as the SDK service name and cannot fall back to the umbrella
-        ``CreditCard`` value that the API rejects. The brand is written only
-        on the root (authorize/pay) transaction, so refunds chained off a
-        capture tx must walk up ``source_transaction_id``.
-        """
-        self.ensure_one()
-        tx = source_tx
-        service_code = tx.buckaroo_official_service_code
-        seen = {tx.id}
-        while (
-            not service_code
-            and tx.source_transaction_id
-            and tx.source_transaction_id.id not in seen
-        ):
-            tx = tx.source_transaction_id
-            seen.add(tx.id)
-            service_code = tx.buckaroo_official_service_code
-        if not service_code:
-            raise ValidationError(
-                _(
-                    "Card brand unknown on the original transaction. The "
-                    "authorization may have been created before service code "
-                    "tracking was enabled."
-                )
-            )
-        return service_code
+        # Brand is written only on the root (authorize/pay) tx; capture/void
+        # and refund chained off a capture must walk up source_transaction_id.
+        return self._buckaroo_require_service_code(source_tx, _(
+            "Card brand unknown on the original transaction. The "
+            "authorization may have been created before service code "
+            "tracking was enabled."
+        ))

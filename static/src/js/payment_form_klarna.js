@@ -11,7 +11,7 @@ patch(PaymentForm.prototype, {
         if (!radio || radio.dataset.providerCode !== 'buckaroo_official') {
             return params;
         }
-        if (radio.dataset.paymentMethodCode === 'klarna') {
+        if (radio.dataset.paymentMethodCode === 'buckaroo_klarna') {
             const gender = document.querySelector('select.o_buckaroo_klarna_gender');
             if (gender && gender.value) {
                 params.klarna_gender = gender.value;

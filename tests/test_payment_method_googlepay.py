@@ -29,7 +29,7 @@ class TestGooglepayPaymentMethodRecord(BuckarooOfficialCommon):
     def test_googlepay_record_loads_with_expected_fields(self):
         method = self.env.ref("payment_buckaroo_official.payment_method_googlepay")
 
-        self.assertEqual(method.code, "googlepay")
+        self.assertEqual(method.code, "buckaroo_googlepay")
         self.assertEqual(method.buckaroo_official_sdk_service_name, "googlepay")
         self.assertEqual(method.support_refund, "partial")
         self.assertTrue(method.active)
@@ -446,11 +446,11 @@ class TestGooglepayCompatibilityFilter(BuckarooOfficialCommon):
 
     def test_googlepay_hidden_when_merchant_guid_unconfigured(self):
         self.googlepay.buckaroo_official_googlepay_merchant_guid = ""
-        self.assertNotIn("googlepay", self._compatible_codes())
+        self.assertNotIn("buckaroo_googlepay", self._compatible_codes())
 
     def test_googlepay_visible_when_merchant_guid_set(self):
         self.googlepay.buckaroo_official_googlepay_merchant_guid = "BUCK-GUID-AAA"
-        self.assertIn("googlepay", self._compatible_codes())
+        self.assertIn("buckaroo_googlepay", self._compatible_codes())
 
     def test_googlepay_hidden_in_prod_when_google_merchant_id_unset(self):
         self.buckaroo.state = "enabled"
@@ -460,7 +460,7 @@ class TestGooglepayCompatibilityFilter(BuckarooOfficialCommon):
                 "buckaroo_official_googlepay_google_merchant_id": "",
             }
         )
-        self.assertNotIn("googlepay", self._compatible_codes())
+        self.assertNotIn("buckaroo_googlepay", self._compatible_codes())
 
     def test_googlepay_visible_in_prod_when_fully_configured(self):
         self.buckaroo.state = "enabled"
@@ -470,7 +470,7 @@ class TestGooglepayCompatibilityFilter(BuckarooOfficialCommon):
                 "buckaroo_official_googlepay_google_merchant_id": "GOOG-MID-BBB",
             }
         )
-        self.assertIn("googlepay", self._compatible_codes())
+        self.assertIn("buckaroo_googlepay", self._compatible_codes())
 
     def test_googlepay_visible_in_test_without_google_merchant_id(self):
         self.buckaroo.state = "test"
@@ -480,7 +480,7 @@ class TestGooglepayCompatibilityFilter(BuckarooOfficialCommon):
                 "buckaroo_official_googlepay_google_merchant_id": "",
             }
         )
-        self.assertIn("googlepay", self._compatible_codes())
+        self.assertIn("buckaroo_googlepay", self._compatible_codes())
 
 
 @tagged("post_install", "-at_install")
@@ -541,11 +541,11 @@ class TestGooglepayExpressCompatFilter(BuckarooOfficialCommon):
                 "buckaroo_official_googlepay_show_on_cart": True,
             }
         )
-        self.assertIn("googlepay", self._express_compatible_codes())
+        self.assertIn("buckaroo_googlepay", self._express_compatible_codes())
 
     def test_express_filter_drops_unconfigured_googlepay(self):
         self.googlepay.buckaroo_official_googlepay_merchant_guid = ""
-        self.assertNotIn("googlepay", self._express_compatible_codes())
+        self.assertNotIn("buckaroo_googlepay", self._express_compatible_codes())
 
     def test_express_filter_drops_googlepay_in_prod_without_google_merchant_id(self):
         self.buckaroo.state = "enabled"
@@ -555,7 +555,7 @@ class TestGooglepayExpressCompatFilter(BuckarooOfficialCommon):
                 "buckaroo_official_googlepay_google_merchant_id": "",
             }
         )
-        self.assertNotIn("googlepay", self._express_compatible_codes())
+        self.assertNotIn("buckaroo_googlepay", self._express_compatible_codes())
 
     def test_express_filter_drops_googlepay_when_show_on_cart_false(self):
         self.googlepay.write(
@@ -564,7 +564,7 @@ class TestGooglepayExpressCompatFilter(BuckarooOfficialCommon):
                 "buckaroo_official_googlepay_show_on_cart": False,
             }
         )
-        self.assertNotIn("googlepay", self._express_compatible_codes())
+        self.assertNotIn("buckaroo_googlepay", self._express_compatible_codes())
 
 
 @tagged("post_install", "-at_install")
@@ -600,7 +600,7 @@ class TestGooglepayCheckoutListCompatFilter(BuckarooOfficialCommon):
                 "buckaroo_official_googlepay_show_on_checkout": True,
             }
         )
-        self.assertIn("googlepay", self._checkout_compatible_codes())
+        self.assertIn("buckaroo_googlepay", self._checkout_compatible_codes())
 
     def test_show_on_checkout_false_drops_googlepay_from_inline_list(self):
         self.googlepay.write(
@@ -609,7 +609,7 @@ class TestGooglepayCheckoutListCompatFilter(BuckarooOfficialCommon):
                 "buckaroo_official_googlepay_show_on_checkout": False,
             }
         )
-        self.assertNotIn("googlepay", self._checkout_compatible_codes())
+        self.assertNotIn("buckaroo_googlepay", self._checkout_compatible_codes())
 
     def test_show_on_checkout_false_does_not_affect_express_cart_flow(self):
         self.googlepay.write(
@@ -619,7 +619,7 @@ class TestGooglepayCheckoutListCompatFilter(BuckarooOfficialCommon):
                 "buckaroo_official_googlepay_show_on_cart": True,
             }
         )
-        self.assertIn("googlepay", self._express_compatible_codes())
+        self.assertIn("buckaroo_googlepay", self._express_compatible_codes())
 
 
 @tagged("post_install", "-at_install")

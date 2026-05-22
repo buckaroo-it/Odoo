@@ -2,6 +2,7 @@
 
 from . import main
 from . import creditcard
+from . import giftcard
 from . import billink
 from . import in3
 from . import klarna

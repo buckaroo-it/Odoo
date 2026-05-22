@@ -37,17 +37,17 @@ class PaymentMethodKlarna(models.Model):
     def _buckaroo_get_payment_action(self):
         """Klarna MOR is always Reserve→Pay; never immediate capture."""
         self.ensure_one()
-        if self.code == "klarna":
+        if self.code == "buckaroo_klarna":
             return "authorize"
         return super()._buckaroo_get_payment_action()
 
     def _buckaroo_create_payment(self, transaction, client):
-        if self.code != "klarna":
+        if self.code != "buckaroo_klarna":
             return super()._buckaroo_create_payment(transaction, client)
 
         params = self._buckaroo_get_payment_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
 
@@ -79,11 +79,11 @@ class PaymentMethodKlarna(models.Model):
 
     def _buckaroo_create_capture(self, transaction, client):
         """Klarna capture = Pay action with DataRequestKey from prior Reserve."""
-        if self.code != "klarna":
+        if self.code != "buckaroo_klarna":
             return super()._buckaroo_create_capture(transaction, client)
         params, data_request_key = self._buckaroo_get_post_authorize_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
         builder.add_parameter("dataRequestKey", data_request_key)
@@ -91,11 +91,11 @@ class PaymentMethodKlarna(models.Model):
 
     def _buckaroo_create_void(self, transaction, client):
         """Klarna void = CancelReservation with OriginalTransactionKey."""
-        if self.code != "klarna":
+        if self.code != "buckaroo_klarna":
             return super()._buckaroo_create_void(transaction, client)
         params, original_key = self._buckaroo_get_post_authorize_params(transaction)
         builder = PaymentService(client).create_payment(
-            self._buckaroo_get_sdk_service_name(),
+            self.buckaroo_official_sdk_service_name,
             params,
         )
         response = builder.cancelReservation(original_transaction_key=original_key)
