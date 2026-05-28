@@ -41,7 +41,6 @@
                    ref('payment_buckaroo_official.payment_method_creditcard'),
                    ref('payment_buckaroo_official.payment_method_giftcard'),
                    ref('payment_buckaroo_official.payment_method_brand_vvvgiftcard'),
-                   ref('payment_buckaroo_official.payment_method_brand_intersolve'),
                    ref('payment_buckaroo_official.payment_method_brand_fashioncheque'),
                    ref('payment_buckaroo_official.payment_method_brand_tcs'),
                    ref('payment_buckaroo_official.payment_method_brand_boekenbon'),

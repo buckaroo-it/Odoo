@@ -132,7 +132,7 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
         return extra_tx
 
     def _make_giftcard_tx_for_invoice(self, reference="ACCMOVE-GC-1", amount=50.0):
-        giftcard = self.env.ref("payment_buckaroo_official.payment_method_brand_intersolve")
+        giftcard = self.env.ref("payment_buckaroo_official.payment_method_brand_vvvgiftcard")
         self.buckaroo.payment_method_ids = [Command.link(giftcard.id)]
         return self._add_second_buckaroo_tx(reference=reference, amount=amount, payment_method=giftcard)
 

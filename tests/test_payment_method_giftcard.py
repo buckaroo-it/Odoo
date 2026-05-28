@@ -3,8 +3,8 @@
 """Tests for the giftcard payment method branch on payment.method.
 
 After the rework, giftcard follows the credit-card pattern: a parent
-``giftcard`` method with brand children (vvvgiftcard, intersolve,
-fashioncheque, tcs, boekenbon, webshopgiftcard, yourgift) linked via
+``giftcard`` method with brand children (vvvgiftcard, fashioncheque,
+tcs, boekenbon, webshopgiftcard, yourgift) linked via
 ``primary_payment_method_id``.
 """
 
@@ -21,7 +21,6 @@ from .common import BuckarooOfficialCommon, make_mock_sdk_builder, parsed_from_f
 
 BRAND_CODES = (
     "vvvgiftcard",
-    "intersolve",
     "fashioncheque",
     "tcs",
     "boekenbon",
@@ -36,9 +35,6 @@ class _GiftcardTestBase(BuckarooOfficialCommon):
         super().setUpClass()
         cls.giftcard = cls.env.ref("payment_buckaroo_official.payment_method_giftcard")
         cls.brand_vvv = cls.env.ref("payment_buckaroo_official.payment_method_brand_vvvgiftcard")
-        cls.brand_intersolve = cls.env.ref(
-            "payment_buckaroo_official.payment_method_brand_intersolve"
-        )
         cls.brand_fashioncheque = cls.env.ref(
             "payment_buckaroo_official.payment_method_brand_fashioncheque"
         )
@@ -55,7 +51,6 @@ class _GiftcardTestBase(BuckarooOfficialCommon):
         cls.buckaroo.payment_method_ids = [
             Command.link(cls.giftcard.id),
             Command.link(cls.brand_vvv.id),
-            Command.link(cls.brand_intersolve.id),
             Command.link(cls.brand_fashioncheque.id),
             Command.link(cls.brand_tcs.id),
             Command.link(cls.brand_boekenbon.id),
@@ -66,13 +61,13 @@ class _GiftcardTestBase(BuckarooOfficialCommon):
 
 @tagged("post_install", "-at_install")
 class TestGiftcardBrandRecords(_GiftcardTestBase):
-    """7 brand records exist, all linked to the giftcard parent."""
+    """6 brand records exist, all linked to the giftcard parent."""
 
-    def test_seven_brand_children_exist(self):
+    def test_six_brand_children_exist(self):
         children = self.env["payment.method"].search(
             [("primary_payment_method_id", "=", self.giftcard.id)]
         )
-        self.assertEqual(len(children), 7)
+        self.assertEqual(len(children), 6)
 
     def test_brand_codes_match_expected_set(self):
         children = self.env["payment.method"].search(
@@ -279,7 +274,6 @@ class TestGiftcardBrandInline(_GiftcardTestBase):
         # (brand_attr, sdk_name, cardnumber, pin, card_param, pin_param)
         cases = [
             ("brand_fashioncheque", "fashioncheque", "FC-CARD", "1111", "FashionChequeCardNumber", "FashionChequePIN"),
-            ("brand_intersolve", "intersolve", "IS-CARD", "2222", "IntersolveCardnumber", "IntersolvePIN"),
             ("brand_vvv", "vvvgiftcard", "VVV-CARD", "3333", "IntersolveCardnumber", "IntersolvePIN"),
             ("brand_boekenbon", "boekenbon", "BB-CARD", "4444", "IntersolveCardnumber", "IntersolvePIN"),
             ("brand_webshop", "webshopgiftcard", "WSG-CARD", "5555", "IntersolveCardnumber", "IntersolvePIN"),
@@ -716,7 +710,6 @@ class TestGiftcardRefundParams(_GiftcardTestBase):
     def test_intersolve_refund_params_include_lastname_and_email(self):
         cases = [
             (self.brand_vvv, "vvvgiftcard"),
-            (self.brand_intersolve, "intersolve"),
             (self.brand_boekenbon, "boekenbon"),
             (self.brand_webshop, "webshopgiftcard"),
             (self.brand_yourgift, "yourgift"),
@@ -1220,7 +1213,6 @@ class TestGiftcardCheckoutVisibility(_GiftcardTestBase):
         self.assertIn(self.giftcard, methods)
         for brand in (
             self.brand_vvv,
-            self.brand_intersolve,
             self.brand_fashioncheque,
             self.brand_tcs,
             self.brand_boekenbon,
@@ -1236,7 +1228,6 @@ class TestGiftcardCheckoutVisibility(_GiftcardTestBase):
         self.assertNotIn(self.giftcard, methods)
         for brand in (
             self.brand_vvv,
-            self.brand_intersolve,
             self.brand_fashioncheque,
             self.brand_tcs,
             self.brand_boekenbon,
@@ -1258,7 +1249,6 @@ class TestGiftcardCheckoutVisibility(_GiftcardTestBase):
         self.assertIn(self.pm_unknown, methods)
         for brand in (
             self.brand_vvv,
-            self.brand_intersolve,
             self.brand_fashioncheque,
             self.brand_tcs,
             self.brand_boekenbon,
@@ -1282,7 +1272,7 @@ class TestGiftcardCheckoutVisibility(_GiftcardTestBase):
         )
         self.assertNotIn(self.brand_vvv, methods)
         # Other brands without a min still surface.
-        self.assertIn(self.brand_intersolve, methods)
+        self.assertIn(self.brand_boekenbon, methods)
 
     def test_inactive_brand_does_not_surface_in_inline_mode(self):
         """H3: super skipped brand sub-methods, so the inline-mode surfacer
@@ -1296,7 +1286,7 @@ class TestGiftcardCheckoutVisibility(_GiftcardTestBase):
             self.brand_vvv.active = True
         self.assertNotIn(self.brand_vvv, methods)
         # Sibling active brands still surface.
-        self.assertIn(self.brand_intersolve, methods)
+        self.assertIn(self.brand_boekenbon, methods)
 
 
 @tagged("post_install", "-at_install")
@@ -1417,7 +1407,6 @@ class TestGiftcardRefundRoutingAllBrands(_GiftcardTestBase):
     def _all_brands(self):
         return (
             (self.brand_vvv, "vvvgiftcard"),
-            (self.brand_intersolve, "intersolve"),
             (self.brand_fashioncheque, "fashioncheque"),
             (self.brand_tcs, "tcs"),
             (self.brand_boekenbon, "boekenbon"),

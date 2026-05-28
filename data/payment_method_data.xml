@@ -462,21 +462,6 @@
         <field name="support_refund">partial</field>
     </record>
 
-    <record id="payment_method_brand_intersolve" model="payment.method">
-        <field name="name">Intersolve</field>
-        <field name="code">buckaroo_intersolve</field>
-        <field name="sequence">110</field>
-        <field name="active">True</field>
-        <field name="primary_payment_method_id" ref="payment_method_giftcard"/>
-        <field name="buckaroo_official_sdk_service_name">intersolve</field>
-        <field name="buckaroo_official_giftcard_backend">intersolve</field>
-        <field name="buckaroo_official_giftcard_cardnumber_param">IntersolveCardnumber</field>
-        <field name="buckaroo_official_giftcard_pin_param">IntersolvePIN</field>
-        <field name="image" type="base64"
-               file="payment_buckaroo_official/static/src/img/brand_intersolve.png"/>
-        <field name="support_refund">partial</field>
-    </record>
-
     <record id="payment_method_brand_fashioncheque" model="payment.method">
         <field name="name">Fashioncheque</field>
         <field name="code">buckaroo_fashioncheque</field>
