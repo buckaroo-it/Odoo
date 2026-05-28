@@ -6,7 +6,7 @@
               name="Buckaroo Bank Transfer instructions">
         <xpath expr="//t[@t-call='website_sale.payment_confirmation_status']" position="after">
             <t t-set="bt_tx" t-value="order.get_portal_last_transaction()"/>
-            <div t-if="bt_tx.payment_method_id.code == 'bank_transfer' and bt_tx.buckaroo_official_bank_iban"
+            <div t-if="bt_tx.payment_method_id.code == 'buckaroo_bank_transfer' and bt_tx.buckaroo_official_bank_iban"
                  class="alert alert-info mt-3"
                  name="buckaroo_bank_transfer_instructions">
                 <h5>Complete your payment</h5>

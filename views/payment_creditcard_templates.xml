@@ -7,7 +7,7 @@
               name="Buckaroo Hosted Fields Inline Form"
               inherit_id="payment.method_form">
         <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
-            <t t-if="pm_sudo.code == 'creditcard'
+            <t t-if="pm_sudo.code == 'buckaroo_creditcard'
                        and pm_sudo.buckaroo_official_creditcard_method == 'inline'">
                 <div id="o_buckaroo_hosted_fields_container"
                      class="mt-2"

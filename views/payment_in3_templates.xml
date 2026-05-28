@@ -7,7 +7,7 @@
               name="Buckaroo In3 Inline Form"
               inherit_id="payment.method_form">
         <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
-            <t t-if="pm_sudo.code == 'in3'">
+            <t t-if="pm_sudo.code == 'buckaroo_in3'">
                 <t t-set="in3_saved_birthdate"
                    t-value="(not request.env.user._is_public()) and request.env.user.partner_id.buckaroo_in3_birthdate and request.env.user.partner_id.buckaroo_in3_birthdate.isoformat() or ''"/>
                 <div class="mt-2">

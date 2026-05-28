@@ -5,7 +5,7 @@
               name="Buckaroo Google Pay Inline Form"
               inherit_id="payment.method_form">
         <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
-            <t t-if="pm_sudo.code == 'googlepay'">
+            <t t-if="pm_sudo.code == 'buckaroo_googlepay'">
                 <t t-set="gp_partner"
                    t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id) or request.env['res.partner']"/>
                 <t t-set="gp_country"
@@ -25,7 +25,7 @@
 
     <template id="googlepay_express_form"
               name="Buckaroo Google Pay Express Form">
-        <t t-set="gp_method" t-value="provider_sudo.payment_method_ids.filtered(lambda m: m.code == 'googlepay' and m.buckaroo_official_googlepay_show_on_cart and m._buckaroo_googlepay_is_configured())[:1]"/>
+        <t t-set="gp_method" t-value="provider_sudo.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_googlepay' and m.buckaroo_official_googlepay_show_on_cart and m._buckaroo_googlepay_is_configured())[:1]"/>
         <t t-if="gp_method">
             <t t-set="gp_partner"
                t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id) or request.env['res.partner']"/>
@@ -51,7 +51,7 @@
               inherit_id="website_sale.cta_wrapper">
         <xpath expr="//div[@id='add_to_cart_wrap']" position="before">
             <t t-set="gp_provider" t-value="request.env['payment.provider'].sudo().search([('code', '=', 'buckaroo_official'), ('state', 'in', ['enabled', 'test']), ('allow_express_checkout', '=', True)], limit=1)"/>
-            <t t-set="gp_method" t-value="gp_provider and gp_provider.payment_method_ids.filtered(lambda m: m.code == 'googlepay' and m.active and m.buckaroo_official_googlepay_show_on_product and m._buckaroo_googlepay_is_configured())[:1]"/>
+            <t t-set="gp_method" t-value="gp_provider and gp_provider.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_googlepay' and m.active and m.buckaroo_official_googlepay_show_on_product and m._buckaroo_googlepay_is_configured())[:1]"/>
             <t t-if="gp_provider and gp_method">
                 <t t-set="gp_country"
                    t-value="gp_provider.company_id.country_id"/>

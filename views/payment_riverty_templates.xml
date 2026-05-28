@@ -10,7 +10,7 @@
               name="Buckaroo Riverty Inline Form"
               inherit_id="payment.method_form">
         <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
-            <t t-if="pm_sudo.code == 'riverty'">
+            <t t-if="pm_sudo.code == 'buckaroo_riverty'">
                 <t t-set="riverty_partner"
                    t-value="(not request.env.user._is_public()) and request.env.user.partner_id"/>
                 <t t-set="riverty_saved_birthdate"

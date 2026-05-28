@@ -8,7 +8,7 @@
               name="Buckaroo Klarna Inline Form"
               inherit_id="payment.method_form">
         <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
-            <t t-if="pm_sudo.code == 'klarna'">
+            <t t-if="pm_sudo.code == 'buckaroo_klarna'">
                 <t t-set="klarna_saved_gender"
                    t-value="(not request.env.user._is_public()) and request.env.user.partner_id.buckaroo_klarna_gender or ''"/>
                 <div class="mt-2">
