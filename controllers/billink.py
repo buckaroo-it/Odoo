@@ -2,7 +2,7 @@
 
 from odoo import _
 from odoo.exceptions import ValidationError
-from odoo.http import request
+from odoo.http import request, route
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
@@ -10,6 +10,12 @@ from ..helpers.customer import validate_bnpl_birthdate
 
 
 class BillinkPaymentPortal(PaymentPortal):
+    @route(
+        "/shop/payment/transaction/<int:order_id>",
+        type="jsonrpc",
+        auth="public",
+        website=True,
+    )
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
         payment_method_id = kwargs.get("payment_method_id")
         if not payment_method_id:

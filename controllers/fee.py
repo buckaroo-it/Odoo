@@ -1,7 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import http
-from odoo.http import request
+from odoo.http import request, route
 from odoo.tools import formatLang
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
@@ -10,6 +10,12 @@ from ..utils import const
 
 
 class BuckarooFeePaymentPortal(PaymentPortal):
+    @route(
+        "/shop/payment/transaction/<int:order_id>",
+        type="jsonrpc",
+        auth="public",
+        website=True,
+    )
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
         if not self._buckaroo_official_request_for_buckaroo(kwargs):
             return super().shop_payment_transaction(order_id, access_token, **kwargs)

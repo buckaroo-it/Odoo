@@ -2,12 +2,18 @@
 
 import re
 
-from odoo.http import request
+from odoo.http import request, route
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
 
 class GooglepayPaymentPortal(PaymentPortal):
+    @route(
+        "/shop/payment/transaction/<int:order_id>",
+        type="jsonrpc",
+        auth="public",
+        website=True,
+    )
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
         payment_method_id = kwargs.get("payment_method_id")
         if not payment_method_id:

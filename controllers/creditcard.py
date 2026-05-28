@@ -6,7 +6,7 @@ from buckaroo.exceptions._buckaroo_error import BuckarooError
 from buckaroo.services.hosted_fields_service import HostedFieldsService
 
 from odoo import _, http
-from odoo.http import request
+from odoo.http import request, route
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
@@ -14,6 +14,12 @@ _logger = logging.getLogger(__name__)
 
 
 class CreditCardPaymentPortal(PaymentPortal):
+    @route(
+        "/shop/payment/transaction/<int:order_id>",
+        type="jsonrpc",
+        auth="public",
+        website=True,
+    )
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
         hf_session_id = kwargs.pop("buckaroo_hf_session_id", None)
         hf_service = kwargs.pop("buckaroo_hf_service", None)

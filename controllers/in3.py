@@ -1,7 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import _
-from odoo.http import request
+from odoo.http import request, route
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
@@ -9,6 +9,12 @@ from ..helpers.customer import validate_bnpl_birthdate
 
 
 class In3PaymentPortal(PaymentPortal):
+    @route(
+        "/shop/payment/transaction/<int:order_id>",
+        type="jsonrpc",
+        auth="public",
+        website=True,
+    )
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
         payment_method_id = kwargs.get("payment_method_id")
         if not payment_method_id:

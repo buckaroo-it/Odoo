@@ -5,7 +5,7 @@ import re
 from werkzeug.exceptions import BadRequest
 
 from odoo import _
-from odoo.http import request
+from odoo.http import request, route
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
@@ -16,6 +16,12 @@ _PIN_RE = re.compile(r"^[A-Za-z0-9]{1,10}$")
 
 
 class GiftcardPaymentPortal(PaymentPortal):
+    @route(
+        "/shop/payment/transaction/<int:order_id>",
+        type="jsonrpc",
+        auth="public",
+        website=True,
+    )
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
         kwargs.pop("buckaroo_giftcard_brand", None)
         cardnumber = kwargs.pop("buckaroo_giftcard_cardnumber", None)
