@@ -178,6 +178,72 @@ class TestBuckarooRefund(BuckarooOfficialCommon):
         mock_builder.pay.assert_not_called()
         self.assertEqual(result, mock_response)
 
+    def test_refund_after_capture_uses_capture_key(self):
+        """When the source tx was authorized and later captured, the
+        refund's ``original_transaction_key`` must be the capture
+        child's provider_reference — not the auth's. Buckaroo rejects
+        the auth key with 490 "Invalid parameter: originaltransaction".
+        """
+        auth_tx = self._create_buckaroo_tx(reference="AUTH-001", amount=63.0)
+        auth_tx.provider_reference = "AUTH_KEY"
+        auth_tx.buckaroo_official_payment_action = "authorize"
+        # Simulate Odoo's _capture(): child carries parent's operation,
+        # transitions through authorized → done as Buckaroo confirms.
+        capture_tx = self.env["payment.transaction"].create(
+            {
+                "provider_id": self.buckaroo.id,
+                "payment_method_id": self.ideal.id,
+                "reference": "P-AUTH-001",
+                "amount": 63.0,
+                "currency_id": self.currency_euro.id,
+                "partner_id": self.partner.id,
+                "operation": "online_redirect",
+                "source_transaction_id": auth_tx.id,
+                "provider_reference": "CAPTURE_KEY",
+            }
+        )
+        capture_tx._set_done()
+        auth_tx._set_done()
+
+        refund_tx = self._create_buckaroo_tx(reference="R-AUTH-001", amount=-63.0)
+        params = self.ideal._buckaroo_get_refund_params(auth_tx, refund_tx)
+        self.assertEqual(params["original_transaction_key"], "CAPTURE_KEY")
+
+    def test_refund_without_capture_child_uses_source_key(self):
+        """Direct-pay refund (no capture child) must keep using the
+        source tx's provider_reference — guards the W6 direct-pay path.
+        """
+        source_tx = self._create_buckaroo_tx(reference="DP-001", amount=50.0)
+        source_tx.provider_reference = "DIRECT_PAY_KEY"
+        refund_tx = self._create_buckaroo_tx(reference="R-DP-001", amount=-50.0)
+        params = self.ideal._buckaroo_get_refund_params(source_tx, refund_tx)
+        self.assertEqual(params["original_transaction_key"], "DIRECT_PAY_KEY")
+
+    def test_refund_ignores_refund_children_when_resolving_key(self):
+        """A prior refund child must not be mistaken for a capture
+        child — its operation is ``refund``, not the parent's.
+        """
+        source_tx = self._create_buckaroo_tx(reference="MIX-001", amount=50.0)
+        source_tx.provider_reference = "SRC_KEY"
+        prior_refund = self.env["payment.transaction"].create(
+            {
+                "provider_id": self.buckaroo.id,
+                "payment_method_id": self.ideal.id,
+                "reference": "R-MIX-001",
+                "amount": -25.0,
+                "currency_id": self.currency_euro.id,
+                "partner_id": self.partner.id,
+                "operation": "refund",
+                "source_transaction_id": source_tx.id,
+                "provider_reference": "PRIOR_REFUND_KEY",
+            }
+        )
+        prior_refund._set_done()
+
+        new_refund = self._create_buckaroo_tx(reference="R-MIX-002", amount=-25.0)
+        params = self.ideal._buckaroo_get_refund_params(source_tx, new_refund)
+        self.assertEqual(params["original_transaction_key"], "SRC_KEY")
+
 
 @tagged("post_install", "-at_install")
 class TestBuckarooPostAuthorize(BuckarooOfficialCommon):

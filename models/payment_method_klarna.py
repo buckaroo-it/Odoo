@@ -35,7 +35,7 @@ class PaymentMethodKlarna(models.Model):
         ]
 
     def _buckaroo_get_payment_action(self):
-        """Klarna MOR is always Reserve→Pay; never immediate capture."""
+        """Klarna MOR is always Reserve→Pay-as-capture; never immediate Pay."""
         self.ensure_one()
         if self.code == "buckaroo_klarna":
             return "authorize"

@@ -794,6 +794,30 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
         mock_builder.add_parameter.assert_called_once_with("dataRequestKey", "RES_FULL_CAP")
         mock_builder.pay.assert_called_once_with()
 
+    def test_capture_triggers_post_process_for_account_payment(self):
+        """After capture, _post_process must run synchronously so the
+        capture child's account.payment is created and the Refund button
+        appears immediately (cron-free path)."""
+        tx = self._create_authorized_tx(reference="KL-PP-CAP", provider_reference="RES_PP_CAP")
+        PaymentMethod = type(tx.payment_method_id)
+        mock_response = make_mock_sdk_response(190)
+
+        with (
+            patch.object(
+                PaymentMethod, "_buckaroo_create_capture", return_value=mock_response
+            ),
+            patch.object(
+                type(tx.provider_id),
+                "_buckaroo_official_get_client",
+                return_value=MagicMock(),
+            ),
+            patch.object(type(tx), "_post_process") as mock_pp,
+        ):
+            tx._send_capture_request()
+
+        self.assertEqual(tx.state, "done")
+        mock_pp.assert_called()
+
     def test_void_via_full_dispatch_calls_sdk_cancel_reservation(self):
         """Full pipeline: provider_reference → _send_void_request →
         SDK builder.cancelReservation(original_transaction_key=...)."""

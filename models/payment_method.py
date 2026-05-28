@@ -311,7 +311,42 @@ class PaymentMethod(models.Model):
 
     def _buckaroo_split_remainder_push(self, transaction, payment_data):
         self.ensure_one()
+        capture_child = self._buckaroo_spawn_capture_from_push(transaction, payment_data)
+        if capture_child:
+            return capture_child
         return transaction.browse()
+
+    def _buckaroo_spawn_capture_from_push(self, transaction, payment_data):
+        """Spawn a capture child when a 190 push lands on an authorized tx with
+        a transaction key that differs from the auth's provider_reference.
+
+        Plaza and other external captures arrive as a Collecting push on the
+        original auth tx; without a child the auth alone can't hold both
+        states (authorized + done) and the W8 refund-key resolver has nowhere
+        to read the capture key from. Routes the push to the new child so
+        ``_apply_updates`` sets it to done; the framework's
+        ``_update_source_transaction_state`` then promotes the parent.
+        """
+        self.ensure_one()
+        if transaction.buckaroo_official_payment_action != "authorize":
+            return None
+        if transaction.state != "authorized":
+            return None
+        if not payment_data.is_success():
+            return None
+        push_key = payment_data.transaction_key
+        if not push_key or push_key == transaction.provider_reference:
+            return None
+        # Skip on redelivery and when the admin-button path already spawned
+        # a capture child (operation copies parent's, so filter out refunds).
+        # Not atomic: a concurrent admin Capture + Plaza push could both pass
+        # this check and spawn duplicate capture children. Single-writer assumed.
+        if transaction.child_transaction_ids.filtered(
+            lambda t: t.operation != "refund"
+        ):
+            return None
+        child_amount = payment_data.amount or transaction.amount
+        return transaction._create_child_transaction(child_amount)
 
     def _buckaroo_failure_message_hint(self, transaction, response, operation, status_code):
         self.ensure_one()
@@ -334,6 +369,25 @@ class PaymentMethod(models.Model):
             raise ValidationError(missing_message)
         return service_code
 
+    def _buckaroo_resolve_original_transaction_key(self, source_tx):
+        """Pick the provider_reference to send as Buckaroo's
+        ``OriginalTransactionKey`` when refunding ``source_tx``. When
+        ``source_tx`` was authorized and then captured, the gateway
+        wants the capture's key — sending the auth key trips a 490
+        "Invalid parameter: originaltransaction".
+        """
+        self.ensure_one()
+        # "Latest wins" assumes a single full capture (support_manual_capture is
+        # full_only). Mixed Odoo+Plaza partial captures are out of scope.
+        capture_child = source_tx.child_transaction_ids.filtered(
+            lambda t: t.state == "done"
+            and t.operation != "refund"
+            and t.provider_reference
+        ).sorted("id")[-1:]
+        if capture_child:
+            return capture_child.provider_reference
+        return source_tx.provider_reference
+
     def _buckaroo_get_refund_params(self, source_tx, refund_tx):
         self.ensure_one()
         provider = refund_tx.provider_id
@@ -342,7 +396,9 @@ class PaymentMethod(models.Model):
             or provider.buckaroo_official_transaction_description
         )
         params = self._buckaroo_get_payment_params(refund_tx, description_template=template)
-        params["original_transaction_key"] = source_tx.provider_reference
+        params["original_transaction_key"] = self._buckaroo_resolve_original_transaction_key(
+            source_tx
+        )
         params["refund_amount"] = abs(refund_tx.amount)
         return params
 

@@ -17,6 +17,7 @@ from . import test_payment_method_klarna
 from . import test_payment_method_riverty
 from . import test_payment_method_creditcard
 from . import test_payment_method_giftcard
+from . import test_capture_push
 from . import test_giftcard_summary
 from . import test_payment_method_googlepay
 from . import test_payment_method_sdk_contract

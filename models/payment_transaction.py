@@ -174,6 +174,13 @@ class PaymentTransaction(models.Model):
             success_state=success_state,
         )
 
+        # Capture/void/refund are merchant-initiated from the backend, so the
+        # framework's /payment/status/poll route never fires; without this,
+        # `account.payment` records only appear after the post-process cron
+        # runs (default 5min), and the Refund button stays hidden in between.
+        if self.state in ("done", "cancel") and not self.is_post_processed:
+            self._post_process()
+
     def _buckaroo_official_is_dispatchable(self, operation):
         if self.state in ("draft", "error"):
             return True
