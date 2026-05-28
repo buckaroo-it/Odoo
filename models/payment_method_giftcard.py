@@ -361,7 +361,8 @@ class PaymentMethodGiftcard(models.Model):
 
     def _buckaroo_handle_duplicate_push(self, transaction, payment_data):
         """Demote done → cancel when a remainder push (different txn_key)
-        cancels or fails. Same-key pushes still skip."""
+        cancels or fails. Refund-success pushes fall through to the base,
+        which spawns the R- child generically for all buckaroo methods."""
         if not self._is_buckaroo_giftcard():
             return super()._buckaroo_handle_duplicate_push(transaction, payment_data)
         txn_key = payment_data.transaction_key
@@ -380,6 +381,23 @@ class PaymentMethodGiftcard(models.Model):
             )
             transaction._set_canceled(extra_allowed_states=("done",))
             transaction._post_process()
+            return
+        return super()._buckaroo_handle_duplicate_push(transaction, payment_data)
+
+    def _buckaroo_skip_payment_creation(self, transaction):
+        """No PBNK for a giftcard partial leg: a parent giftcard tx
+        (no source) whose amount is below the order total. Such legs are
+        refundable only via Plaza/API (the push handler spawns the R- child),
+        and the framework's child-state gate races against GCR-child creation,
+        producing a stray PBNK with the wrong amount_available_for_refund."""
+        if not self._is_buckaroo_giftcard():
+            return super()._buckaroo_skip_payment_creation(transaction)
+        if transaction.source_transaction_id:
+            return False  # GCR child, not a parent partial leg
+        order = transaction.sale_order_ids[:1]
+        if not order:
+            return False
+        return transaction.currency_id.compare_amounts(transaction.amount, order.amount_total) < 0
 
     def _buckaroo_adjust_amount_on_success(self, transaction, payment_data):
         """Shrink the tx to the actually-drawn slice on a partial-pay push."""
@@ -407,7 +425,7 @@ class PaymentMethodGiftcard(models.Model):
         if not related:
             return transaction.browse()
         service_code = payment_data.service_code
-        if not service_code or service_code == transaction.buckaroo_official_service_code:
+        if not service_code:
             return transaction.browse()
         txn_key = payment_data.transaction_key
         if not txn_key:

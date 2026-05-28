@@ -60,18 +60,26 @@ class ParsedPush:
         or ``None``. Bridges form (``brq_relatedtransaction_partialpayment``)
         and JSON (``Transaction.RelatedTransactions[]``) push shapes so the
         remainder-split detector handles both wire formats uniformly."""
+        return self._get_relation("partialpayment", "brq_relatedtransaction_partialpayment")
+
+    def get_refund_relation(self):
+        """Return the source transaction key for a ``Refund`` relation, or
+        ``None``. A refund push carries the original tx's key here so the
+        handler can spawn the matching ``R-`` child."""
+        return self._get_relation("refund", "brq_relatedtransaction_refund")
+
+    def _get_relation(self, relation_type, form_key):
         if self.is_json:
             data = self.raw.get("Transaction", self.raw) if isinstance(self.raw, dict) else {}
-            related = data.get("RelatedTransactions") or []
-            for rel in related:
+            for rel in data.get("RelatedTransactions") or []:
                 if not isinstance(rel, dict):
                     continue
-                if (rel.get("RelationType") or "").lower() == "partialpayment":
+                if (rel.get("RelationType") or "").lower() == relation_type:
                     key = rel.get("RelatedTransactionKey")
                     if key:
                         return key
             return None
-        return self.lowered_keys.get("brq_relatedtransaction_partialpayment") or None
+        return self.lowered_keys.get(form_key) or None
 
     def _check(self, group):
         return (

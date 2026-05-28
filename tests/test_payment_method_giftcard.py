@@ -12,11 +12,25 @@ from unittest.mock import MagicMock, patch
 
 from buckaroo.http.client import BuckarooApiError
 
+from odoo.addons.account_payment.models.payment_transaction import PaymentTransaction
 from odoo.exceptions import ValidationError
 from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon, make_mock_sdk_builder, parsed_from_form, parsed_from_json
+
+
+def _route_giftcard_push(env, parsed):
+    """Drive the same split + process path the webhook controller runs."""
+    tx_sudo = env["payment.transaction"].sudo()._search_by_reference("buckaroo_official", parsed)
+    if not tx_sudo:
+        return None
+    remainder_tx = tx_sudo._buckaroo_split_remainder_push(parsed)
+    target = remainder_tx or tx_sudo
+    target._process("buckaroo_official", parsed)
+    if remainder_tx and remainder_tx.state == "done":
+        remainder_tx._post_process()
+    return remainder_tx or tx_sudo
 
 
 BRAND_CODES = (
@@ -1879,3 +1893,163 @@ class TestGiftcardPartialRefund690Hint(_GiftcardTestBase):
         self.assertNotIn("Intersolve", refund_tx.state_message)
         self.assertNotIn("LastName and Email", refund_tx.state_message)
         self.assertIn("690", refund_tx.state_message)
+
+
+@tagged("post_install", "-at_install")
+class TestGiftcardRefundTargetResolution(_GiftcardTestBase):
+    """A Plaza refund push whose invoice number matches the giftcard partial
+    leg must spawn the R- child on the GCR child resolved by the
+    ``RelatedTransactions.Refund`` key, not on the invoice-matched parent."""
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch.object(PaymentTransaction, "_post_process", lambda self: None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_refund_resolves_gcr_child_not_invoice_match(self):
+        parent = self._create_buckaroo_tx(
+            reference="GC-RES-001", amount=15.0, payment_method=self.giftcard
+        )
+        parent.provider_reference = "PARENT_KEY"
+        parent._set_done()
+        child = self.env["payment.transaction"].create(
+            {
+                "provider_id": self.buckaroo.id,
+                "payment_method_id": self.ideal.id,
+                "reference": "GC-RES-001-GCR-XYZ",
+                "amount": 7.5,
+                "currency_id": self.currency_euro.id,
+                "partner_id": self.partner.id,
+                "operation": "online_redirect",
+                "source_transaction_id": parent.id,
+            }
+        )
+        child.provider_reference = "GCR_CHILD_KEY"
+        child._set_done()
+
+        _route_giftcard_push(
+            self.env,
+            parsed_from_form(
+                {
+                    "brq_invoicenumber": "GC-RES-001",
+                    "brq_amount_credit": "7.50",
+                    "brq_currency": "EUR",
+                    "brq_statuscode": "190",
+                    "brq_transactions": "GCR_REFUND_KEY",
+                    "brq_relatedtransaction_refund": "GCR_CHILD_KEY",
+                    "brq_transaction_method": "ideal",
+                }
+            ),
+        )
+
+        refund = child.child_transaction_ids.filtered(lambda t: t.operation == "refund")
+        self.assertEqual(len(refund), 1, "refund child should hang off the GCR child")
+        self.assertEqual(refund.source_transaction_id, child)
+        self.assertEqual(refund.amount, -7.5)
+        self.assertEqual(refund.state, "done")
+        self.assertFalse(
+            parent.child_transaction_ids.filtered(lambda t: t.operation == "refund"),
+            "parent partial leg must not gain a refund child",
+        )
+
+
+@tagged("post_install", "-at_install")
+class TestGiftcardSameBrandMultiPartial(_GiftcardTestBase):
+    """A remainder push for the SAME giftcard brand as the parent leg must
+    still spawn its own child tx (3-leg chains must not drop the middle leg)."""
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch.object(PaymentTransaction, "_post_process", lambda self: None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_same_brand_remainder_push_spawns_child(self):
+        vvv_service = self.brand_vvv.buckaroo_official_sdk_service_name
+        parent = self._create_buckaroo_tx(
+            reference="GC-SB-001", amount=10.0, payment_method=self.giftcard
+        )
+        parent.provider_reference = "LEG1_KEY"
+        parent.buckaroo_official_service_code = vvv_service
+        parent._set_done()
+
+        _route_giftcard_push(
+            self.env,
+            parsed_from_form(
+                {
+                    "brq_invoicenumber": "GC-SB-001",
+                    "brq_amount": "5.00",
+                    "brq_currency": "EUR",
+                    "brq_statuscode": "190",
+                    "brq_transactions": "LEG2_KEY",
+                    "brq_transaction_method": vvv_service,
+                    "brq_relatedtransaction_partialpayment": "LEG1_KEY",
+                }
+            ),
+        )
+
+        children = parent.child_transaction_ids
+        self.assertEqual(len(children), 1, "same-brand 2nd leg must spawn a child")
+        self.assertEqual(children.provider_reference, "LEG2_KEY")
+        self.assertEqual(children.amount, 5.0)
+        self.assertEqual(children.source_transaction_id, parent)
+
+
+@tagged("post_install", "-at_install")
+class TestGiftcardPbnkSuppression(_GiftcardTestBase):
+    """``_buckaroo_skip_payment_creation`` vetoes PBNK only for giftcard
+    partial legs — not full-cover giftcard payments, GCR children, or
+    non-giftcard methods."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        product = cls.env["product.product"].create(
+            {"name": "Buckaroo Test Product", "list_price": 100.0, "taxes_id": [Command.clear()]}
+        )
+        cls.order = cls.env["sale.order"].create(
+            {
+                "partner_id": cls.partner.id,
+                "order_line": [
+                    Command.create(
+                        {"product_id": product.id, "product_uom_qty": 1, "price_unit": 100.0}
+                    )
+                ],
+            }
+        )
+        cls.order_total = cls.order.amount_total
+
+    def _gc_tx(self, reference, amount, payment_method=None, source=None):
+        vals = {
+            "provider_id": self.buckaroo.id,
+            "payment_method_id": (payment_method or self.giftcard).id,
+            "reference": reference,
+            "amount": amount,
+            "currency_id": self.order.currency_id.id,
+            "partner_id": self.partner.id,
+            "operation": "online_redirect",
+            "sale_order_ids": [Command.link(self.order.id)],
+        }
+        if source:
+            vals["source_transaction_id"] = source.id
+        return self.env["payment.transaction"].create(vals)
+
+    def test_partial_giftcard_leg_skips_pbnk(self):
+        tx = self._gc_tx("GC-PBNK-PARTIAL", self.order_total - 10.0)
+        self.assertTrue(tx.payment_method_id._buckaroo_skip_payment_creation(tx))
+
+    def test_full_cover_giftcard_keeps_pbnk(self):
+        tx = self._gc_tx("GC-PBNK-FULL", self.order_total)
+        self.assertFalse(tx.payment_method_id._buckaroo_skip_payment_creation(tx))
+
+    def test_gcr_child_keeps_pbnk(self):
+        parent = self._gc_tx("GC-PBNK-PARENT", self.order_total - 10.0)
+        child = self._gc_tx(
+            "GC-PBNK-PARENT-GCR-K", 10.0, payment_method=self.ideal, source=parent
+        )
+        self.assertFalse(child.payment_method_id._buckaroo_skip_payment_creation(child))
+
+    def test_non_giftcard_keeps_pbnk(self):
+        tx = self._gc_tx("GC-PBNK-IDEAL", self.order_total - 10.0, payment_method=self.ideal)
+        self.assertFalse(tx.payment_method_id._buckaroo_skip_payment_creation(tx))

@@ -1,14 +1,15 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from buckaroo.config.buckaroo_config import BuckarooConfig
 from buckaroo.http.client import BuckarooHttpClient
 from buckaroo.services.reply import HttpPost
 from werkzeug.exceptions import Forbidden
 
-from odoo.tests import BaseCase
+from odoo.addons.account_payment.models.payment_transaction import PaymentTransaction
+from odoo.tests import BaseCase, tagged
 
 from odoo.addons.payment_buckaroo_official.utils.push_handlers import (
     ParsedPush,
@@ -16,7 +17,34 @@ from odoo.addons.payment_buckaroo_official.utils.push_handlers import (
     verify_signature,
 )
 
-from .common import make_mock_request, parsed_from_form, parsed_from_json
+from .common import BuckarooOfficialCommon, make_mock_request, parsed_from_form, parsed_from_json
+
+
+def _route_push(env, parsed):
+    """Drive the same split + process path the webhook controller runs."""
+    tx_sudo = env["payment.transaction"].sudo()._search_by_reference("buckaroo_official", parsed)
+    if not tx_sudo:
+        return None
+    remainder_tx = tx_sudo._buckaroo_split_remainder_push(parsed)
+    target = remainder_tx or tx_sudo
+    target._process("buckaroo_official", parsed)
+    if remainder_tx and remainder_tx.state == "done":
+        remainder_tx._post_process()
+    return remainder_tx or tx_sudo
+
+
+def _refund_push(invoicenumber, refund_relation, txn_key, credit="50.00", service="ideal"):
+    return parsed_from_form(
+        {
+            "brq_invoicenumber": invoicenumber,
+            "brq_amount_credit": credit,
+            "brq_currency": "EUR",
+            "brq_statuscode": "190",
+            "brq_transactions": txn_key,
+            "brq_relatedtransaction_refund": refund_relation,
+            "brq_transaction_method": service,
+        }
+    )
 
 
 def _make_request(content_type="", form=None, json_body=None):
@@ -110,6 +138,16 @@ class TestParsedPushForm(BaseCase):
     def test_transaction_key(self):
         self.assertEqual(self._parsed().transaction_key, "KEY_123")
 
+    def test_partial_payment_relation(self):
+        parsed = self._parsed(brq_relatedtransaction_partialpayment="PKEY")
+        self.assertEqual(parsed.get_partial_payment_relation(), "PKEY")
+        self.assertIsNone(self._parsed().get_partial_payment_relation())
+
+    def test_refund_relation(self):
+        parsed = self._parsed(brq_relatedtransaction_refund="RKEY")
+        self.assertEqual(parsed.get_refund_relation(), "RKEY")
+        self.assertIsNone(self._parsed().get_refund_relation())
+
     def test_signature(self):
         self.assertEqual(self._parsed().signature, "abc")
 
@@ -186,6 +224,17 @@ class TestParsedPushJson(BaseCase):
 
     def test_transaction_key(self):
         self.assertEqual(self._parsed().transaction_key, "TXN_KEY")
+
+    def test_relations_from_related_transactions(self):
+        payload = self._payload()
+        payload["Transaction"]["RelatedTransactions"] = [
+            {"RelationType": "Refund", "RelatedTransactionKey": "RKEY"},
+            {"RelationType": "PartialPayment", "RelatedTransactionKey": "PKEY"},
+        ]
+        parsed = parsed_from_json(payload)
+        self.assertEqual(parsed.get_refund_relation(), "RKEY")
+        self.assertEqual(parsed.get_partial_payment_relation(), "PKEY")
+        self.assertIsNone(self._parsed().get_refund_relation())
 
     def test_signature_field_is_unused_for_json(self):
         self.assertIsNone(self._parsed().signature)
@@ -404,3 +453,66 @@ class TestVerifySignature(BaseCase):
         parsed = parse_push(req)
         with self.assertRaises(Forbidden):
             verify_signature(parsed, self._provider())
+
+
+@tagged("post_install", "-at_install")
+class TestPlazaRefundPush(BuckarooOfficialCommon):
+    """A Plaza refund push (190 + ``RelatedTransactions.Refund``) on an
+    already-done tx spawns the ``R-`` child generically — the spawn lives on
+    the base payment method, so non-giftcard methods are covered too."""
+
+    def setUp(self):
+        super().setUp()
+        # Isolate the spawn from accounting (the journal-less test provider
+        # would otherwise blow up inside _create_payment).
+        patcher = patch.object(PaymentTransaction, "_post_process", lambda self: None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _done_ideal_tx(self, reference, key, amount=50.0):
+        tx = self._create_buckaroo_tx(reference=reference, amount=amount, payment_method=self.ideal)
+        tx.provider_reference = key
+        tx._set_done()
+        return tx
+
+    def test_refund_push_spawns_refund_child_for_ideal(self):
+        tx = self._done_ideal_tx("IDEAL-RF-001", "IDEAL_KEY")
+
+        _route_push(self.env, _refund_push("IDEAL-RF-001", "IDEAL_KEY", "IDEAL_REFUND_KEY"))
+
+        refund = tx.child_transaction_ids.filtered(lambda t: t.operation == "refund")
+        self.assertEqual(len(refund), 1)
+        self.assertEqual(refund.reference, "R-IDEAL-RF-001")
+        self.assertEqual(refund.amount, -50.0)
+        self.assertEqual(refund.state, "done")
+        self.assertEqual(refund.source_transaction_id, tx)
+        self.assertEqual(refund.provider_reference, "IDEAL_REFUND_KEY")
+
+    def test_refund_push_is_idempotent_on_replay(self):
+        tx = self._done_ideal_tx("IDEAL-RF-002", "IDEAL_KEY_2")
+        push = _refund_push("IDEAL-RF-002", "IDEAL_KEY_2", "IDEAL_REFUND_KEY_2")
+
+        _route_push(self.env, push)
+        _route_push(self.env, push)  # replay
+
+        refunds = tx.child_transaction_ids.filtered(lambda t: t.operation == "refund")
+        self.assertEqual(len(refunds), 1)
+
+    def test_duplicate_190_without_refund_relation_does_not_spawn(self):
+        tx = self._done_ideal_tx("IDEAL-RF-003", "IDEAL_KEY_3")
+
+        _route_push(
+            self.env,
+            parsed_from_form(
+                {
+                    "brq_invoicenumber": "IDEAL-RF-003",
+                    "brq_amount": "50.00",
+                    "brq_currency": "EUR",
+                    "brq_statuscode": "190",
+                    "brq_transactions": "SOME_OTHER_KEY",
+                    "brq_transaction_method": "ideal",
+                }
+            ),
+        )
+
+        self.assertFalse(tx.child_transaction_ids)

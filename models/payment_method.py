@@ -3,6 +3,8 @@
 import logging
 import re
 
+from psycopg2.errors import UniqueViolation
+
 from buckaroo.services.payment_service import PaymentService
 
 from odoo import _, api, fields, models
@@ -298,16 +300,106 @@ class PaymentMethod(models.Model):
             transaction.buckaroo_official_service_code = service_code
 
     def _buckaroo_handle_duplicate_push(self, transaction, payment_data):
+        """Spawn an ``R-`` child when Buckaroo emits a refund push for an
+        already-done tx (Plaza-initiated refunds for any method). Otherwise
+        log + skip the duplicate."""
         self.ensure_one()
+        if payment_data.is_success():
+            refund_relation = payment_data.get_refund_relation()
+            if refund_relation:
+                target = self._buckaroo_resolve_refund_target(transaction, refund_relation)
+                if target:
+                    self._buckaroo_spawn_refund_child(target, payment_data)
+                    return
         _logger.info(
             "Skipping duplicate Buckaroo callback for transaction %s (state=%s)",
             transaction.reference,
             transaction.state,
         )
 
+    @staticmethod
+    def _buckaroo_resolve_refund_target(transaction, refund_relation):
+        """Locate the tx whose ``provider_reference`` matches the push's
+        ``RelatedTransactions.Refund`` key. The matched-by-invoice tx may
+        point at the wrong row (e.g. the giftcard partial leg when the
+        refund actually targets its GCR child)."""
+        if transaction.provider_reference == refund_relation:
+            return transaction
+        return transaction.search(
+            [
+                ("provider_id", "=", transaction.provider_id.id),
+                ("provider_reference", "=", refund_relation),
+            ],
+            limit=1,
+        )
+
+    @staticmethod
+    def _buckaroo_spawn_refund_child(transaction, payment_data):
+        """Create the ``R-`` child for a Plaza-initiated refund push."""
+        txn_key = payment_data.transaction_key
+        currency = transaction.currency_id
+        amount = payment_data.credit_amount or payment_data.amount or 0.0
+        if currency.compare_amounts(amount, 0) <= 0:
+            _logger.info(
+                "Buckaroo refund push for %s carried no positive amount; skipping",
+                transaction.reference,
+            )
+            return transaction.browse()
+        if txn_key:
+            existing = transaction.search(
+                [
+                    ("provider_id", "=", transaction.provider_id.id),
+                    ("provider_reference", "=", txn_key),
+                ],
+                limit=1,
+            )
+            if existing:
+                return existing
+        refund_ref = f"R-{transaction.reference}"
+        vals = {
+            "provider_id": transaction.provider_id.id,
+            "payment_method_id": transaction.payment_method_id.id,
+            "reference": refund_ref,
+            "amount": -amount,
+            "currency_id": currency.id,
+            "partner_id": transaction.partner_id.id,
+            "operation": "refund",
+            "source_transaction_id": transaction.id,
+            "provider_reference": txn_key,
+            "buckaroo_official_service_code": (
+                payment_data.service_code or transaction.buckaroo_official_service_code
+            ),
+        }
+        try:
+            with transaction.env.cr.savepoint():
+                refund_tx = transaction.create(vals)
+        except UniqueViolation:
+            return transaction.search(
+                [
+                    ("provider_id", "=", transaction.provider_id.id),
+                    ("reference", "=", refund_ref),
+                ],
+                limit=1,
+            )
+        refund_tx._set_done()
+        refund_tx._post_process()
+        _logger.info(
+            "Spawned Plaza-initiated refund child %s for %s (amount %s)",
+            refund_tx.reference,
+            transaction.reference,
+            amount,
+        )
+        return refund_tx
+
     def _buckaroo_adjust_amount_on_success(self, transaction, payment_data):
         self.ensure_one()
         return
+
+    def _buckaroo_skip_payment_creation(self, transaction):
+        """Veto ``account.payment`` (PBNK) creation for *transaction*.
+        Overridden per method; base never skips."""
+        self.ensure_one()
+        return False
 
     def _buckaroo_split_remainder_push(self, transaction, payment_data):
         self.ensure_one()
