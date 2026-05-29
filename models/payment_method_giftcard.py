@@ -385,15 +385,23 @@ class PaymentMethodGiftcard(models.Model):
         return super()._buckaroo_handle_duplicate_push(transaction, payment_data)
 
     def _buckaroo_skip_payment_creation(self, transaction):
-        """No PBNK for a giftcard partial leg: a parent giftcard tx
-        (no source) whose amount is below the order total. Such legs are
-        refundable only via Plaza/API (the push handler spawns the R- child),
-        and the framework's child-state gate races against GCR-child creation,
-        producing a stray PBNK with the wrong amount_available_for_refund."""
+        """No PBNK for a giftcard partial leg: a giftcard tx whose amount is
+        below the order total. Such legs are refundable only via Plaza/API
+        (the push handler spawns the R- child), and the framework's child-state
+        gate races against GCR-child creation, producing a stray PBNK with the
+        wrong amount_available_for_refund.
+
+        A redirect-spawned GCR remainder child (reference ``{ORDER}-GCR-{key}``,
+        created by ``_buckaroo_split_remainder_push``) is a genuine remainder
+        leg and KEEPS its PBNK. Gate on that reference marker, not the mere
+        presence of ``source_transaction_id``: inline follow-up legs are linked
+        to the root via ``source_transaction_id`` too (see the controller's
+        ``_validate_transaction_for_order``), yet they are partial slices that
+        must skip PBNK exactly as they did before the linkage existed."""
         if not self._is_buckaroo_giftcard():
             return super()._buckaroo_skip_payment_creation(transaction)
-        if transaction.source_transaction_id:
-            return False  # GCR child, not a parent partial leg
+        if "-GCR-" in transaction.reference:
+            return False  # redirect remainder child, not a partial slice
         order = transaction.sale_order_ids[:1]
         if not order:
             return False
@@ -507,6 +515,18 @@ class SaleOrderGiftcard(models.Model):
         if not self._buckaroo_partial_payment_remainder():
             return False
         return bool(self._buckaroo_giftcard_done_transactions())
+
+    def _buckaroo_giftcard_root_transaction(self):
+        """The order's root giftcard leg: the earliest done giftcard tx with
+        no ``source_transaction_id``. Inline follow-up legs all chain to this
+        one root (a fan-out, not a linked-list). The redirect flow resolves a
+        different anchor: ``_buckaroo_split_remainder_push`` points each GCR
+        sibling at the specific push-receiving session parent, not necessarily
+        the order's globally-earliest giftcard leg."""
+        self.ensure_one()
+        return self._buckaroo_giftcard_done_transactions().filtered(
+            lambda t: not t.source_transaction_id
+        ).sorted("id")[:1]
 
 
 class WebsiteGiftcard(models.Model):

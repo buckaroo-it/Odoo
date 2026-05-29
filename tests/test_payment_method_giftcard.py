@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 from buckaroo.http.client import BuckarooApiError
 
 from odoo.addons.account_payment.models.payment_transaction import PaymentTransaction
+from odoo.addons.payment_buckaroo_official.controllers.giftcard import GiftcardPaymentPortal
 from odoo.exceptions import ValidationError
 from odoo.fields import Command
 from odoo.tests import tagged
@@ -1623,23 +1624,6 @@ class TestGiftcardRedirectModeRemainderPush(_GiftcardTestBase):
         )
         self.assertFalse(gc_tx._buckaroo_split_remainder_push(push))
 
-    def test_remainder_push_same_service_code_returns_false(self):
-        """Defensive: a resend of the giftcard slice (same brand code) must
-        not split into a sibling — only a different method triggers split."""
-        gc_tx = self._giftcard_done_tx("TX-GC-RP-RPSH-006")
-        push = parsed_from_form(
-            {
-                "brq_invoicenumber": "TX-GC-RP-RPSH-006",
-                "brq_amount": "25.00",
-                "brq_currency": "EUR",
-                "brq_statuscode": "190",
-                "brq_transactions": "OTHER_KEY",
-                "brq_transaction_method": "boekenbon",
-                "brq_relatedtransaction_partialpayment": "GC_DONE_KEY",
-            }
-        )
-        self.assertFalse(gc_tx._buckaroo_split_remainder_push(push))
-
     def test_non_giftcard_done_tx_does_not_split(self):
         """Only giftcard txs split off remainders. A stray push with
         ``relatedtransaction_partialpayment`` arriving on a plain iDEAL
@@ -2053,3 +2037,32 @@ class TestGiftcardPbnkSuppression(_GiftcardTestBase):
     def test_non_giftcard_keeps_pbnk(self):
         tx = self._gc_tx("GC-PBNK-IDEAL", self.order_total - 10.0, payment_method=self.ideal)
         self.assertFalse(tx.payment_method_id._buckaroo_skip_payment_creation(tx))
+
+    def test_same_brand_gcr_child_keeps_pbnk(self):
+        """A redirect-spawned GCR sibling that happens to be a giftcard brand
+        (same-brand remainder) must STILL get a PBNK — it is a genuine
+        remainder leg, not a partial slice of the order total."""
+        parent = self._gc_tx("GC-PBNK-SBPARENT", self.order_total - 10.0)
+        child = self._gc_tx(
+            "GC-PBNK-SBPARENT-GCR-K", 10.0, payment_method=self.brand_vvv, source=parent
+        )
+        self.assertFalse(child.payment_method_id._buckaroo_skip_payment_creation(child))
+
+    def test_linked_inline_partial_leg_skips_pbnk(self):
+        """Regression: an inline second-giftcard-brand leg taken through the
+        controller linkage gains a ``source_transaction_id`` to the root, but
+        it is a partial slice of the order total — it must STILL skip PBNK
+        (pre-#25 behavior), not be misread as a GCR remainder child."""
+        root = self._gc_tx("GC-PBNK-LINK-ROOT", 40.0)
+        root.provider_reference = "LINK_ROOT_KEY"
+        root.buckaroo_official_service_code = self.brand_vvv.buckaroo_official_sdk_service_name
+        root._set_done()
+
+        # The order remainder is 60; the upstream creates the second brand leg
+        # at that remainder. Run it through the controller linkage hook.
+        leg = self._gc_tx("GC-PBNK-LINK-LEG", 60.0, payment_method=self.brand_vvv)
+        GiftcardPaymentPortal()._validate_transaction_for_order(leg, self.order)
+
+        self.assertEqual(leg.source_transaction_id, root)
+        self.assertTrue(leg.payment_method_id._buckaroo_skip_payment_creation(leg))
+        self.assertFalse(leg._create_payment())
