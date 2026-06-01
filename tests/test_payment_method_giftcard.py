@@ -72,6 +72,35 @@ class _GiftcardTestBase(BuckarooOfficialCommon):
             Command.link(cls.brand_webshop.id),
             Command.link(cls.brand_yourgift.id),
         ]
+        product = cls.env["product.product"].create(
+            {"name": "Buckaroo Test Product", "list_price": 100.0, "taxes_id": [Command.clear()]}
+        )
+        cls.order = cls.env["sale.order"].create(
+            {
+                "partner_id": cls.partner.id,
+                "order_line": [
+                    Command.create(
+                        {"product_id": product.id, "product_uom_qty": 1, "price_unit": 100.0}
+                    )
+                ],
+            }
+        )
+        cls.order_total = cls.order.amount_total
+
+    def _gc_tx(self, reference, amount, payment_method=None, source=None):
+        vals = {
+            "provider_id": self.buckaroo.id,
+            "payment_method_id": (payment_method or self.giftcard).id,
+            "reference": reference,
+            "amount": amount,
+            "currency_id": self.order.currency_id.id,
+            "partner_id": self.partner.id,
+            "operation": "online_redirect",
+            "sale_order_ids": [Command.link(self.order.id)],
+        }
+        if source:
+            vals["source_transaction_id"] = source.id
+        return self.env["payment.transaction"].create(vals)
 
 
 @tagged("post_install", "-at_install")
@@ -339,6 +368,8 @@ def _make_partial_response(
     key="GC_PARTIAL_KEY",
     remainder_url="https://checkout.buckaroo.nl/remainder/abc123",
     is_successful=True,
+    group_key=None,
+    related_key=None,
 ):
     """Build a mock SDK response that mimics Buckaroo's giftcard partial-pay shape.
 
@@ -361,7 +392,12 @@ def _make_partial_response(
     response.redirect_url = None
     response.required_action = MagicMock()
     response.required_action.redirect_url = remainder_url
-    response._raw_data = {}
+    response.required_action.pay_remainder_details = (
+        {"GroupTransaction": group_key} if group_key else None
+    )
+    response.related_transactions = (
+        [{"RelatedTransactionKey": related_key}] if related_key else None
+    )
     response.amount_debit = amount_debit_root
     response.is_successful.return_value = is_successful
 
@@ -385,8 +421,10 @@ def _make_partial_response(
 
 @tagged("post_install", "-at_install")
 class TestGiftcardInlinePartial(_GiftcardTestBase):
-    """Inline mode + partial pay: bounce shopper to ``/shop/payment`` so Odoo
-    drives the remainder, instead of following Buckaroo's hosted picker URL.
+    """Inline mode + partial pay: record the consumed slice, capture the group
+    transaction key, and bounce the shopper to ``/shop/payment`` so Odoo drives
+    the remainder on-site. The remainder leg settles into the giftcard group via
+    a PayRemainder against the captured key (see ``TestGiftcardGroupRemainder``).
     """
 
     @classmethod
@@ -564,6 +602,15 @@ class TestGiftcardInlinePartial(_GiftcardTestBase):
             tx, _ = self._run_inline_partial(response, reference="TX-GC-PP-PEND-001")
         mock_pp.assert_not_called()
         self.assertEqual(tx.state, "pending")
+
+    def test_inline_giftcard_partial_leg_keeps_pbnk(self):
+        """Inline mode: the giftcard slice is an independent payment — it KEEPS
+        its PBNK so it is refundable from Odoo (unlike redirect, which skips it
+        and refunds via Plaza)."""
+        tx = self._gc_tx(
+            "GC-INLINE-PBNK", self.order_total - 10.0, payment_method=self.brand_vvv
+        )
+        self.assertFalse(tx.payment_method_id._buckaroo_skip_payment_creation(tx))
 
 
 @tagged("post_install", "-at_install")
@@ -1982,42 +2029,14 @@ class TestGiftcardSameBrandMultiPartial(_GiftcardTestBase):
 
 @tagged("post_install", "-at_install")
 class TestGiftcardPbnkSuppression(_GiftcardTestBase):
-    """``_buckaroo_skip_payment_creation`` vetoes PBNK only for giftcard
-    partial legs — not full-cover giftcard payments, GCR children, or
-    non-giftcard methods."""
+    """Redirect mode: ``_buckaroo_skip_payment_creation`` vetoes PBNK only for
+    giftcard partial slices (Plaza-only refund) — not full-cover giftcard
+    payments, GCR children, or non-giftcard methods."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        product = cls.env["product.product"].create(
-            {"name": "Buckaroo Test Product", "list_price": 100.0, "taxes_id": [Command.clear()]}
-        )
-        cls.order = cls.env["sale.order"].create(
-            {
-                "partner_id": cls.partner.id,
-                "order_line": [
-                    Command.create(
-                        {"product_id": product.id, "product_uom_qty": 1, "price_unit": 100.0}
-                    )
-                ],
-            }
-        )
-        cls.order_total = cls.order.amount_total
-
-    def _gc_tx(self, reference, amount, payment_method=None, source=None):
-        vals = {
-            "provider_id": self.buckaroo.id,
-            "payment_method_id": (payment_method or self.giftcard).id,
-            "reference": reference,
-            "amount": amount,
-            "currency_id": self.order.currency_id.id,
-            "partner_id": self.partner.id,
-            "operation": "online_redirect",
-            "sale_order_ids": [Command.link(self.order.id)],
-        }
-        if source:
-            vals["source_transaction_id"] = source.id
-        return self.env["payment.transaction"].create(vals)
+        cls.giftcard.buckaroo_official_giftcard_method = "redirect"
 
     def test_partial_giftcard_leg_skips_pbnk(self):
         tx = self._gc_tx("GC-PBNK-PARTIAL", self.order_total - 10.0)
@@ -2048,21 +2067,113 @@ class TestGiftcardPbnkSuppression(_GiftcardTestBase):
         )
         self.assertFalse(child.payment_method_id._buckaroo_skip_payment_creation(child))
 
-    def test_linked_inline_partial_leg_skips_pbnk(self):
-        """Regression: an inline second-giftcard-brand leg taken through the
-        controller linkage gains a ``source_transaction_id`` to the root, but
-        it is a partial slice of the order total — it must STILL skip PBNK
-        (pre-#25 behavior), not be misread as a GCR remainder child."""
+    def test_redirect_second_giftcard_brand_leg_skips_pbnk(self):
+        """Redirect mode: a second giftcard-brand partial leg is below the order
+        total and refunded via Plaza, so it skips PBNK. The controller leaves it
+        an independent payment — no ``source_transaction_id`` linkage."""
         root = self._gc_tx("GC-PBNK-LINK-ROOT", 40.0)
         root.provider_reference = "LINK_ROOT_KEY"
         root.buckaroo_official_service_code = self.brand_vvv.buckaroo_official_sdk_service_name
         root._set_done()
 
         # The order remainder is 60; the upstream creates the second brand leg
-        # at that remainder. Run it through the controller linkage hook.
+        # at that remainder. Run it through the controller hook.
         leg = self._gc_tx("GC-PBNK-LINK-LEG", 60.0, payment_method=self.brand_vvv)
         GiftcardPaymentPortal()._validate_transaction_for_order(leg, self.order)
 
-        self.assertEqual(leg.source_transaction_id, root)
+        self.assertFalse(leg.source_transaction_id)
         self.assertTrue(leg.payment_method_id._buckaroo_skip_payment_creation(leg))
         self.assertFalse(leg._create_payment())
+
+
+@tagged("post_install", "-at_install")
+class TestGiftcardGroupRemainder(_GiftcardTestBase):
+    """Inline giftcard remainder settles into the Buckaroo group via a
+    PayRemainder against the captured group transaction key — giftcard +
+    remainder reconcile as one group transaction, with the shopper staying on
+    the merchant checkout instead of being sent to Buckaroo's hosted page."""
+
+    def test_extract_group_key_reads_pay_remainder_details(self):
+        response = _make_partial_response(consumed=5.00, group_key="GROUP-KEY-1")
+        self.assertEqual(
+            self.brand_vvv._buckaroo_extract_group_transaction_key(response),
+            "GROUP-KEY-1",
+        )
+
+    def test_extract_group_key_returns_none_without_details(self):
+        response = _make_partial_response(consumed=5.00)
+        self.assertIsNone(
+            self.brand_vvv._buckaroo_extract_group_transaction_key(response)
+        )
+
+    def test_extract_group_key_falls_back_to_related_transaction(self):
+        # No PayRemainderDetails, but a RelatedTransactions entry carries the key.
+        response = _make_partial_response(consumed=5.00, related_key="REL-KEY-1")
+        self.assertEqual(
+            self.brand_vvv._buckaroo_extract_group_transaction_key(response),
+            "REL-KEY-1",
+        )
+
+    def test_inline_partial_stores_group_key_on_order(self):
+        tx = self._create_buckaroo_tx(
+            reference="TX-GC-GROUP-001", amount=self.order_total,
+            payment_method=self.brand_vvv,
+        ).with_context(
+            buckaroo_giftcard_cardnumber="VVV-PART-001",
+            buckaroo_giftcard_pin="1234",
+        )
+        tx.sale_order_ids = [Command.set(self.order.ids)]
+        response = _make_partial_response(consumed=5.00, group_key="GROUP-KEY-2")
+        mock_builder = MagicMock()
+        mock_builder.pay.return_value = response
+        with patch(
+            "odoo.addons.payment_buckaroo_official.models.payment_method_giftcard.PaymentService"
+        ) as MockPS:
+            MockPS.return_value.create_payment.return_value = mock_builder
+            tx._get_specific_processing_values({})
+        self.assertEqual(
+            self.order.buckaroo_official_group_transaction_key, "GROUP-KEY-2"
+        )
+
+    def test_remainder_group_key_empty_for_giftcard_leg(self):
+        self.order.buckaroo_official_group_transaction_key = "GROUP-KEY-3"
+        gc_tx = self._gc_tx("TX-GC-GROUP-GC", 5.00, payment_method=self.brand_vvv)
+        self.assertFalse(gc_tx._buckaroo_giftcard_remainder_group_key())
+
+    def test_remainder_group_key_returned_for_remainder_leg(self):
+        self.order.buckaroo_official_group_transaction_key = "GROUP-KEY-4"
+        rem_tx = self._gc_tx("TX-GC-GROUP-REM", 60.0, payment_method=self.ideal)
+        self.assertEqual(
+            rem_tx._buckaroo_giftcard_remainder_group_key(), "GROUP-KEY-4"
+        )
+
+    def test_remainder_leg_creates_pay_remainder_with_group_key(self):
+        self.order.buckaroo_official_group_transaction_key = "GROUP-KEY-5"
+        rem_tx = self._gc_tx("TX-GC-GROUP-PR", 60.0, payment_method=self.ideal)
+
+        mock_builder = MagicMock()
+        client = MagicMock()
+        with patch(
+            "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
+        ) as MockPS:
+            MockPS.return_value.create_payment.return_value = mock_builder
+            self.ideal._buckaroo_create_payment(rem_tx, client)
+
+        mock_builder.pay_remainder.assert_called_once_with(
+            original_transaction_key="GROUP-KEY-5"
+        )
+        mock_builder.pay.assert_not_called()
+
+    def test_order_without_group_key_uses_plain_pay(self):
+        plain_tx = self._gc_tx("TX-GC-GROUP-PLAIN", 60.0, payment_method=self.ideal)
+
+        mock_builder = MagicMock()
+        client = MagicMock()
+        with patch(
+            "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
+        ) as MockPS:
+            MockPS.return_value.create_payment.return_value = mock_builder
+            self.ideal._buckaroo_create_payment(plain_tx, client)
+
+        mock_builder.pay.assert_called_once()
+        mock_builder.pay_remainder.assert_not_called()

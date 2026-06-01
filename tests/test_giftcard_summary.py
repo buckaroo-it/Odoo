@@ -306,65 +306,46 @@ class TestGiftcardSummaryTemplate(BuckarooOfficialCommon):
 
 
 @tagged("post_install", "-at_install")
-class TestGiftcardInlineLegSourceLinkage(TestGiftcardSummaryTemplate):
-    """Inline partial-pay legs must chain to the order's root giftcard leg
-    via ``source_transaction_id`` — the same transaction graph the redirect
-    (hosted-picker) flow produces for GCR children. The framework creates each
-    inline follow-up leg as an independent top-level tx; the controller hook
-    links it so refund/traceability code that walks ``source_transaction_id``
-    traverses inline and redirect identically.
+class TestGiftcardInlineRemainderLeg(TestGiftcardSummaryTemplate):
+    """The on-site remainder leg is shrunk to the still-open amount and left as
+    an INDEPENDENT payment — no ``source_transaction_id`` link to the giftcard
+    slice. Both legs reconcile and refund on their own PBNK; the giftcard
+    grouping lives on Buckaroo's side via the group transaction key.
     """
 
-    def test_inline_remainder_leg_links_to_root_giftcard_leg(self):
+    def test_inline_remainder_leg_amount_shrunk_to_remainder(self):
         order = self._make_order(price=22.0)
-        root = self._add_done_giftcard_tx(order, amount=10.0)
-        # Upstream creates the next leg (another method) as a standalone tx.
-        leg = self._make_draft_tx(order, amount=12.0, payment_method=self.ideal)
-        self.assertFalse(leg.source_transaction_id)
+        self._add_done_giftcard_tx(order, amount=10.0)
+        # Upstream creates the next leg at the full order total.
+        leg = self._make_draft_tx(order, amount=22.0, payment_method=self.ideal)
 
         self._invoke_validate_hook(order, leg)
 
-        self.assertEqual(leg.source_transaction_id, root)
+        self.assertEqual(leg.amount, 12.0)
 
-    def test_inline_second_giftcard_leg_links_to_root_giftcard_leg(self):
+    def test_inline_remainder_leg_is_not_linked_to_giftcard(self):
         order = self._make_order(price=22.0)
-        root = self._add_done_giftcard_tx(order, amount=10.0)
-        # A second giftcard brand leg, like the redirect GCR sibling.
+        self._add_done_giftcard_tx(order, amount=10.0)
+        leg = self._make_draft_tx(order, amount=12.0, payment_method=self.ideal)
+
+        self._invoke_validate_hook(order, leg)
+
+        self.assertFalse(leg.source_transaction_id)
+
+    def test_second_giftcard_leg_is_not_linked(self):
+        order = self._make_order(price=22.0)
+        self._add_done_giftcard_tx(order, amount=10.0)
         leg = self._make_draft_tx(order, amount=12.0, payment_method=self.brand_vvv)
 
         self._invoke_validate_hook(order, leg)
 
-        self.assertEqual(leg.source_transaction_id, root)
-
-    def test_inline_legs_share_one_root_not_a_linked_list(self):
-        order = self._make_order(price=33.0)
-        root = self._add_done_giftcard_tx(order, amount=10.0)
-        second = self._add_done_giftcard_tx(order, amount=11.0)
-        # Third leg must point at the root, not at the most-recent done leg.
-        leg = self._make_draft_tx(order, amount=12.0, payment_method=self.ideal)
-
-        self._invoke_validate_hook(order, leg)
-
-        self.assertEqual(leg.source_transaction_id, root)
-        self.assertNotEqual(leg.source_transaction_id, second)
-
-    def test_first_leg_with_no_prior_payment_is_not_linked(self):
-        order = self._make_order(price=22.0)
-        # No prior done giftcard payment: the order has no pending remainder,
-        # so the hook early-returns and the leg gets no source link.
-        leg = self._make_draft_tx(order, amount=22.0, payment_method=self.brand_vvv)
-
-        self._invoke_validate_hook(order, leg)
-
         self.assertFalse(leg.source_transaction_id)
 
-    def test_existing_source_link_is_not_overwritten(self):
-        order = self._make_order(price=33.0)
-        root = self._add_done_giftcard_tx(order, amount=10.0)
-        other = self._add_done_giftcard_tx(order, amount=11.0)
-        leg = self._make_draft_tx(order, amount=12.0, payment_method=self.ideal)
-        leg.source_transaction_id = other.id
+    def test_hook_leaves_amount_alone_when_nothing_paid(self):
+        order = self._make_order(price=22.0)
+        leg = self._make_draft_tx(order, amount=22.0, payment_method=self.ideal)
 
         self._invoke_validate_hook(order, leg)
 
-        self.assertEqual(leg.source_transaction_id, other)
+        self.assertEqual(leg.amount, 22.0)
+        self.assertFalse(leg.source_transaction_id)

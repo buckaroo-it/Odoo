@@ -246,14 +246,18 @@ class PaymentMethod(models.Model):
     def _buckaroo_create_payment(self, transaction, client):
         self.ensure_one()
         params = self._buckaroo_get_payment_params(transaction)
-        return (
-            PaymentService(client)
-            .create_payment(
-                self.buckaroo_official_sdk_service_name,
-                params,
-            )
-            .pay()
+        builder = PaymentService(client).create_payment(
+            self.buckaroo_official_sdk_service_name,
+            params,
         )
+        return self._buckaroo_submit_payment(builder, transaction)
+
+    def _buckaroo_submit_payment(self, builder, transaction):
+        """Submit the built payment request. Hook for methods that must use an
+        action other than a plain Pay (see the giftcard override, which routes a
+        remainder leg through PayRemainder)."""
+        self.ensure_one()
+        return builder.pay()
 
     def _buckaroo_extract_redirect_url(self, response):
         self.ensure_one()

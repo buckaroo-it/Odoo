@@ -182,6 +182,14 @@ class PaymentMethodGiftcard(models.Model):
             return PaymentService(client).create_payment("giftcards", params).pay()
         return self._buckaroo_create_giftcard_inline(transaction, client, params)
 
+    def _buckaroo_submit_payment(self, builder, transaction):
+        group_key = transaction._buckaroo_giftcard_remainder_group_key()
+        if group_key:
+            # Remainder leg of an inline giftcard partial: settle it into the
+            # existing giftcard group instead of opening a standalone payment.
+            return builder.pay_remainder(original_transaction_key=group_key)
+        return super()._buckaroo_submit_payment(builder, transaction)
+
     def _buckaroo_create_giftcard_inline(self, transaction, client, params):
         self.ensure_one()
         ctx = transaction.env.context
@@ -217,8 +225,13 @@ class PaymentMethodGiftcard(models.Model):
         return {"api_url": f"{base_url}/payment/status"}
 
     def _buckaroo_handle_redirect_response(self, transaction, response):
-        """Inline-mode partial-pay: intercept the gateway's hosted remainder
-        picker, record the consumed slice, bounce the shopper to /shop/payment."""
+        """Inline-mode partial-pay: record the consumed slice, capture the
+        group transaction key, then bounce the shopper to ``/shop/payment`` so
+        Odoo drives the remainder. The remainder leg is sent as a PayRemainder
+        against the captured group key (see ``payment.transaction.
+        _buckaroo_giftcard_remainder_group_key``), so Buckaroo settles giftcard
+        + remainder as one group transaction without the shopper leaving the
+        merchant's checkout."""
         primary = self._buckaroo_giftcard_primary()
         if not primary:
             return super()._buckaroo_handle_redirect_response(transaction, response)
@@ -235,6 +248,9 @@ class PaymentMethodGiftcard(models.Model):
             return None
 
         transaction.provider_reference = response.key
+        group_key = self._buckaroo_extract_group_transaction_key(response)
+        if group_key:
+            transaction.sale_order_ids[:1].buckaroo_official_group_transaction_key = group_key
         consumed = self._buckaroo_giftcard_partial_amount(transaction, response)
         if consumed is None:
             transaction._set_pending()
@@ -251,6 +267,25 @@ class PaymentMethodGiftcard(models.Model):
             transaction._post_process()
         base_url = transaction.provider_id.get_base_url().rstrip("/")
         return {"api_url": f"{base_url}/shop/payment"}
+
+    @staticmethod
+    def _buckaroo_extract_group_transaction_key(response):
+        """Group transaction key from a giftcard partial-pay response, used as
+        OriginalTransactionKey on the PayRemainder that settles the open amount.
+        Buckaroo returns it under ``RequiredAction.PayRemainderDetails.
+        GroupTransaction``; fall back to the first related transaction key.
+
+        Called only after the caller has confirmed ``response.required_action``
+        is set, so the attribute is accessed directly."""
+        details = response.required_action.pay_remainder_details
+        if isinstance(details, dict):
+            key = details.get("GroupTransaction")
+            if key:
+                return key
+        related = response.related_transactions
+        if related and isinstance(related[0], dict):
+            return related[0].get("RelatedTransactionKey")
+        return None
 
     @staticmethod
     def _buckaroo_giftcard_partial_amount(transaction, response):
@@ -385,21 +420,23 @@ class PaymentMethodGiftcard(models.Model):
         return super()._buckaroo_handle_duplicate_push(transaction, payment_data)
 
     def _buckaroo_skip_payment_creation(self, transaction):
-        """No PBNK for a giftcard partial leg: a giftcard tx whose amount is
-        below the order total. Such legs are refundable only via Plaza/API
-        (the push handler spawns the R- child), and the framework's child-state
-        gate races against GCR-child creation, producing a stray PBNK with the
-        wrong amount_available_for_refund.
+        """Whether to veto ``account.payment`` (PBNK) creation for a giftcard tx.
 
-        A redirect-spawned GCR remainder child (reference ``{ORDER}-GCR-{key}``,
-        created by ``_buckaroo_split_remainder_push``) is a genuine remainder
-        leg and KEEPS its PBNK. Gate on that reference marker, not the mere
-        presence of ``source_transaction_id``: inline follow-up legs are linked
-        to the root via ``source_transaction_id`` too (see the controller's
-        ``_validate_transaction_for_order``), yet they are partial slices that
-        must skip PBNK exactly as they did before the linkage existed."""
-        if not self._is_buckaroo_giftcard():
+        Inline mode: each leg (giftcard slice + on-site remainder) is an
+        independent payment, so the slice KEEPS its PBNK and is refundable from
+        Odoo like any other payment.
+
+        Redirect mode: the gateway groups the slice with a GCR remainder child.
+        The GCR child (reference ``{ORDER}-GCR-{key}``, created by
+        ``_buckaroo_split_remainder_push``) keeps its PBNK; the giftcard slice
+        (amount < order total) is refunded via Plaza, so skip its PBNK and avoid
+        the post-process race that would otherwise create a stray PBNK with the
+        wrong ``amount_available_for_refund``."""
+        primary = self._buckaroo_giftcard_primary()
+        if not primary:
             return super()._buckaroo_skip_payment_creation(transaction)
+        if (primary.buckaroo_official_giftcard_method or "redirect") == "inline":
+            return False
         if "-GCR-" in transaction.reference:
             return False  # redirect remainder child, not a partial slice
         order = transaction.sale_order_ids[:1]
@@ -497,8 +534,44 @@ class PaymentMethodGiftcard(models.Model):
         return super()._buckaroo_failure_message_hint(transaction, response, operation, status_code)
 
 
+class PaymentTransactionGiftcard(models.Model):
+    _inherit = "payment.transaction"
+
+    def _buckaroo_giftcard_remainder_group_key(self):
+        """Group transaction key when THIS tx is the remainder leg of an inline
+        giftcard partial payment — sent as OriginalTransactionKey on a
+        PayRemainder so Buckaroo settles it into the giftcard group. Empty for
+        the giftcard slice itself and for orders without a giftcard partial."""
+        self.ensure_one()
+        if self.payment_method_id._is_buckaroo_giftcard():
+            return False
+        # Field access on an empty recordset returns False.
+        return self.sale_order_ids[:1].buckaroo_official_group_transaction_key
+
+
 class SaleOrderGiftcard(models.Model):
     _inherit = "sale.order"
+
+    buckaroo_official_group_transaction_key = fields.Char(
+        string="Buckaroo Group Transaction Key",
+        help="Group transaction key returned by Buckaroo on a giftcard partial "
+        "payment. Sent as OriginalTransactionKey on the PayRemainder that "
+        "settles the open amount, so the gateway groups giftcard + remainder "
+        "as one transaction.",
+        copy=False,
+    )
+
+    def _buckaroo_partial_payment_remainder(self):
+        """``amount_total - amount_paid`` when partly paid (>0 paid, < total);
+        ``0.0`` otherwise. Single source of truth for the partial-payment
+        predicate used in the giftcard controller, sale_order helpers, and QWeb."""
+        self.ensure_one()
+        currency = self.currency_id
+        if currency.compare_amounts(self.amount_paid, 0) <= 0:
+            return 0.0
+        if currency.compare_amounts(self.amount_paid, self.amount_total) >= 0:
+            return 0.0
+        return self.amount_total - self.amount_paid
 
     def _buckaroo_giftcard_done_transactions(self):
         self.ensure_one()
@@ -515,18 +588,6 @@ class SaleOrderGiftcard(models.Model):
         if not self._buckaroo_partial_payment_remainder():
             return False
         return bool(self._buckaroo_giftcard_done_transactions())
-
-    def _buckaroo_giftcard_root_transaction(self):
-        """The order's root giftcard leg: the earliest done giftcard tx with
-        no ``source_transaction_id``. Inline follow-up legs all chain to this
-        one root (a fan-out, not a linked-list). The redirect flow resolves a
-        different anchor: ``_buckaroo_split_remainder_push`` points each GCR
-        sibling at the specific push-receiving session parent, not necessarily
-        the order's globally-earliest giftcard leg."""
-        self.ensure_one()
-        return self._buckaroo_giftcard_done_transactions().filtered(
-            lambda t: not t.source_transaction_id
-        ).sorted("id")[:1]
 
 
 class WebsiteGiftcard(models.Model):

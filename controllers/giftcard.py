@@ -43,19 +43,14 @@ class GiftcardPaymentPortal(PaymentPortal):
             return result
         if not sale_order._buckaroo_has_giftcard_pending_remainder():
             return result
+        # Shrink the on-site remainder leg to the still-open amount. The leg is
+        # left as an independent payment (no source_transaction_id link to the
+        # giftcard slice): both legs reconcile and refund on their own PBNK; the
+        # giftcard grouping lives on Buckaroo's side via the group transaction
+        # key, not as an Odoo payment parent/child.
         remainder = sale_order._buckaroo_partial_payment_remainder()
         if sale_order.currency_id.compare_amounts(transaction.amount, remainder) != 0:
             transaction.amount = remainder
-        # Chain this inline leg into the giftcard payment group so refund and
-        # traceability code that walks source_transaction_id sees the same
-        # graph the redirect GCR flow builds. First-wins: never re-point a leg
-        # that already has a source (e.g. a redirect-spawned GCR child). The
-        # root is always a done tx and this leg is draft, so the two can never
-        # be the same record.
-        if not transaction.source_transaction_id:
-            root = sale_order._buckaroo_giftcard_root_transaction()
-            if root:
-                transaction.source_transaction_id = root.id
         return result
 
     @staticmethod
