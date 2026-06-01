@@ -27,7 +27,7 @@ class CreditCardPaymentPortal(PaymentPortal):
         if hf_session_id:
             request.session["buckaroo_hf_session_id"] = hf_session_id
             request.session["buckaroo_hf_service"] = hf_service or ""
-        if cc_brand and isinstance(cc_brand, str) and len(cc_brand) <= 64:
+        if cc_brand and len(cc_brand) <= 64:
             # Format guard only; the authoritative whitelist check against the
             # configured brands happens in payment_method_creditcard.
             request.session["buckaroo_cc_brand"] = cc_brand

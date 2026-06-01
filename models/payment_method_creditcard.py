@@ -65,11 +65,6 @@ class PaymentMethodCreditCard(models.Model):
     def _buckaroo_create_payment(self, transaction, client):
         """Credit card flow: routing on redirect/inline x pay/authorize.
 
-        - Inline + pay        -> payWithToken() with the Hosted Fields session
-        - Inline + authorize  -> authorizeWithToken() with the Hosted Fields session
-        - Redirect + pay      -> pay() with the brand chosen in checkout
-        - Redirect + authorize -> authorize() with the brand chosen in checkout
-
         The SDK service name is always ``creditcard``; the concrete card brand
         (from the Hosted Fields session inline, or the checkout dropdown on
         redirect) is passed in ``params["brand"]``. Buckaroo then redirects to
@@ -88,7 +83,6 @@ class PaymentMethodCreditCard(models.Model):
 
         params = self._buckaroo_get_payment_params(transaction)
 
-        # Inline (Hosted Fields): the client-side session supplies the brand.
         if hf_session_id:
             if hf_service:
                 params["brand"] = hf_service
@@ -104,9 +98,12 @@ class PaymentMethodCreditCard(models.Model):
                 return builder.authorizeWithToken()
             return builder.payWithToken()
 
-        # Redirect: the customer picked a card brand in checkout. Validate it
-        # against the configured brands before using it as the service name.
-        allowed = {b["service"] for b in self._buckaroo_creditcard_redirect_brands()}
+        allowed = {
+            b.buckaroo_official_sdk_service_name
+            for b in self.brand_ids.filtered(
+                lambda b: b.active and b.buckaroo_official_sdk_service_name
+            )
+        }
         if cc_brand not in allowed:
             raise ValidationError(_("Please select a valid card type."))
         params["brand"] = cc_brand
