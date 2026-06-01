@@ -120,6 +120,13 @@ patch(PaymentForm.prototype, {
             return;
         }
 
+        const brandSelect = this.el.querySelector('#o_buckaroo_cc_brand');
+        if (brandSelect && !brandSelect.value) {
+            this._displayErrorDialog(_t("Error"), _t("Please select your card type."));
+            this._enableButton();
+            return;
+        }
+
         if (this._buckarooHFInitPromise) {
             await this._buckarooHFInitPromise;
         }
@@ -159,6 +166,10 @@ patch(PaymentForm.prototype, {
         if (this._buckarooHFSessionId) {
             params.buckaroo_hf_session_id = this._buckarooHFSessionId;
             params.buckaroo_hf_service = this._buckarooHFService;
+        }
+        const brandSelect = this.el.querySelector('#o_buckaroo_cc_brand');
+        if (brandSelect && brandSelect.value) {
+            params.buckaroo_cc_brand = brandSelect.value;
         }
         return params;
     },

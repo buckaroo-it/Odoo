@@ -56,6 +56,7 @@ class TestCreditcardSdkContract(BuckarooOfficialCommon):
         super().setUpClass()
         cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
         cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.brand = cls.creditcard._buckaroo_creditcard_redirect_brands()[0]["service"]
 
     def _make_source_authorize_tx(self, reference, service_code="visa"):
         """Build a source transaction with a recorded service code for brand lookup."""
@@ -153,7 +154,7 @@ class TestCreditcardSdkContract(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            _invoke_verb(self.creditcard, "pay", tx, client)
+            _invoke_verb(self.creditcard, "pay", tx, client, session={"buckaroo_cc_brand": self.brand})
 
         self._assert_service_name(MockPS)
         mock_builder.pay.assert_called_once()
@@ -174,7 +175,7 @@ class TestCreditcardSdkContract(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            _invoke_verb(self.creditcard, "authorize", tx, client)
+            _invoke_verb(self.creditcard, "authorize", tx, client, session={"buckaroo_cc_brand": self.brand})
 
         self._assert_service_name(MockPS)
         mock_builder.authorize.assert_called_once()

@@ -50,7 +50,7 @@ class TestCreditCardNonCreditCardUnaffected(BuckarooOfficialCommon):
 
 @tagged("post_install", "-at_install")
 class TestCreditCardRedirectPay(BuckarooOfficialCommon):
-    """Redirect + pay flow: no HF session data, authorize='pay'."""
+    """Redirect + pay flow: brand chosen in checkout, authorize='pay'."""
 
     @classmethod
     def setUpClass(cls):
@@ -59,9 +59,10 @@ class TestCreditCardRedirectPay(BuckarooOfficialCommon):
         cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
         cls.creditcard.buckaroo_official_creditcard_authorize = "pay"
         cls.creditcard.buckaroo_official_creditcard_method = "redirect"
+        cls.brand = cls.creditcard._buckaroo_creditcard_redirect_brands()[0]["service"]
 
     def test_redirect_pay_calls_sdk_pay(self):
-        """Redirect + pay should call .pay() via base class."""
+        """Redirect + pay sends the selected brand and calls .pay()."""
         tx = self._create_buckaroo_tx(reference="TX-CC-001", payment_method=self.creditcard)
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
@@ -70,7 +71,7 @@ class TestCreditCardRedirectPay(BuckarooOfficialCommon):
             patch(
                 "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard.PaymentService"
             ) as MockPS,
-            _patch_request({}),
+            _patch_request({"buckaroo_cc_brand": self.brand}),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
             result = self.creditcard._buckaroo_create_payment(tx, client)
@@ -79,12 +80,48 @@ class TestCreditCardRedirectPay(BuckarooOfficialCommon):
         mock_builder.authorize.assert_not_called()
         mock_builder.payWithToken.assert_not_called()
         mock_builder.authorizeWithToken.assert_not_called()
+        params = MockPS.return_value.create_payment.call_args[0][1]
+        self.assertEqual(params["brand"], self.brand)
+        self.assertEqual(tx.buckaroo_official_service_code, self.brand)
         self.assertEqual(result, mock_response)
+
+    def test_redirect_missing_brand_raises(self):
+        """No brand selected -> ValidationError (Buckaroo has no generic service)."""
+        tx = self._create_buckaroo_tx(reference="TX-CC-NOBRAND", payment_method=self.creditcard)
+        with (
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard.PaymentService"
+            ),
+            _patch_request({}),
+        ):
+            with self.assertRaises(ValidationError):
+                self.creditcard._buckaroo_create_payment(tx, MagicMock())
+
+    def test_redirect_invalid_brand_raises(self):
+        """A brand not in the configured set is rejected."""
+        tx = self._create_buckaroo_tx(reference="TX-CC-BADBRAND", payment_method=self.creditcard)
+        with (
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard.PaymentService"
+            ),
+            _patch_request({"buckaroo_cc_brand": "NotACard"}),
+        ):
+            with self.assertRaises(ValidationError):
+                self.creditcard._buckaroo_create_payment(tx, MagicMock())
+
+    def test_redirect_brands_deduped_by_service(self):
+        """Brand records sharing a service (V PAY/Carte Bancaire -> Visa) collapse."""
+        brands = self.creditcard._buckaroo_creditcard_redirect_brands()
+        services = [b["service"] for b in brands]
+        self.assertTrue(services)
+        self.assertEqual(len(services), len(set(services)))
+        self.assertEqual(services.count("Visa"), 1)
+        self.assertTrue(all(b["label"] for b in brands))
 
 
 @tagged("post_install", "-at_install")
 class TestCreditCardRedirectAuthorize(BuckarooOfficialCommon):
-    """Redirect + authorize flow: no HF session data, authorize='authorize'."""
+    """Redirect + authorize flow: brand chosen in checkout, authorize='authorize'."""
 
     @classmethod
     def setUpClass(cls):
@@ -93,9 +130,10 @@ class TestCreditCardRedirectAuthorize(BuckarooOfficialCommon):
         cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
         cls.creditcard.buckaroo_official_creditcard_authorize = "authorize"
         cls.creditcard.buckaroo_official_creditcard_method = "redirect"
+        cls.brand = cls.creditcard._buckaroo_creditcard_redirect_brands()[0]["service"]
 
     def test_redirect_authorize_calls_sdk_authorize(self):
-        """Redirect + authorize should call .authorize()."""
+        """Redirect + authorize sends the selected brand and calls .authorize()."""
         tx = self._create_buckaroo_tx(reference="TX-CC-AUTH-001", payment_method=self.creditcard)
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
@@ -104,7 +142,7 @@ class TestCreditCardRedirectAuthorize(BuckarooOfficialCommon):
             patch(
                 "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard.PaymentService"
             ) as MockPS,
-            _patch_request({}),
+            _patch_request({"buckaroo_cc_brand": self.brand}),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
             result = self.creditcard._buckaroo_create_payment(tx, client)
@@ -112,6 +150,8 @@ class TestCreditCardRedirectAuthorize(BuckarooOfficialCommon):
         mock_builder.authorize.assert_called_once()
         mock_builder.pay.assert_not_called()
         mock_builder.payWithToken.assert_not_called()
+        params = MockPS.return_value.create_payment.call_args[0][1]
+        self.assertEqual(params["brand"], self.brand)
         self.assertEqual(result, mock_response)
 
 
@@ -195,6 +235,28 @@ class TestCreditCardInlinePay(BuckarooOfficialCommon):
 
         params = MockPS.return_value.create_payment.call_args[0][1]
         self.assertEqual(params.get("brand"), "visa")
+
+    def test_inline_pay_persists_service_code_for_refund(self):
+        """HF session brand is stored on the tx so a later refund/capture has it."""
+        tx = self._create_buckaroo_tx(reference="TX-CC-HF-SVC", payment_method=self.creditcard)
+        client = MagicMock()
+        mock_builder, _ = make_mock_sdk_builder()
+
+        with (
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard.PaymentService"
+            ) as MockPS,
+            _patch_request(
+                {
+                    "buckaroo_hf_session_id": "hf-sess-svc",
+                    "buckaroo_hf_service": "mastercard",
+                }
+            ),
+        ):
+            MockPS.return_value.create_payment.return_value = mock_builder
+            self.creditcard._buckaroo_create_payment(tx, client)
+
+        self.assertEqual(tx.buckaroo_official_service_code, "mastercard")
 
     def test_inline_pay_uses_creditcard_service_name(self):
         """HF token flow should use 'creditcard' as the SDK service name."""
@@ -281,53 +343,40 @@ class TestCreditCardInlineAuthorize(BuckarooOfficialCommon):
 
 @tagged("post_install", "-at_install")
 class TestCreditCardNoRequestContext(BuckarooOfficialCommon):
-    """Credit card payment should work without an HTTP request context."""
+    """Without an HTTP request there is no selected brand, so redirect raises."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
         cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard.buckaroo_official_creditcard_method = "redirect"
         cls.creditcard.buckaroo_official_creditcard_authorize = "pay"
 
-    def test_no_request_falls_through_to_redirect_pay(self):
-        """Without HTTP request, creditcard should fall through to redirect .pay()."""
+    def test_no_request_pay_raises_without_brand(self):
+        """Redirect pay with no request -> no brand -> ValidationError."""
         tx = self._create_buckaroo_tx(reference="TX-CC-NOREQ-001", payment_method=self.creditcard)
-        client = MagicMock()
-        mock_builder, mock_response = make_mock_sdk_builder()
-
         with (
             patch(
                 "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard.PaymentService"
-            ) as MockPS,
+            ),
             patch("odoo.http.request", None),
         ):
-            MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.creditcard._buckaroo_create_payment(tx, client)
+            with self.assertRaises(ValidationError):
+                self.creditcard._buckaroo_create_payment(tx, MagicMock())
 
-        # Should fall through to base .pay(), not crash
-        mock_builder.pay.assert_called_once()
-        self.assertEqual(result, mock_response)
-
-    def test_no_request_falls_through_to_redirect_authorize(self):
-        """Without HTTP request, creditcard authorize should use redirect .authorize()."""
+    def test_no_request_authorize_raises_without_brand(self):
+        """Redirect authorize with no request -> no brand -> ValidationError."""
         self.creditcard.buckaroo_official_creditcard_authorize = "authorize"
         tx = self._create_buckaroo_tx(reference="TX-CC-NOREQ-AUTH", payment_method=self.creditcard)
-        client = MagicMock()
-        mock_builder, mock_response = make_mock_sdk_builder()
-
         with (
             patch(
                 "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard.PaymentService"
-            ) as MockPS,
+            ),
             patch("odoo.http.request", None),
         ):
-            MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.creditcard._buckaroo_create_payment(tx, client)
-
-        mock_builder.authorize.assert_called_once()
-        mock_builder.payWithToken.assert_not_called()
-        self.assertEqual(result, mock_response)
+            with self.assertRaises(ValidationError):
+                self.creditcard._buckaroo_create_payment(tx, MagicMock())
 
 
 @tagged("post_install", "-at_install")

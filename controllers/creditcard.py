@@ -23,9 +23,14 @@ class CreditCardPaymentPortal(PaymentPortal):
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
         hf_session_id = kwargs.pop("buckaroo_hf_session_id", None)
         hf_service = kwargs.pop("buckaroo_hf_service", None)
+        cc_brand = kwargs.pop("buckaroo_cc_brand", None)
         if hf_session_id:
             request.session["buckaroo_hf_session_id"] = hf_session_id
             request.session["buckaroo_hf_service"] = hf_service or ""
+        if cc_brand and isinstance(cc_brand, str) and len(cc_brand) <= 64:
+            # Format guard only; the authoritative whitelist check against the
+            # configured brands happens in payment_method_creditcard.
+            request.session["buckaroo_cc_brand"] = cc_brand
         return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
 

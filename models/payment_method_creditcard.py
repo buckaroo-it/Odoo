@@ -45,14 +45,35 @@ class PaymentMethodCreditCard(models.Model):
             return "authorize"
         return super()._buckaroo_get_payment_action()
 
-    def _buckaroo_create_payment(self, transaction, client):
-        """Credit card flow: 4-way routing on redirect/inline x pay/authorize.
+    def _buckaroo_creditcard_redirect_brands(self):
+        """Active card brands offered by the redirect checkout selector.
 
-        Flows:
-        1. Redirect + pay       -> .pay()
-        2. Redirect + authorize -> .authorize()
-        3. Inline + pay         -> .payWithToken() with HF session
-        4. Inline + authorize   -> .authorizeWithToken() with HF session
+        Buckaroo has no generic ``creditcard`` service - every Pay/Authorize
+        names a specific brand, so the customer chooses one in checkout. Several
+        brand records share one SDK service (V PAY, Carte Bancaire and others all
+        run on ``Visa``), so dedupe by service while keeping the first display
+        name. Returns ``[{"service": ..., "label": ...}, ...]``.
+        """
+        self.ensure_one()
+        brands = {}
+        for brand in self.brand_ids.filtered(
+            lambda b: b.active and b.buckaroo_official_sdk_service_name
+        ):
+            brands.setdefault(brand.buckaroo_official_sdk_service_name, brand.name)
+        return [{"service": service, "label": label} for service, label in brands.items()]
+
+    def _buckaroo_create_payment(self, transaction, client):
+        """Credit card flow: routing on redirect/inline x pay/authorize.
+
+        - Inline + pay        -> payWithToken() with the Hosted Fields session
+        - Inline + authorize  -> authorizeWithToken() with the Hosted Fields session
+        - Redirect + pay      -> pay() with the brand chosen in checkout
+        - Redirect + authorize -> authorize() with the brand chosen in checkout
+
+        The SDK service name is always ``creditcard``; the concrete card brand
+        (from the Hosted Fields session inline, or the checkout dropdown on
+        redirect) is passed in ``params["brand"]``. Buckaroo then redirects to
+        that brand's hosted card-entry page.
         """
         self.ensure_one()
         if self.code != "buckaroo_creditcard":
@@ -62,23 +83,38 @@ class PaymentMethodCreditCard(models.Model):
 
         hf_session_id = request.session.pop("buckaroo_hf_session_id", None) if request else None
         hf_service = request.session.pop("buckaroo_hf_service", None) if request else None
+        cc_brand = request.session.pop("buckaroo_cc_brand", None) if request else None
         authorize = self.buckaroo_official_creditcard_authorize
 
         params = self._buckaroo_get_payment_params(transaction)
-        if hf_session_id and hf_service:
-            params["brand"] = hf_service
 
-        builder = PaymentService(client).create_payment(
-            self.buckaroo_official_sdk_service_name,
-            params,
-        )
-
+        # Inline (Hosted Fields): the client-side session supplies the brand.
         if hf_session_id:
+            if hf_service:
+                params["brand"] = hf_service
+                # Persist the brand now so a later refund/capture has it even if
+                # the Buckaroo push omits the service code.
+                transaction.buckaroo_official_service_code = hf_service
+            builder = PaymentService(client).create_payment(
+                self.buckaroo_official_sdk_service_name,
+                params,
+            )
             builder.add_parameter("SessionId", hf_session_id)
             if authorize == "authorize":
                 return builder.authorizeWithToken()
             return builder.payWithToken()
 
+        # Redirect: the customer picked a card brand in checkout. Validate it
+        # against the configured brands before using it as the service name.
+        allowed = {b["service"] for b in self._buckaroo_creditcard_redirect_brands()}
+        if cc_brand not in allowed:
+            raise ValidationError(_("Please select a valid card type."))
+        params["brand"] = cc_brand
+        transaction.buckaroo_official_service_code = cc_brand
+        builder = PaymentService(client).create_payment(
+            self.buckaroo_official_sdk_service_name,
+            params,
+        )
         if authorize == "authorize":
             return builder.authorize()
         return builder.pay()
