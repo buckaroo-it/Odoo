@@ -7,16 +7,16 @@ from odoo.addons.website_sale.controllers.cart import Cart
 from .express_wallet import BuckarooWalletExpressMixin
 
 
-class BuckarooGooglepayExpressController(BuckarooWalletExpressMixin, Cart):
+class BuckarooApplepayExpressController(BuckarooWalletExpressMixin, Cart):
     @http.route(
-        "/shop/buckaroo/googlepay/express_init",
+        "/shop/buckaroo/applepay/express_init",
         type="jsonrpc",
         auth="public",
         methods=["POST"],
         website=True,
         sitemap=False,
     )
-    def googlepay_express_init(
+    def applepay_express_init(
         self,
         product_id=None,
         qty=None,

@@ -2,13 +2,19 @@
 
 import { _t } from "@web/core/l10n/translation";
 import { loadJS } from "@web/core/assets";
-import { ConfirmationDialog } from '@web/core/confirmation_dialog/confirmation_dialog';
 import { rpc } from '@web/core/network/rpc';
-import { redirect } from '@web/core/utils/urls';
 import { patch } from '@web/core/utils/patch';
 import { registry } from '@web/core/registry';
 import { PaymentForm } from '@payment/interactions/payment_form';
 import { ExpressCheckout } from '@payment/interactions/express_checkout';
+import {
+    bindProductCart,
+    displayWalletError,
+    finalizeExpressTransaction,
+    isDuplicatePlacement,
+    snapshotProductDom,
+    truthyData,
+} from '@payment_buckaroo_official/js/express_wallet_utils';
 
 const GOOGLE_PAY_JS_URL = 'https://pay.google.com/gp/p/js/pay.js';
 
@@ -29,7 +35,7 @@ export function buildGooglePayRequest(config, context) {
     if (!countryCode) {
         throw new Error('Missing countryCode for Google Pay request.');
     }
-    return {
+    const request = {
         apiVersion: 2,
         apiVersionMinor: 0,
         allowedPaymentMethods: [{
@@ -58,6 +64,14 @@ export function buildGooglePayRequest(config, context) {
         shippingAddressRequired: Boolean(context?.shippingRequired),
         emailRequired: Boolean(context?.emailRequired),
     };
+    if (context?.shippingRequired) {
+        // Show the delivery-method selector in the sheet and route its changes
+        // through `onPaymentDataChanged` (set on the express PaymentsClient).
+        request.shippingAddressParameters = { phoneNumberRequired: false };
+        request.shippingOptionRequired = true;
+        request.callbackIntents = ['SHIPPING_ADDRESS', 'SHIPPING_OPTION'];
+    }
+    return request;
 }
 
 function _gpExtractTokenAndName(paymentData) {
@@ -83,29 +97,82 @@ function _gpExtractAddress(address, fallbackEmail) {
     };
 }
 
-function _gpDisplayError(interaction, message) {
-    interaction.services.dialog.add(ConfirmationDialog, {
-        title: _t("Error"),
-        body: message,
-    });
+// Google's mid-sheet callback only exposes a redacted address (country, zip,
+// locality, region) - enough to rate the carriers.
+function _gpRedactedAddress(address) {
+    if (!address) return {};
+    return {
+        country: address.countryCode || '',
+        zip: address.postalCode || '',
+        city: address.locality || '',
+        state: address.administrativeArea || '',
+    };
 }
 
-// Variant changes are not tracked via events; upstream `view_item_event`
-// is GA-gated. Read fresh DOM at click time instead.
-function _gpSnapshotProductDom() {
-    const main = document.querySelector('.js_main_product')
-        || document.querySelector('#product_detail');
-    if (!main) return null;
-    const productInput = main.querySelector('input.product_id, input[name="product_id"]');
-    const qtyInput = main.querySelector('input[name="add_qty"]');
-    const priceEl = main.querySelector('.product_price .oe_currency_value');
-    const productId = parseInt(productInput?.value || '0');
-    const qty = parseInt(qtyInput?.value || '1') || 1;
-    const rawPrice = (priceEl?.textContent || '').trim().replace(/\s+/g, '').replace(/,/g, '.');
-    const unitPrice = parseFloat(rawPrice);
-    if (!Number.isFinite(productId) || productId <= 0) return null;
-    if (!Number.isFinite(unitPrice) || unitPrice <= 0) return null;
-    return { productId, qty: Math.max(qty, 1), unitPrice };
+function _gpTransactionInfo(interaction, total) {
+    return {
+        countryCode: interaction._gpCountryCode || '',
+        currencyCode: (interaction.paymentContext.currencyName || '').toUpperCase(),
+        totalPriceStatus: 'FINAL',
+        totalPrice: parseFloat(total || 0).toFixed(2),
+        totalPriceLabel: _t('Total'),
+    };
+}
+
+// Fires while the sheet is open: on address pick it needs the serviceable
+// carriers, on method switch it needs the new total. Same Buckaroo routes the
+// Apple Pay shipping callbacks use; money math stays server-side.
+async function _gpOnPaymentDataChanged(interaction, intermediate) {
+    if (intermediate.callbackTrigger === 'SHIPPING_OPTION') {
+        let resp;
+        try {
+            resp = await rpc('/shop/buckaroo/wallet/set_method', {
+                dm_id: intermediate.shippingOptionData?.id,
+            });
+        } catch (error) {
+            console.error('Google Pay shipping method update failed:', error);
+            return { error: {
+                reason: 'OTHER_ERROR',
+                message: _t("Could not update the delivery method."),
+                intent: 'SHIPPING_OPTION',
+            } };
+        }
+        return { newTransactionInfo: _gpTransactionInfo(interaction, resp.amount) };
+    }
+    let resp;
+    try {
+        resp = await rpc('/shop/buckaroo/wallet/shipping_address', {
+            partial_delivery_address: _gpRedactedAddress(intermediate.shippingAddress),
+        });
+    } catch (error) {
+        console.error('Google Pay shipping address update failed:', error);
+        return { error: {
+            reason: 'SHIPPING_ADDRESS_UNSERVICEABLE',
+            message: _t("Could not load delivery methods for this address."),
+            intent: 'SHIPPING_ADDRESS',
+        } };
+    }
+    const methods = resp.delivery_methods || [];
+    if (!methods.length) {
+        return { error: {
+            reason: 'SHIPPING_ADDRESS_UNSERVICEABLE',
+            message: _t("No delivery method is available for this address."),
+            intent: 'SHIPPING_ADDRESS',
+        } };
+    }
+    const shippingOptions = methods.map((m) => ({
+        id: String(m.id),
+        label: m.name,
+        description: '',
+    }));
+    return {
+        newShippingOptionParameters: {
+            // Odoo preselects the cheapest server-side; mirror that here.
+            defaultSelectedOptionId: shippingOptions[0].id,
+            shippingOptions,
+        },
+        newTransactionInfo: _gpTransactionInfo(interaction, resp.amount),
+    };
 }
 
 patch(PaymentForm.prototype, {
@@ -235,8 +302,21 @@ async function _gpMountButton(interaction, container, providerData) {
     }
 
     const env = container.dataset.environment === 'PRODUCTION' ? 'PRODUCTION' : 'TEST';
+    // Cart-page deliverable carts get the in-sheet shipping selector; the
+    // product page has no cart yet, so it keeps the address-only flow.
+    const shippingRequired = container.dataset.placement !== 'product'
+        && !!interaction.paymentContext.shippingInfoRequired;
+    interaction._gpCountryCode = container.dataset.countryCode || '';
     if (!interaction._gpClient) {
-        interaction._gpClient = new google.payments.api.PaymentsClient({ environment: env });
+        const clientOptions = { environment: env };
+        if (shippingRequired) {
+            // Required whenever the request sets callbackIntents, else Google throws.
+            clientOptions.paymentDataCallbacks = {
+                onPaymentDataChanged: (intermediate) =>
+                    _gpOnPaymentDataChanged(interaction, intermediate),
+            };
+        }
+        interaction._gpClient = new google.payments.api.PaymentsClient(clientOptions);
     }
     const paymentsClient = interaction._gpClient;
     const config = {
@@ -276,6 +356,9 @@ async function _gpMountButton(interaction, container, providerData) {
         ),
         buttonType: 'buy',
         buttonSizeMode: 'fill',
+        // 8px radius matches the shared wallet-button geometry (wallet_buttons.css);
+        // the container's 40px height drives the filled button height.
+        buttonRadius: 8,
         buttonColor: container.dataset.buttonStyle === 'white' ? 'white' : 'black',
     });
     container.replaceChildren(button);
@@ -287,9 +370,9 @@ async function _gpExpressClick(interaction, paymentsClient, buildRequest, provid
     let snapshot = null;
     let request;
     if (isProduct) {
-        snapshot = _gpSnapshotProductDom();
+        snapshot = snapshotProductDom();
         if (!snapshot) {
-            _gpDisplayError(interaction, _t(
+            displayWalletError(interaction, _t(
                 "Could not read the product details. Please reload the page and try again.",
             ));
             return;
@@ -305,7 +388,7 @@ async function _gpExpressClick(interaction, paymentsClient, buildRequest, provid
     } catch (error) {
         if (error?.statusCode !== 'CANCELED') {
             console.error('Google Pay loadPaymentData failed:', error);
-            _gpDisplayError(interaction, _t(
+            displayWalletError(interaction, _t(
                 "Google Pay payment could not be processed. Please try again.",
             ));
         }
@@ -314,29 +397,13 @@ async function _gpExpressClick(interaction, paymentsClient, buildRequest, provid
 
     // Bind the variant to a cart only after the popup returns: the
     // finalize step needs a transaction route and partner id.
-    if (isProduct) {
-        let payload;
-        try {
-            payload = await rpc('/shop/buckaroo/googlepay/express_init', {
-                product_id: snapshot.productId,
-                qty: snapshot.qty,
-            });
-        } catch (error) {
-            console.error('Google Pay express init failed:', error);
-            _gpDisplayError(interaction, _t("Google Pay could not start. Please try again."));
-            return;
-        }
-        Object.assign(interaction.paymentContext, {
-            amount: payload.amount,
-            minorAmount: payload.minor_amount,
-            currencyName: String(payload.currency_code || '').toUpperCase(),
-            partnerId: payload.partner_id,
-            transactionRoute: payload.transaction_route,
-            expressCheckoutRoute: payload.express_checkout_route,
-            shippingInfoRequired: !!payload.shipping_info_required,
-            accessToken: payload.access_token,
-            landingRoute: payload.landing_route || '/shop/payment/validate',
-        });
+    if (isProduct && !(await bindProductCart(
+        interaction,
+        '/shop/buckaroo/googlepay/express_init',
+        snapshot,
+        _t("Google Pay could not start. Please try again."),
+    ))) {
+        return;
     }
 
     await _gpFinalize(interaction, paymentData, providerData, paymentMethodId);
@@ -345,7 +412,7 @@ async function _gpExpressClick(interaction, paymentsClient, buildRequest, provid
 async function _gpFinalize(interaction, paymentData, providerData, paymentMethodId) {
     const { token, customerName, billing, shipping } = _gpExtractTokenAndName(paymentData);
     if (!token || !customerName) {
-        _gpDisplayError(interaction, _t(
+        displayWalletError(interaction, _t(
             "Google Pay returned an incomplete response. Please try again.",
         ));
         return;
@@ -356,60 +423,21 @@ async function _gpFinalize(interaction, paymentData, providerData, paymentMethod
     if (interaction.paymentContext.shippingInfoRequired && shipping?.name) {
         addresses.shipping_address = _gpExtractAddress(shipping, email);
     }
-
-    let partnerId;
-    try {
-        partnerId = await interaction.waitFor(rpc(
-            interaction.paymentContext.expressCheckoutRoute, addresses,
-        ));
-    } catch (error) {
-        console.error('Google Pay address update RPC failed:', error);
-        _gpDisplayError(interaction, _t("Address update failed. Please try again."));
-        return;
+    const shipOptId = paymentData?.shippingOptionData?.id;
+    if (shipOptId) {
+        // Re-apply the picked carrier so its cost is in the order total Buckaroo charges.
+        addresses.shipping_option = { id: String(shipOptId) };
     }
-    const parsedPartnerId = parseInt(partnerId);
-    if (!Number.isFinite(parsedPartnerId)) {
-        console.error('Google Pay address update returned invalid partner id:', partnerId);
-        _gpDisplayError(interaction, _t("Address update failed. Please try again."));
-        return;
-    }
-    interaction.paymentContext.partnerId = parsedPartnerId;
-
-    let processingValues;
-    try {
-        processingValues = await interaction.waitFor(rpc(
-            interaction.paymentContext.transactionRoute,
-            {
-                provider_id: parseInt(providerData.providerId),
-                // Override framework default of payment_method_unknown so
-                // backend dispatches to the googlepay branch.
-                payment_method_id: paymentMethodId,
-                token_id: null,
-                flow: 'direct',
-                tokenization_requested: false,
-                landing_route: interaction.paymentContext.landingRoute,
-                access_token: interaction.paymentContext.accessToken,
-                csrf_token: odoo.csrf_token,
-                buckaroo_googlepay_token: token,
-                buckaroo_googlepay_customer_name: customerName,
-            },
-        ));
-    } catch (error) {
-        console.error('Google Pay transaction RPC failed:', error);
-        _gpDisplayError(interaction, _t(
-            "Google Pay payment could not be processed. Please try again.",
-        ));
-        return;
-    }
-
-    // Buckaroo redirect-based flow: tx returns api_url to its hosted
-    // page. Cross-origin so use `window.location.assign` (Odoo's
-    // `redirect()` blocks foreign origins).
-    if (processingValues?.api_url) {
-        window.location.assign(processingValues.api_url);
-        return;
-    }
-    redirect('/payment/status');
+    await finalizeExpressTransaction(interaction, {
+        providerId: providerData.providerId,
+        paymentMethodId,
+        addresses,
+        txExtra: {
+            buckaroo_googlepay_token: token,
+            buckaroo_googlepay_customer_name: customerName,
+        },
+        txError: _t("Google Pay payment could not be processed. Please try again."),
+    });
 }
 
 patch(ExpressCheckout.prototype, {
@@ -423,12 +451,11 @@ patch(ExpressCheckout.prototype, {
             await super._prepareExpressCheckoutForm(...arguments);
             return;
         }
-        // Some themes render multiple express placements per page
-        // (cart sidebar + shorter_cart_summary); keep only the first.
-        const all = document.querySelectorAll(
-            'form[name="o_payment_express_checkout_form"] div[name="o_express_checkout_container"][data-merchant-guid]'
-        );
-        if (all.length > 1 && all[0] !== container) {
+        // Keep only the first cart button when a theme renders the express form twice.
+        if (isDuplicatePlacement(
+            container,
+            'form[name="o_payment_express_checkout_form"] div[name="o_express_checkout_container"][data-merchant-guid]',
+        )) {
             container.style.display = 'none';
             return;
         }
@@ -444,11 +471,7 @@ export class BuckarooGooglePayProductExpress extends ExpressCheckout {
 
     setup() {
         this.paymentContext = { ...this.el.dataset };
-        // dataset values are strings; "False" is truthy via `!!`.
-        this.paymentContext.shippingInfoRequired = (
-            this.paymentContext.shippingInfoRequired === 'True'
-            || this.paymentContext.shippingInfoRequired === 'true'
-        );
+        this.paymentContext.shippingInfoRequired = truthyData(this.paymentContext.shippingInfoRequired);
     }
 
     async willStart() {

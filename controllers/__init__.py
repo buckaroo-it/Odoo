@@ -10,3 +10,7 @@ from . import riverty
 from . import fee
 from . import googlepay
 from . import express_googlepay
+from . import applepay
+from . import express_applepay
+from . import express_shipping
+from . import express_checkout

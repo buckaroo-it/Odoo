@@ -7,7 +7,7 @@
         <field name="sequence">350</field>
         <field name="redirect_form_view_id" ref="payment_buckaroo_official.redirect_form"/>
         <field name="express_checkout_form_view_id"
-               ref="payment_buckaroo_official.googlepay_express_form"/>
+               ref="payment_buckaroo_official.buckaroo_express_checkout_form"/>
         <field name="allow_express_checkout">True</field>
         <field name="module_id" ref="base.module_payment_buckaroo_official"/>
         <field name="payment_method_ids"

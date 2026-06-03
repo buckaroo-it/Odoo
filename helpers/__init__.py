@@ -2,3 +2,4 @@
 
 from . import articles
 from . import customer
+from . import wallet

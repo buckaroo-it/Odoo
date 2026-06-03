@@ -1,0 +1,79 @@
+/* Shared geometry for Buckaroo wallet buttons (Google Pay + Apple Pay).
+ * Unifies size, shape and spacing across every render site (checkout inline
+ * + cart/product express). Each wallet keeps its own brand fill; only the
+ * geometry below is shared. Canonical tokens: 40px height, 8px radius,
+ * full container width. Google Pay fills this box (buttonSizeMode 'fill' +
+ * buttonRadius:8 in JS); Apple Pay is sized via its custom properties.
+ *
+ * Height is 40px because Google Pay enforces a 40px minimum and ignores a
+ * shorter container. Apple Pay scales its label with the button height and
+ * exposes no font-size knob, so a 40px Apple button outsizes Google Pay's
+ * capped label. To match both the box size AND the label size, the Apple
+ * button is rendered at 32px (the height where the two labels coincide) and
+ * centered inside the shared 40px box; the box carries the brand fill so the
+ * gap above/below reads as part of a full 40px pill. */
+.o_buckaroo_wallet_button {
+    width: 100%;
+    height: 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    /* Wallet buttons render as inline-level elements; the inherited line-height
+     * leaves a phantom descender gap below them (worst in Safari, where each is
+     * an iframe). Zeroing it makes the rendered box flush with the 40px container
+     * so both wallets sit at identical height. Ref: woocommerce/woocommerce#64005. */
+    line-height: 0;
+}
+
+.o_buckaroo_wallet_button > * {
+    display: block;
+}
+
+/* Center the shorter (32px) Apple button in the 40px box and paint the brand
+ * fill, so the visible pill matches Google Pay's height while the label stays
+ * the same size. White Apple buttons swap the fill to white to stay seamless. */
+.o_buckaroo_wallet_button:has(> apple-pay-button) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #000;
+}
+
+.o_buckaroo_wallet_button:has(> apple-pay-button[buttonstyle="white"]) {
+    background: #fff;
+}
+
+.o_buckaroo_wallet_button apple-pay-button {
+    --apple-pay-button-width: 100%;
+    --apple-pay-button-height: 32px;
+    --apple-pay-button-border-radius: 8px;
+}
+
+/* Apple hover overlay - reproduces Google Pay's native hover (the black button
+ * lightens to ~#3c4043). Google does this inside its own iframe; Apple gets a
+ * matching translucent layer on top of the pill. pointer-events:none keeps the
+ * button clickable, and there is no transition so it snaps on like Google's. */
+.o_buckaroo_wallet_button:has(> apple-pay-button)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.o_buckaroo_wallet_button:has(> apple-pay-button):hover::after {
+    background: rgba(255, 255, 255, .22);
+}
+
+.o_buckaroo_wallet_button:has(> apple-pay-button[buttonstyle="white"]):hover::after {
+    background: rgba(0, 0, 0, .06);
+}
+
+/* Focus cue (keyboard tab / after click), static. Apple Pay draws no focus
+ * ring of its own, so it gets this one; Google Pay already rings itself from
+ * inside its iframe, so it is excluded to avoid a double outline. :focus-within
+ * because focus lands on the inner Apple button, not the container. */
+.o_buckaroo_wallet_button:has(> apple-pay-button):focus-within {
+    outline: 2px solid #0a84ff;
+    outline-offset: 2px;
+}

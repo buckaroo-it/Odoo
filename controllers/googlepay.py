@@ -1,10 +1,10 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-import re
-
 from odoo.http import request, route
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
+
+from ..helpers.wallet import sanitize_customer_name, sanitize_token
 
 
 class GooglepayPaymentPortal(PaymentPortal):
@@ -22,8 +22,8 @@ class GooglepayPaymentPortal(PaymentPortal):
         if pm.code != "buckaroo_googlepay":
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
-        token = self._buckaroo_sanitize_token(kwargs.pop("buckaroo_googlepay_token", None))
-        customer_name = self._buckaroo_sanitize_customer_name(
+        token = sanitize_token(kwargs.pop("buckaroo_googlepay_token", None))
+        customer_name = sanitize_customer_name(
             kwargs.pop("buckaroo_googlepay_customer_name", None)
         )
         if token:
@@ -31,21 +31,3 @@ class GooglepayPaymentPortal(PaymentPortal):
         if customer_name:
             request.session["buckaroo_googlepay_customer_name"] = customer_name
         return super().shop_payment_transaction(order_id, access_token, **kwargs)
-
-    @staticmethod
-    def _buckaroo_sanitize_token(value):
-        if value is None:
-            return None
-        cleaned = str(value).strip()
-        if not cleaned:
-            return None
-        return cleaned[:8192]
-
-    @staticmethod
-    def _buckaroo_sanitize_customer_name(value):
-        if value is None:
-            return None
-        cleaned = re.sub(r"[\x00-\x1F\x7F]", "", str(value)).strip()
-        if not cleaned:
-            return None
-        return cleaned[:128]

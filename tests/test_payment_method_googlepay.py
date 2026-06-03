@@ -491,9 +491,11 @@ class TestGooglepayExpressCheckoutCapability(BuckarooOfficialCommon):
     def test_buckaroo_provider_has_express_checkout_form_view(self):
         view = self.buckaroo.express_checkout_form_view_id
         self.assertTrue(view)
+        # The provider points at the combined wrapper, which renders every
+        # Buckaroo wallet's express form (Google Pay + Apple Pay).
         self.assertEqual(
             view.xml_id,
-            "payment_buckaroo_official.googlepay_express_form",
+            "payment_buckaroo_official.buckaroo_express_checkout_form",
         )
 
     def test_buckaroo_provider_allows_express_checkout_by_default(self):
@@ -698,7 +700,7 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
 
         with (
             patch(
-                "odoo.addons.payment_buckaroo_official.controllers.express_googlepay.request",
+                "odoo.addons.payment_buckaroo_official.controllers.express_wallet.request",
                 new=fake_req,
             ),
             patch.object(
@@ -827,10 +829,11 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
         self.assertNotIn("kwargs", sig.parameters)
 
     def test_real_cart_add_charges_chosen_variant(self):
-        # Integration test: hit the real `_cart_add` (no mock cart) with
-        # a variant product and assert the resulting SOL has the variant
-        # we asked for. Catches regressions where the endpoint silently
-        # ignores variant params and charges the wrong product line.
+        # Integration test: hit the real `_cart_add` (no mock cart) with a
+        # variant product and assert the dedicated express order carries the
+        # variant we asked for - while the shopper's existing cart is left
+        # untouched. Catches regressions where the endpoint ignores variant
+        # params, or where the buy-now leaks into (or charges) the real cart.
         attribute = self.env["product.attribute"].create(
             {
                 "name": "GP Test Color",
@@ -880,19 +883,28 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
         controller = BuckarooGooglepayExpressController()
 
         fake_req = MagicMock()
+        # The shopper's pre-existing cart, which the buy-now must not touch.
         fake_req.cart = order
         fake_req.env = self.env
         fake_req.website = website
+        # `_prepare_sale_order_values` (used to build the dedicated express
+        # order) reads these off the request.
+        fake_req.fiscal_position = self.env["account.fiscal.position"]
+        fake_req.pricelist = self.env["product.pricelist"].search([], limit=1)
 
         import odoo.http
 
         with (
             patch(
-                "odoo.addons.payment_buckaroo_official.controllers.express_googlepay.request",
+                "odoo.addons.payment_buckaroo_official.controllers.express_wallet.request",
                 new=fake_req,
             ),
             patch(
                 "odoo.addons.website_sale.controllers.cart.request",
+                new=fake_req,
+            ),
+            patch(
+                "odoo.addons.website_sale.models.website.request",
                 new=fake_req,
             ),
             patch.object(
@@ -903,7 +915,7 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
             patch.object(
                 BuckarooGooglepayExpressController,
                 "_get_express_shop_payment_values",
-                return_value={"amount": order.amount_total},
+                side_effect=lambda o, **kw: {"amount": o.amount_total},
             ),
         ):
             result = controller.googlepay_express_init(
@@ -912,9 +924,13 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
             )
 
         self.assertIsInstance(result, dict)
-        self.assertEqual(len(order.order_line), 1)
-        self.assertEqual(order.order_line.product_id, blue_variant)
-        self.assertEqual(order.order_line.product_uom_qty, 3)
+        # The buy-now built its own order (now `request.cart`); the variant and
+        # quantity land there, not on the shopper's pre-existing cart.
+        express_order = fake_req.cart
+        self.assertNotEqual(express_order, order)
+        self.assertFalse(order.order_line, "Existing cart must stay untouched.")
+        self.assertEqual(express_order.order_line.product_id, blue_variant)
+        self.assertEqual(express_order.order_line.product_uom_qty, 3)
 
     def test_anonymous_user_returns_payload_with_public_partner_sentinel(self):
         result, add_to_cart_mock, _ = self._call_endpoint(

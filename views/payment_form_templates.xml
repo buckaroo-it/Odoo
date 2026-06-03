@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <template id="buckaroo_express_checkout_form"
+              name="Buckaroo Express Checkout Form">
+        <!-- Single express form view for the provider; renders every
+             Buckaroo wallet that has an express button (each gates on its
+             own config + show-on-cart flag). -->
+        <t t-call="payment_buckaroo_official.googlepay_express_form"/>
+        <t t-call="payment_buckaroo_official.applepay_express_form"/>
+    </template>
+
     <template id="payment_method_form_buckaroo_surcharge"
               inherit_id="payment.method_form">
         <xpath expr="//label[@t-out='pm_sudo.name']" position="attributes">

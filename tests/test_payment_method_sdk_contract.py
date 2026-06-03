@@ -453,3 +453,44 @@ class TestBaseMethodsSdkContract(BuckarooOfficialCommon):
         self.assertEqual(call[0][0], "bancontact")
         builder.cancelAuthorize.assert_called_once()
         builder.add_parameter.assert_not_called()
+
+
+@tagged("post_install", "-at_install")
+class TestApplepaySdkContract(BuckarooOfficialCommon):
+    """Apple Pay pay path must hit the `applepay` service with token params."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
+        cls.buckaroo.payment_method_ids = [Command.link(cls.applepay.id)]
+
+    def test_applepay_pay_sends_payment_data_and_customer_name_to_applepay_service(self):
+        tx = self._create_buckaroo_tx(
+            reference="TX-AP-MX-PAY",
+            payment_method=self.applepay,
+        )
+        client = MagicMock()
+        mock_builder, _ = make_mock_sdk_builder()
+
+        with _patched_payment_service(
+            "odoo.addons.payment_buckaroo_official.models.payment_method_applepay"
+        ) as MockPS:
+            MockPS.return_value.create_payment.return_value = mock_builder
+            _invoke_verb(
+                self.applepay,
+                "pay",
+                tx,
+                client,
+                session={
+                    "buckaroo_applepay_token": "ap-tok",
+                    "buckaroo_applepay_customer_name": "Grace Hopper",
+                },
+            )
+
+        call = MockPS.return_value.create_payment.call_args
+        self.assertEqual(call[0][0], "applepay")
+        param_names = [c[0][0] for c in mock_builder.add_parameter.call_args_list]
+        self.assertIn("PaymentData", param_names)
+        self.assertIn("CustomerCardName", param_names)
+        mock_builder.pay.assert_called_once()
