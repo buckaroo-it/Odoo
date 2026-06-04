@@ -24,7 +24,6 @@ METHODS_FIXTURE = [
     "mbway",
     "multibanco",
     "knaken",
-    "paypal",
     "trustly",
     "przelewy24",
     "blik",

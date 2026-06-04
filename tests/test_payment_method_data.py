@@ -158,6 +158,9 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
         self.env.ref(
             "payment_buckaroo_official.payment_method_applepay"
         ).buckaroo_official_applepay_merchant_guid = "test_merchant_guid"
+        self.env.ref(
+            "payment_buckaroo_official.payment_method_paypal"
+        ).buckaroo_official_paypal_merchant_id = "test_merchant_id"
         self.env.flush_all()
 
         nl_partner = self.env["res.partner"].create(

@@ -12,5 +12,7 @@ from . import googlepay
 from . import express_googlepay
 from . import applepay
 from . import express_applepay
+from . import paypal
+from . import express_paypal
 from . import express_shipping
 from . import express_checkout

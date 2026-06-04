@@ -8,6 +8,7 @@
              own config + show-on-cart flag). -->
         <t t-call="payment_buckaroo_official.googlepay_express_form"/>
         <t t-call="payment_buckaroo_official.applepay_express_form"/>
+        <t t-call="payment_buckaroo_official.paypal_express_form"/>
     </template>
 
     <template id="payment_method_form_buckaroo_surcharge"

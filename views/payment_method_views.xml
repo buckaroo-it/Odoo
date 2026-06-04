@@ -58,6 +58,17 @@
                     <field name="buckaroo_official_applepay_show_on_checkout"/>
                     <field name="buckaroo_official_applepay_button_style"/>
                 </group>
+                <group string="PayPal Express Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_paypal'">
+                    <field name="buckaroo_official_paypal_merchant_id"/>
+                    <field name="buckaroo_official_paypal_sandbox_merchant_id"/>
+                </group>
+                <group string="PayPal Express Placement &amp; Display"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_paypal'">
+                    <field name="buckaroo_official_paypal_show_on_product"/>
+                    <field name="buckaroo_official_paypal_show_on_cart"/>
+                    <field name="buckaroo_official_paypal_show_on_checkout"/>
+                </group>
             </field>
         </field>
     </record>
