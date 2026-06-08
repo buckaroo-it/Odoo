@@ -36,6 +36,7 @@ DEFAULT_PAYMENT_METHOD_CODES = [
     "buckaroo_riverty",
     "buckaroo_creditcard",
     "buckaroo_bank_transfer",
+    "buckaroo_paypermail",
 ]
 
 # Buckaroo status code groupings — addon-owned mapping, kept in sync

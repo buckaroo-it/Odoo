@@ -1534,3 +1534,56 @@ msgstr "iDEAL | Wero"
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
 msgid "using the bank details below."
 msgstr "met de onderstaande bankgegevens."
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
+msgid "<option value=\"\">Prefer not to say</option>"
+msgstr "Liever niet zeggen"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_paypermail_gender__2
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
+msgid "Female"
+msgstr "Vrouw"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
+msgid "Gender (optional)"
+msgstr "Geslacht (optioneel)"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_paypermail_gender__1
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
+msgid "Male"
+msgstr "Man"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_paypermail
+msgid "Pay Per Email"
+msgstr "Pay Per Email"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_partner__buckaroo_paypermail_gender
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_users__buckaroo_paypermail_gender
+msgid "Pay Per Email Gender"
+msgstr "Geslacht"
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_paypermail.py:0
+msgid ""
+"Pay Per Email cannot be refunded until the paid method is known. The push "
+"that records the actual payment method has not arrived yet."
+msgstr "Pay Per Email kan niet worden terugbetaald totdat de gebruikte betaalmethode bekend is. De push die de werkelijke betaalmethode registreert, is nog niet ontvangen."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_paypermail.py:0
+msgid "Pay Per Email paid via %s."
+msgstr "Pay Per Email betaald via %s."
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_paypermail_gender
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_users__buckaroo_paypermail_gender
+msgid "Saved from the last Pay Per Email checkout to prefill on next order."
+msgstr "Bewaard bij de laatste Pay Per Email-afrekening om bij de volgende order vooraf in te vullen."

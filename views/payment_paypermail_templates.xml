@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Pay Per Email: optional gender selection inside the inline form.
+         Buckaroo PPE accepts CustomerGender 1=Male, 2=Female; an empty choice
+         is valid (the invitation defaults it to 0=Unknown). Prefilled from the
+         logged-in user's partner on subsequent orders. -->
+    <template id="paypermail_inline_form"
+              name="Buckaroo Pay Per Email Inline Form"
+              inherit_id="payment.method_form">
+        <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
+            <t t-if="pm_sudo.code == 'buckaroo_paypermail'">
+                <t t-set="paypermail_saved_gender"
+                   t-value="(not request.env.user._is_public()) and request.env.user.partner_id.buckaroo_paypermail_gender or ''"/>
+                <div class="mt-2">
+                    <label class="form-label mb-1"
+                           for="o_buckaroo_paypermail_gender">
+                        Gender (optional)
+                    </label>
+                    <select class="form-select o_buckaroo_paypermail_gender"
+                            id="o_buckaroo_paypermail_gender"
+                            name="o_buckaroo_paypermail_gender">
+                        <option value="">Prefer not to say</option>
+                        <option value="1"
+                                t-att-selected="paypermail_saved_gender == '1'">Male</option>
+                        <option value="2"
+                                t-att-selected="paypermail_saved_gender == '2'">Female</option>
+                    </select>
+                </div>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

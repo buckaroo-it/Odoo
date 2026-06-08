@@ -1552,3 +1552,56 @@ msgstr "iDEAL | Wero"
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
 msgid "using the bank details below."
 msgstr "unter Verwendung der unten stehenden Bankdaten."
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
+msgid "<option value=\"\">Prefer not to say</option>"
+msgstr "Keine Angabe"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_paypermail_gender__2
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
+msgid "Female"
+msgstr "Weiblich"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
+msgid "Gender (optional)"
+msgstr "Geschlecht (optional)"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_paypermail_gender__1
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
+msgid "Male"
+msgstr "Männlich"
+
+#. module: payment_buckaroo_official
+#: model:payment.method,name:payment_buckaroo_official.payment_method_paypermail
+msgid "Pay Per Email"
+msgstr "Pay Per Email"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_partner__buckaroo_paypermail_gender
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_res_users__buckaroo_paypermail_gender
+msgid "Pay Per Email Gender"
+msgstr "Geschlecht"
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_paypermail.py:0
+msgid ""
+"Pay Per Email cannot be refunded until the paid method is known. The push "
+"that records the actual payment method has not arrived yet."
+msgstr "Pay Per Email kann nicht erstattet werden, solange die verwendete Zahlungsmethode nicht bekannt ist. Die Push-Benachrichtigung mit der tatsächlichen Zahlungsmethode ist noch nicht eingegangen."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_method_paypermail.py:0
+msgid "Pay Per Email paid via %s."
+msgstr "Pay Per Email bezahlt über %s."
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_partner__buckaroo_paypermail_gender
+#: model:ir.model.fields,help:payment_buckaroo_official.field_res_users__buckaroo_paypermail_gender
+msgid "Saved from the last Pay Per Email checkout to prefill on next order."
+msgstr "Bei der letzten Pay Per Email-Bestellung gespeichert, um beim nächsten Auftrag vorausgefüllt zu werden."

@@ -60,7 +60,8 @@ def make_mock_sdk_builder():
     """Return (mock_builder, mock_response) for patching PaymentService.
 
     The builder has stubs for pay, refund, authorize, reserve, payWithToken,
-    authorizeWithToken, capture, cancelAuthorize, and cancelReservation.
+    authorizeWithToken, capture, cancelAuthorize, cancelReservation, and
+    execute_action.
     """
     mock_response = make_mock_response()
     mock_builder = MagicMock()
@@ -73,6 +74,7 @@ def make_mock_sdk_builder():
     mock_builder.capture.return_value = mock_response
     mock_builder.cancelAuthorize.return_value = mock_response
     mock_builder.cancelReservation.return_value = mock_response
+    mock_builder.execute_action.return_value = mock_response
     return mock_builder, mock_response
 
 

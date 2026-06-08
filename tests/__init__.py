@@ -23,6 +23,7 @@ from . import test_payment_method_googlepay
 from . import test_payment_method_applepay
 from . import test_payment_method_paypal
 from . import test_payment_method_paypal_express
+from . import test_payment_method_paypermail
 from . import test_payment_method_sdk_contract
 from . import test_transaction_model_dispatch
 from . import test_account_move_refund

@@ -11,6 +11,7 @@ from . import payment_method_riverty
 from . import payment_method_googlepay
 from . import payment_method_applepay
 from . import payment_method_paypal
+from . import payment_method_paypermail
 from . import payment_transaction
 from . import sale_order
 from . import account_move

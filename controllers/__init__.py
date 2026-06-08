@@ -6,6 +6,7 @@ from . import giftcard
 from . import billink
 from . import in3
 from . import klarna
+from . import paypermail
 from . import riverty
 from . import fee
 from . import googlepay

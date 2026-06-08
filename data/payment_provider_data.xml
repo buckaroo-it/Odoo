@@ -39,6 +39,7 @@
                    ref('payment_buckaroo_official.payment_method_riverty'),
                    ref('payment_buckaroo_official.payment_method_bank_transfer'),
                    ref('payment_buckaroo_official.payment_method_creditcard'),
+                   ref('payment_buckaroo_official.payment_method_paypermail'),
                    ref('payment_buckaroo_official.payment_method_giftcard'),
                    ref('payment_buckaroo_official.payment_method_brand_vvvgiftcard'),
                    ref('payment_buckaroo_official.payment_method_brand_fashioncheque'),

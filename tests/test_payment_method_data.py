@@ -96,6 +96,7 @@ METHOD_DATA = [
         },
     ),
     ("riverty", {"EUR"}, {"NL", "BE", "DE", "AT", "FI"}),
+    ("paypermail", {"EUR"}, set()),
 ]
 
 
@@ -158,9 +159,13 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
         self.env.ref(
             "payment_buckaroo_official.payment_method_applepay"
         ).buckaroo_official_applepay_merchant_guid = "test_merchant_guid"
-        self.env.ref(
-            "payment_buckaroo_official.payment_method_paypal"
-        ).buckaroo_official_paypal_merchant_id = "test_merchant_id"
+        # PayPal shows on checkout only when configured for the provider's mode
+        # and flagged on. The provider runs in test mode (reads the sandbox id),
+        # and show_on_checkout can be off on upgraded records, so set both.
+        paypal = self.env.ref("payment_buckaroo_official.payment_method_paypal")
+        paypal.buckaroo_official_paypal_merchant_id = "test_merchant_id"
+        paypal.buckaroo_official_paypal_sandbox_merchant_id = "test_sandbox_merchant_id"
+        paypal.buckaroo_official_paypal_show_on_checkout = True
         self.env.flush_all()
 
         nl_partner = self.env["res.partner"].create(
