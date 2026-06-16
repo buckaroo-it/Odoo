@@ -2,11 +2,19 @@
 
 {
     "name": "Payment Provider: Buckaroo Official",
-    "version": "1.0",
+    "version": "19.0.1.0.0",
     "category": "Accounting/Payment Providers",
     "sequence": 350,
     "summary": "An official Buckaroo payment provider for Odoo 19.",
-    "description": " ",
+    "description": """
+Buckaroo Payment Provider
+=========================
+
+Accept payments in Odoo through Buckaroo, with 30+ payment methods across Europe:
+iDEAL, Bancontact, credit cards, PayPal, Klarna, in3, Riverty, Billink, Apple Pay,
+Google Pay, gift cards and more. Includes express checkout, refunds from Odoo,
+authorize & capture, Pay Per Email and optional payment surcharges.
+""",
     "depends": ["payment", "website_sale", "account_payment"],
     "external_dependencies": {
         "python": ["buckaroo"],
@@ -51,8 +59,11 @@
             "payment_buckaroo_official/static/src/js/payment_form_surcharge.js",
         ],
     },
+    "images": ["static/description/cover.png"],
     "post_init_hook": "post_init_hook",
     "uninstall_hook": "uninstall_hook",
     "author": "Buckaroo",
+    "website": "https://www.buckaroo.eu/",
+    "support": "support@buckaroo.nl",
     "license": "LGPL-3",
 }
