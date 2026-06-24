@@ -59,7 +59,10 @@ class BuckarooOfficialController(http.Controller):
             remainder_tx = tx_sudo._buckaroo_split_remainder_push(parsed)
             target = remainder_tx or tx_sudo
             target._process("buckaroo_official", parsed)
-            if remainder_tx and remainder_tx.state == "done":
-                # Spawned siblings skip the framework's status-poll route, so
-                # post-processing won't fire on its own.
-                remainder_tx._post_process()
+            # A push confirms the payment server-to-server and never reaches
+            # /payment/status, so the framework's status-poll never post-processes
+            # it; account.payment would otherwise only appear after the 10-min
+            # cron. Post-process inline instead (also covers spawned siblings,
+            # which skip the poll route too).
+            if target.state in ("done", "authorized", "cancel") and not target.is_post_processed:
+                target._post_process()
