@@ -190,9 +190,14 @@ msgid "Brand"
 msgstr "Marque"
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_provider__code__buckaroo_official
+msgid "Buckaroo"
+msgstr "Buckaroo"
+
+#. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.view_partner_form_buckaroo_official
 msgid "Buckaroo BNPL"
-msgstr "Buckaroo Official"
+msgstr "Buckaroo BNPL"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_max_amount
@@ -210,7 +215,6 @@ msgid "Buckaroo Min Amount (EUR)"
 msgstr "Montant minimum Buckaroo (EUR)"
 
 #. module: payment_buckaroo_official
-#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_provider__code__buckaroo_official
 #: model:payment.provider,name:payment_buckaroo_official.payment_provider_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.payment_method_form_buckaroo_official
 msgid "Buckaroo Official"

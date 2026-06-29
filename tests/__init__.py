@@ -27,3 +27,4 @@ from . import test_payment_method_paypermail
 from . import test_payment_method_sdk_contract
 from . import test_transaction_model_dispatch
 from . import test_account_move_refund
+from . import test_secured_by_notice

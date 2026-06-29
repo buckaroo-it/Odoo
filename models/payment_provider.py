@@ -17,7 +17,7 @@ class PaymentProvider(models.Model):
     _inherit = "payment.provider"
 
     code = fields.Selection(
-        selection_add=[(const.PROVIDER_CODE, "Buckaroo Official")],
+        selection_add=[(const.PROVIDER_CODE, "Buckaroo")],
         ondelete={const.PROVIDER_CODE: "set default"},
     )
     buckaroo_official_website_key = fields.Char(
