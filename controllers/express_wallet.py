@@ -42,9 +42,7 @@ class BuckarooWalletExpressMixin:
         if order._has_deliverable_products() and not order.carrier_id:
             rated = [(m, m.rate_shipment(order)) for m in order._get_delivery_methods()]
             if rated:
-                cheapest, rate = min(
-                    rated, key=lambda mr: mr[1].get("price", float("inf"))
-                )
+                cheapest, rate = min(rated, key=lambda mr: mr[1].get("price", float("inf")))
                 order._set_delivery_method(cheapest, rate=rate)
         return super()._get_express_shop_payment_values(order, **kwargs)
 

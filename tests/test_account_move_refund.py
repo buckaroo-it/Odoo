@@ -134,7 +134,9 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
     def _make_giftcard_tx_for_invoice(self, reference="ACCMOVE-GC-1", amount=50.0):
         giftcard = self.env.ref("payment_buckaroo_official.payment_method_brand_vvvgiftcard")
         self.buckaroo.payment_method_ids = [Command.link(giftcard.id)]
-        return self._add_second_buckaroo_tx(reference=reference, amount=amount, payment_method=giftcard)
+        return self._add_second_buckaroo_tx(
+            reference=reference, amount=amount, payment_method=giftcard
+        )
 
     def test_action_returns_notification_for_multi_giftcard_transactions(self):
         self._make_giftcard_tx_for_invoice()
@@ -143,9 +145,7 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
         def fake_send(self):
             called_on.append(self.source_transaction_id)
 
-        with patch.object(
-            type(self.env["payment.transaction"]), "_send_refund_request", fake_send
-        ):
+        with patch.object(type(self.env["payment.transaction"]), "_send_refund_request", fake_send):
             action = self.credit_note.action_buckaroo_official_refund()
         self.assertEqual(action["type"], "ir.actions.client")
         self.assertEqual(action["tag"], "display_notification")
@@ -167,12 +167,12 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
         def fake_send(self):
             refund_amounts.append(abs(self.amount))
 
-        with patch.object(
-            type(self.env["payment.transaction"]), "_send_refund_request", fake_send
-        ):
+        with patch.object(type(self.env["payment.transaction"]), "_send_refund_request", fake_send):
             self.credit_note.action_buckaroo_official_refund()
         self.assertAlmostEqual(
-            sum(refund_amounts), abs(self.credit_note.amount_total), places=2,
+            sum(refund_amounts),
+            abs(self.credit_note.amount_total),
+            places=2,
         )
 
     def test_existing_refund_tx_does_not_count_as_multi(self):

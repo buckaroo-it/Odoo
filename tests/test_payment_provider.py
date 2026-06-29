@@ -70,9 +70,7 @@ class TestPaymentProvider(BuckarooOfficialCommon):
 
     def test_default_pending_message(self):
         """Buckaroo ships the new default pending message, not the base one."""
-        provider = self.env.ref(
-            "payment_buckaroo_official.payment_provider_buckaroo_official"
-        )
+        provider = self.env.ref("payment_buckaroo_official.payment_provider_buckaroo_official")
         expected = "Your order has been received and is awaiting payment confirmation."
         self.assertIn(expected, provider.pending_msg)
         self.assertNotIn("waiting for approval", provider.pending_msg)

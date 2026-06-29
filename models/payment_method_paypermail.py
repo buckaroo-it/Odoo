@@ -43,10 +43,12 @@ class PaymentMethodPayPerEmail(models.Model):
         # (in display order) rather than every method the merchant is
         # subscribed to; Pay Per Email itself can't pay its own invitation.
         enabled = transaction.provider_id.payment_method_ids.filtered(
-            lambda m: m.active
-            and m.is_primary
-            and m.code != "buckaroo_paypermail"
-            and m.buckaroo_official_sdk_service_name
+            lambda m: (
+                m.active
+                and m.is_primary
+                and m.code != "buckaroo_paypermail"
+                and m.buckaroo_official_sdk_service_name
+            )
         ).sorted("sequence")
         allowed = ",".join(enabled.mapped("buckaroo_official_sdk_service_name"))
         if allowed:
@@ -103,11 +105,7 @@ class PaymentMethodPayPerEmail(models.Model):
             ),
         )
         params = self._buckaroo_get_refund_params(source_tx, refund_tx)
-        return (
-            PaymentService(client)
-            .create_payment(service_name, params)
-            .refund()
-        )
+        return PaymentService(client).create_payment(service_name, params).refund()
 
 
 class ResPartner(models.Model):

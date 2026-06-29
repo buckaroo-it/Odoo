@@ -26,9 +26,7 @@ class ApplepayPaymentPortal(PaymentPortal):
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
         token = sanitize_token(kwargs.pop("buckaroo_applepay_token", None))
-        customer_name = sanitize_customer_name(
-            kwargs.pop("buckaroo_applepay_customer_name", None)
-        )
+        customer_name = sanitize_customer_name(kwargs.pop("buckaroo_applepay_customer_name", None))
         if token:
             request.session["buckaroo_applepay_token"] = token
         if customer_name:

@@ -58,10 +58,12 @@ class AccountMove(models.Model):
             action = self._buckaroo_handle_multi_tx_refund(transactions)
             if action:
                 return action
-            raise UserError(_(
-                "Multiple Buckaroo transactions are linked to this credit "
-                "note. Refund each payment record individually."
-            ))
+            raise UserError(
+                _(
+                    "Multiple Buckaroo transactions are linked to this credit "
+                    "note. Refund each payment record individually."
+                )
+            )
         payment = transactions.payment_id
         if not payment:
             raise UserError(_("No payment record is linked to the Buckaroo transaction."))

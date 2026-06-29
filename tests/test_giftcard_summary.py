@@ -27,12 +27,8 @@ class TestGiftcardSummaryTemplate(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.giftcard = cls.env.ref(
-            "payment_buckaroo_official.payment_method_giftcard"
-        )
-        cls.brand_vvv = cls.env.ref(
-            "payment_buckaroo_official.payment_method_brand_vvvgiftcard"
-        )
+        cls.giftcard = cls.env.ref("payment_buckaroo_official.payment_method_giftcard")
+        cls.brand_vvv = cls.env.ref("payment_buckaroo_official.payment_method_brand_vvvgiftcard")
         cls.buckaroo.payment_method_ids = [
             Command.link(cls.giftcard.id),
             Command.link(cls.brand_vvv.id),
@@ -188,6 +184,7 @@ class TestGiftcardSummaryTemplate(BuckarooOfficialCommon):
         from odoo.addons.website_sale.models.website import (
             CART_SESSION_CACHE_KEY,
         )
+
         order = self._make_order(price=22.0)
         self._add_done_giftcard_tx(order, amount=10.0)
 
@@ -240,6 +237,7 @@ class TestGiftcardSummaryTemplate(BuckarooOfficialCommon):
         from odoo.addons.payment_buckaroo_official.controllers.giftcard import (
             GiftcardPaymentPortal,
         )
+
         controller = GiftcardPaymentPortal()
         controller._validate_transaction_for_order(draft_tx, order)
 

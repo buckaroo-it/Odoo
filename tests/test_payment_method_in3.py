@@ -108,7 +108,8 @@ class TestIn3CreatePaymentDispatch(BuckarooOfficialCommon):
         self.assertEqual(result, mock_response)
 
         billing_call = next(
-            call for call in mock_builder.add_parameter.call_args_list
+            call
+            for call in mock_builder.add_parameter.call_args_list
             if call[0][0] == "billingCustomer"
         )
         billing = billing_call[0][1][0]

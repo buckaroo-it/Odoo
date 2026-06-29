@@ -99,7 +99,10 @@ class PaymentMethodRiverty(models.Model):
 
     def _buckaroo_get_payment_action(self):
         self.ensure_one()
-        if self.code == "buckaroo_riverty" and self.buckaroo_official_riverty_authorize == "authorize":
+        if (
+            self.code == "buckaroo_riverty"
+            and self.buckaroo_official_riverty_authorize == "authorize"
+        ):
             return "authorize"
         return super()._buckaroo_get_payment_action()
 

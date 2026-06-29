@@ -203,9 +203,7 @@ class PaymentMethodPaypal(models.Model):
         if zip_code:
             vals["zip"] = zip_code
         if country_code:
-            country = self.env["res.country"].search(
-                [("code", "=", country_code.upper())], limit=1
-            )
+            country = self.env["res.country"].search([("code", "=", country_code.upper())], limit=1)
             if country:
                 vals["country_id"] = country.id
         normalized_email = email_normalize(email) if email else False
