@@ -523,9 +523,7 @@ class TestApplepayWellKnownRouteHttp(HttpCase):
         with file_open(ApplepayWellKnownController._DOMAIN_ASSOCIATION_FILE) as f:
             expected = f.read()
 
-        resp = self.url_open(
-            "/.well-known/apple-developer-merchantid-domain-association"
-        )
+        resp = self.url_open("/.well-known/apple-developer-merchantid-domain-association")
 
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.headers["Content-Type"].startswith("text/plain"))
@@ -1037,9 +1035,7 @@ class TestApplepayProductExpressIsolation(HttpCase):
             "/shop/buckaroo/applepay/express_init",
             {"product_id": self.product.id, "qty": 1},
         )
-        express = self.env["sale.order"].browse(
-            int(res["transaction_route"].rsplit("/", 1)[1])
-        )
+        express = self.env["sale.order"].browse(int(res["transaction_route"].rsplit("/", 1)[1]))
         partner_id = self._rpc(
             "/shop/buckaroo/wallet/express_checkout",
             {
@@ -1069,9 +1065,7 @@ class TestApplepayProductExpressIsolation(HttpCase):
             "/shop/buckaroo/applepay/express_init",
             {"product_id": self.product.id, "qty": 1},
         )
-        express = self.env["sale.order"].browse(
-            int(res["transaction_route"].rsplit("/", 1)[1])
-        )
+        express = self.env["sale.order"].browse(int(res["transaction_route"].rsplit("/", 1)[1]))
         fp_before, total_before = express.fiscal_position_id, express.amount_total
         # Precondition: the JP address must map to a DIFFERENT fiscal position,
         # otherwise the assertions below would pass vacuously (no flip to pin).

@@ -18,7 +18,12 @@ from odoo.exceptions import ValidationError
 from odoo.fields import Command
 from odoo.tests import tagged
 
-from .common import BuckarooOfficialCommon, make_mock_sdk_builder, parsed_from_form, parsed_from_json
+from .common import (
+    BuckarooOfficialCommon,
+    make_mock_sdk_builder,
+    parsed_from_form,
+    parsed_from_json,
+)
 
 
 def _route_giftcard_push(env, parsed):
@@ -60,9 +65,7 @@ class _GiftcardTestBase(BuckarooOfficialCommon):
         cls.brand_webshop = cls.env.ref(
             "payment_buckaroo_official.payment_method_brand_webshopgiftcard"
         )
-        cls.brand_yourgift = cls.env.ref(
-            "payment_buckaroo_official.payment_method_brand_yourgift"
-        )
+        cls.brand_yourgift = cls.env.ref("payment_buckaroo_official.payment_method_brand_yourgift")
         cls.buckaroo.payment_method_ids = [
             Command.link(cls.giftcard.id),
             Command.link(cls.brand_vvv.id),
@@ -143,21 +146,11 @@ class TestGiftcardParentRedirect(_GiftcardTestBase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref(
-            "payment_buckaroo_official.payment_method_creditcard"
-        )
-        cls.googlepay = cls.env.ref(
-            "payment_buckaroo_official.payment_method_googlepay"
-        )
-        cls.applepay = cls.env.ref(
-            "payment_buckaroo_official.payment_method_applepay"
-        )
-        cls.bank_transfer = cls.env.ref(
-            "payment_buckaroo_official.payment_method_bank_transfer"
-        )
-        cls.brand_visa = cls.env.ref(
-            "payment_buckaroo_official.payment_method_brand_visa"
-        )
+        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
+        cls.googlepay = cls.env.ref("payment_buckaroo_official.payment_method_googlepay")
+        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
+        cls.bank_transfer = cls.env.ref("payment_buckaroo_official.payment_method_bank_transfer")
+        cls.brand_visa = cls.env.ref("payment_buckaroo_official.payment_method_brand_visa")
         cls.brand_mastercard = cls.env.ref(
             "payment_buckaroo_official.payment_method_brand_mastercard"
         )
@@ -203,24 +196,35 @@ class TestGiftcardParentRedirect(_GiftcardTestBase):
         # bank_transfer→"transfer") and code-fallback methods (ideal, bancontact,
         # wero, eps, etc.) — all linked to the buckaroo provider must surface.
         for code in (
-            "creditcard", "googlepay", "applepay", "transfer",
-            "ideal", "bancontact", "wero", "eps", "paypal", "klarna",
+            "creditcard",
+            "googlepay",
+            "applepay",
+            "transfer",
+            "ideal",
+            "bancontact",
+            "wero",
+            "eps",
+            "paypal",
+            "klarna",
         ):
             with self.subTest(code=code):
                 self.assertIn(code, selectable)
 
     def test_selectable_services_reads_sdk_service_name(self):
         provider = self.buckaroo
-        extra_method = self.env["payment.method"].create({
-            "name": "Foobar Fallback",
-            "code": "foobar",
-            "active": True,
-            "buckaroo_official_sdk_service_name": "foobar",
-        })
+        extra_method = self.env["payment.method"].create(
+            {
+                "name": "Foobar Fallback",
+                "code": "foobar",
+                "active": True,
+                "buckaroo_official_sdk_service_name": "foobar",
+            }
+        )
         provider.payment_method_ids = [Command.link(extra_method.id)]
         try:
             csv = self.env["payment.method"]._buckaroo_giftcard_selectable_services(
-                self.giftcard, provider,
+                self.giftcard,
+                provider,
             )
         finally:
             provider.payment_method_ids = [Command.unlink(extra_method.id)]
@@ -317,17 +321,54 @@ class TestGiftcardBrandInline(_GiftcardTestBase):
     def test_inline_uses_brand_specific_param_names(self):
         # (brand_attr, sdk_name, cardnumber, pin, card_param, pin_param)
         cases = [
-            ("brand_fashioncheque", "fashioncheque", "FC-CARD", "1111", "FashionChequeCardNumber", "FashionChequePIN"),
-            ("brand_vvv", "vvvgiftcard", "VVV-CARD", "3333", "IntersolveCardnumber", "IntersolvePIN"),
-            ("brand_boekenbon", "boekenbon", "BB-CARD", "4444", "IntersolveCardnumber", "IntersolvePIN"),
-            ("brand_webshop", "webshopgiftcard", "WSG-CARD", "5555", "IntersolveCardnumber", "IntersolvePIN"),
-            ("brand_yourgift", "yourgift", "YG-CARD", "6666", "IntersolveCardnumber", "IntersolvePIN"),
+            (
+                "brand_fashioncheque",
+                "fashioncheque",
+                "FC-CARD",
+                "1111",
+                "FashionChequeCardNumber",
+                "FashionChequePIN",
+            ),
+            (
+                "brand_vvv",
+                "vvvgiftcard",
+                "VVV-CARD",
+                "3333",
+                "IntersolveCardnumber",
+                "IntersolvePIN",
+            ),
+            (
+                "brand_boekenbon",
+                "boekenbon",
+                "BB-CARD",
+                "4444",
+                "IntersolveCardnumber",
+                "IntersolvePIN",
+            ),
+            (
+                "brand_webshop",
+                "webshopgiftcard",
+                "WSG-CARD",
+                "5555",
+                "IntersolveCardnumber",
+                "IntersolvePIN",
+            ),
+            (
+                "brand_yourgift",
+                "yourgift",
+                "YG-CARD",
+                "6666",
+                "IntersolveCardnumber",
+                "IntersolvePIN",
+            ),
             ("brand_tcs", "tcs", "TCS-CARD", "7777", "TCSCardnumber", "TCSValidationCode"),
         ]
         for brand_attr, sdk_name, cardnumber, pin, card_param, pin_param in cases:
             with self.subTest(brand=sdk_name):
                 tx, params, added = self._run_inline_pay(
-                    getattr(self, brand_attr), cardnumber, pin,
+                    getattr(self, brand_attr),
+                    cardnumber,
+                    pin,
                 )
                 self.assertEqual(params.get("giftcard_name"), sdk_name)
                 self.assertEqual(added.get(card_param), cardnumber)
@@ -347,9 +388,7 @@ class TestGiftcardInlineMissingSession(_GiftcardTestBase):
         cls.giftcard.buckaroo_official_giftcard_method = "inline"
 
     def test_inline_missing_keys_raises_validation_error(self):
-        tx = self._create_buckaroo_tx(
-            reference="TX-GC-MISS-001", payment_method=self.brand_vvv
-        )
+        tx = self._create_buckaroo_tx(reference="TX-GC-MISS-001", payment_method=self.brand_vvv)
         client = MagicMock()
         mock_builder, _ = make_mock_sdk_builder()
 
@@ -434,7 +473,9 @@ class TestGiftcardInlinePartial(_GiftcardTestBase):
 
     def _run_inline_partial(self, response, reference="TX-GC-PART-001", amount=10.00):
         tx = self._create_buckaroo_tx(
-            reference=reference, amount=amount, payment_method=self.brand_vvv,
+            reference=reference,
+            amount=amount,
+            payment_method=self.brand_vvv,
         ).with_context(
             buckaroo_giftcard_cardnumber="VVV-PART-001",
             buckaroo_giftcard_pin="1234",
@@ -471,7 +512,9 @@ class TestGiftcardInlinePartial(_GiftcardTestBase):
         # exposes root ``amount_debit`` = 5.00 strictly less than tx.amount
         # = 10.00 — that's the actually-drawn slice, not the requested.
         response = _make_partial_response(
-            consumed=None, remainder=None, amount_debit_root=5.00,
+            consumed=None,
+            remainder=None,
+            amount_debit_root=5.00,
         )
         tx, _ = self._run_inline_partial(response, reference="TX-GC-PART-ROOT-001")
         self.assertEqual(tx.amount, 5.00)
@@ -481,10 +524,13 @@ class TestGiftcardInlinePartial(_GiftcardTestBase):
         # Root ``amount_debit`` = 10.00 equals tx.amount: that's the requested
         # amount mirrored back, not the consumed slice. Treat as unknown.
         response = _make_partial_response(
-            consumed=None, remainder=None, amount_debit_root=10.00,
+            consumed=None,
+            remainder=None,
+            amount_debit_root=10.00,
         )
         tx, result = self._run_inline_partial(
-            response, reference="TX-GC-PART-ROOT-EQ-001",
+            response,
+            reference="TX-GC-PART-ROOT-EQ-001",
         )
         # Unknown consumed -> tx left pending, shopper bounced to /shop/payment.
         self.assertTrue(result["api_url"].endswith("/shop/payment"))
@@ -498,7 +544,8 @@ class TestGiftcardInlinePartial(_GiftcardTestBase):
         # async push will populate the consumed amount and mark it done.
         response = _make_partial_response(consumed=None, remainder=None)
         tx = self._create_buckaroo_tx(
-            reference="TX-GC-PART-UNK-001", payment_method=self.brand_vvv,
+            reference="TX-GC-PART-UNK-001",
+            payment_method=self.brand_vvv,
         ).with_context(
             buckaroo_giftcard_cardnumber="VVV-PART-001",
             buckaroo_giftcard_pin="1234",
@@ -530,7 +577,8 @@ class TestGiftcardInlinePartial(_GiftcardTestBase):
         response.status.code.code = 490
         response.get_some_error.return_value = "Card declined"
         tx = self._create_buckaroo_tx(
-            reference="TX-GC-PART-FAIL-001", payment_method=self.brand_vvv,
+            reference="TX-GC-PART-FAIL-001",
+            payment_method=self.brand_vvv,
         ).with_context(
             buckaroo_giftcard_cardnumber="VVV-PART-FAIL",
             buckaroo_giftcard_pin="1234",
@@ -607,9 +655,7 @@ class TestGiftcardInlinePartial(_GiftcardTestBase):
         """Inline mode: the giftcard slice is an independent payment — it KEEPS
         its PBNK so it is refundable from Odoo (unlike redirect, which skips it
         and refunds via Plaza)."""
-        tx = self._gc_tx(
-            "GC-INLINE-PBNK", self.order_total - 10.0, payment_method=self.brand_vvv
-        )
+        tx = self._gc_tx("GC-INLINE-PBNK", self.order_total - 10.0, payment_method=self.brand_vvv)
         self.assertFalse(tx.payment_method_id._buckaroo_skip_payment_creation(tx))
 
 
@@ -627,7 +673,9 @@ class TestGiftcardRedirectModePartial(_GiftcardTestBase):
         # the hook must NOT intercept; the framework follows the redirect.
         response = _make_partial_response(consumed=5.00)
         tx = self._create_buckaroo_tx(
-            reference="TX-GC-RP-001", amount=10.00, payment_method=self.brand_vvv,
+            reference="TX-GC-RP-001",
+            amount=10.00,
+            payment_method=self.brand_vvv,
         )
 
         mock_builder = MagicMock()
@@ -641,7 +689,8 @@ class TestGiftcardRedirectModePartial(_GiftcardTestBase):
 
         # Buckaroo's hosted picker URL is followed, tx amount untouched.
         self.assertEqual(
-            result["api_url"], "https://checkout.buckaroo.nl/remainder/abc123",
+            result["api_url"],
+            "https://checkout.buckaroo.nl/remainder/abc123",
         )
         self.assertEqual(tx.amount, 10.00)
         self.assertNotEqual(tx.state, "done")
@@ -682,9 +731,7 @@ class TestGiftcardNoRedirectInlineSuccess(_GiftcardTestBase):
     """Inline-success no-redirect short-circuit: parent and brand both trigger."""
 
     def test_brand_inline_success_routes_to_payment_status(self):
-        tx = self._create_buckaroo_tx(
-            reference="TX-GC-NR-001", payment_method=self.brand_vvv
-        )
+        tx = self._create_buckaroo_tx(reference="TX-GC-NR-001", payment_method=self.brand_vvv)
         response = MagicMock()
         response.key = "GC_INLINE_KEY"
         response.get_redirect_url.return_value = None
@@ -692,6 +739,7 @@ class TestGiftcardNoRedirectInlineSuccess(_GiftcardTestBase):
         response.required_action = None
 
         from odoo.addons.payment_buckaroo_official.utils import const  # noqa: PLC0415
+
         mock_sc = MagicMock()
         mock_sc.code = const.BuckarooStatusCode.SUCCESS
         mock_st = MagicMock()
@@ -705,9 +753,7 @@ class TestGiftcardNoRedirectInlineSuccess(_GiftcardTestBase):
         self.assertEqual(tx.state, "done")
 
     def test_no_redirect_returns_none_when_not_success(self):
-        tx = self._create_buckaroo_tx(
-            reference="TX-GC-NR-002", payment_method=self.brand_vvv
-        )
+        tx = self._create_buckaroo_tx(reference="TX-GC-NR-002", payment_method=self.brand_vvv)
         response = MagicMock()
         response.key = "GC_PENDING_KEY"
         response.get_redirect_url.return_value = None
@@ -779,7 +825,9 @@ class TestGiftcardRefundParams(_GiftcardTestBase):
         for brand, code in cases:
             with self.subTest(brand=code):
                 source_tx, refund_tx = self._make_source_and_refund(
-                    f"INT-{code}", brand, code,
+                    f"INT-{code}",
+                    brand,
+                    code,
                 )
                 params = brand._buckaroo_get_refund_params(source_tx, refund_tx)
                 sp = params.get("service_parameters", {})
@@ -793,7 +841,9 @@ class TestGiftcardRefundParams(_GiftcardTestBase):
         ]:
             with self.subTest(brand=code):
                 source_tx, refund_tx = self._make_source_and_refund(
-                    f"NONINT-{code}", brand, code,
+                    f"NONINT-{code}",
+                    brand,
+                    code,
                 )
                 params = brand._buckaroo_get_refund_params(source_tx, refund_tx)
                 sp = params.get("service_parameters", {})
@@ -802,7 +852,9 @@ class TestGiftcardRefundParams(_GiftcardTestBase):
 
     def test_intersolve_refund_lastname_falls_back_when_partner_name_blank(self):
         source_tx, refund_tx = self._make_source_and_refund(
-            "INT-BLANKNAME", self.brand_vvv, "vvvgiftcard",
+            "INT-BLANKNAME",
+            self.brand_vvv,
+            "vvvgiftcard",
         )
         source_tx.partner_id.name = ""
         params = self.brand_vvv._buckaroo_get_refund_params(source_tx, refund_tx)
@@ -811,7 +863,9 @@ class TestGiftcardRefundParams(_GiftcardTestBase):
 
     def test_intersolve_refund_omits_email_when_partner_email_blank(self):
         source_tx, refund_tx = self._make_source_and_refund(
-            "INT-NOEMAIL", self.brand_vvv, "vvvgiftcard",
+            "INT-NOEMAIL",
+            self.brand_vvv,
+            "vvvgiftcard",
         )
         source_tx.partner_id.email = False
         params = self.brand_vvv._buckaroo_get_refund_params(source_tx, refund_tx)
@@ -825,7 +879,9 @@ class TestGiftcardRefundParams(_GiftcardTestBase):
         Intersolve LastName/Email by resolving the brand sub-method from
         ``buckaroo_official_service_code``."""
         source_tx, refund_tx = self._make_source_and_refund(
-            "REDIR-VVV", self.giftcard, "vvvgiftcard",
+            "REDIR-VVV",
+            self.giftcard,
+            "vvvgiftcard",
         )
         params = self.giftcard._buckaroo_get_refund_params(source_tx, refund_tx)
         sp = params.get("service_parameters", {})
@@ -835,7 +891,9 @@ class TestGiftcardRefundParams(_GiftcardTestBase):
 
     def test_redirect_mode_refund_skips_intersolve_params_for_non_intersolve_brand(self):
         source_tx, refund_tx = self._make_source_and_refund(
-            "REDIR-FC", self.giftcard, "fashioncheque",
+            "REDIR-FC",
+            self.giftcard,
+            "fashioncheque",
         )
         params = self.giftcard._buckaroo_get_refund_params(source_tx, refund_tx)
         sp = params.get("service_parameters", {})
@@ -861,7 +919,9 @@ class TestGiftcardRefundParams(_GiftcardTestBase):
             }
         )
         source_tx, refund_tx = self._make_source_and_refund(
-            "INT-COMM", self.brand_vvv, "vvvgiftcard",
+            "INT-COMM",
+            self.brand_vvv,
+            "vvvgiftcard",
         )
         source_tx.partner_id = contact.id
         refund_tx.partner_id = contact.id
@@ -993,7 +1053,9 @@ class TestGiftcardPartialPayGuard(_GiftcardTestBase):
         reflects reality.
         """
         tx = self._create_buckaroo_tx(
-            reference="TX-GC-PEND-001", amount=10.80, payment_method=self.brand_vvv,
+            reference="TX-GC-PEND-001",
+            amount=10.80,
+            payment_method=self.brand_vvv,
         )
         tx.provider_reference = "GC_PARTIAL_KEY"
         tx._set_pending()
@@ -1016,7 +1078,9 @@ class TestGiftcardPartialPayGuard(_GiftcardTestBase):
         """If the push amount equals tx.amount, it's the requested amount
         not the consumed slice — don't overwrite tx.amount."""
         tx = self._create_buckaroo_tx(
-            reference="TX-GC-PEND-002", amount=10.80, payment_method=self.brand_vvv,
+            reference="TX-GC-PEND-002",
+            amount=10.80,
+            payment_method=self.brand_vvv,
         )
         tx.provider_reference = "GC_PARTIAL_KEY_2"
         tx._set_pending()
@@ -1171,9 +1235,7 @@ class TestGiftcardNonGiftcardUnaffected(_GiftcardTestBase):
             self.ideal._buckaroo_create_payment(tx, client)
         # The base method must not touch ``builder.add_parameter`` for the
         # giftcard cardnumber / PIN keys — only the giftcard branch does.
-        added_calls = {
-            call[0][0] for call in mock_builder.add_parameter.call_args_list
-        }
+        added_calls = {call[0][0] for call in mock_builder.add_parameter.call_args_list}
         self.assertNotIn("IntersolveCardnumber", added_calls)
         self.assertNotIn("IntersolvePIN", added_calls)
 
@@ -1204,7 +1266,9 @@ class TestGiftcardControllerContextBridge(_GiftcardTestBase):
             ),
         ):
             result = portal.shop_payment_transaction(
-                order_id=1, access_token="tok", **kwargs,
+                order_id=1,
+                access_token="tok",
+                **kwargs,
             )
             return result, super_stub, fake_req
 
@@ -1360,9 +1424,7 @@ class TestGiftcardRemainderCancelDemotesDone(_GiftcardTestBase):
     """
 
     def test_giftcard_remainder_cancel_push_demotes_done_to_cancel(self):
-        tx = self._create_buckaroo_tx(
-            reference="TX-GC-CANCEL-001", payment_method=self.brand_vvv
-        )
+        tx = self._create_buckaroo_tx(reference="TX-GC-CANCEL-001", payment_method=self.brand_vvv)
         tx.provider_reference = "GC_SUCCESS_KEY"
         tx.buckaroo_official_service_code = "vvvgiftcard"
         tx._set_done()
@@ -1381,9 +1443,7 @@ class TestGiftcardRemainderCancelDemotesDone(_GiftcardTestBase):
         self.assertEqual(tx.state, "cancel")
 
     def test_giftcard_remainder_failed_push_demotes_done_to_cancel(self):
-        tx = self._create_buckaroo_tx(
-            reference="TX-GC-CANCEL-002", payment_method=self.brand_vvv
-        )
+        tx = self._create_buckaroo_tx(reference="TX-GC-CANCEL-002", payment_method=self.brand_vvv)
         tx.provider_reference = "GC_SUCCESS_KEY_2"
         tx.buckaroo_official_service_code = "vvvgiftcard"
         tx._set_done()
@@ -1402,9 +1462,7 @@ class TestGiftcardRemainderCancelDemotesDone(_GiftcardTestBase):
         self.assertEqual(tx.state, "cancel")
 
     def test_giftcard_remainder_success_push_keeps_done(self):
-        tx = self._create_buckaroo_tx(
-            reference="TX-GC-CANCEL-003", payment_method=self.brand_vvv
-        )
+        tx = self._create_buckaroo_tx(reference="TX-GC-CANCEL-003", payment_method=self.brand_vvv)
         tx.provider_reference = "GC_SUCCESS_KEY_3"
         tx.buckaroo_official_service_code = "vvvgiftcard"
         tx._set_done()
@@ -1423,9 +1481,7 @@ class TestGiftcardRemainderCancelDemotesDone(_GiftcardTestBase):
         self.assertEqual(tx.state, "done")
 
     def test_giftcard_duplicate_push_with_same_key_still_skipped(self):
-        tx = self._create_buckaroo_tx(
-            reference="TX-GC-CANCEL-004", payment_method=self.brand_vvv
-        )
+        tx = self._create_buckaroo_tx(reference="TX-GC-CANCEL-004", payment_method=self.brand_vvv)
         tx.provider_reference = "GC_SUCCESS_KEY_4"
         tx.buckaroo_official_service_code = "vvvgiftcard"
         tx._set_done()
@@ -1490,14 +1546,10 @@ class TestGiftcardRefundRoutingAllBrands(_GiftcardTestBase):
                     MockPS.return_value.create_payment.return_value = mock_builder
                     brand._buckaroo_create_refund(source_tx, refund_tx, client)
                     MockPS.return_value.create_payment.assert_called_once()
-                    service_arg, params = (
-                        MockPS.return_value.create_payment.call_args[0]
-                    )
+                    service_arg, params = MockPS.return_value.create_payment.call_args[0]
                 self.assertEqual(service_arg, "giftcards")
                 self.assertEqual(params.get("giftcard_name"), code)
-                self.assertEqual(
-                    params.get("original_transaction_key"), f"SRC_KEY_{suffix}"
-                )
+                self.assertEqual(params.get("original_transaction_key"), f"SRC_KEY_{suffix}")
                 self.assertEqual(params.get("refund_amount"), 50.0)
                 mock_builder.refund.assert_called_once()
 
@@ -1506,14 +1558,11 @@ class TestGiftcardRefundRoutingAllBrands(_GiftcardTestBase):
         previously routed via brand code -> DefaultBuilder -> 491 Validation
         failure. Must now route through the ``giftcards`` service builder.
         """
-        source_tx, refund_tx = self._make_pair(
-            "REG-129087", self.brand_boekenbon, "boekenbon"
-        )
+        source_tx, refund_tx = self._make_pair("REG-129087", self.brand_boekenbon, "boekenbon")
         client = MagicMock()
         mock_builder, _ = make_mock_sdk_builder()
         with patch(
-            "odoo.addons.payment_buckaroo_official.models."
-            "payment_method_giftcard.PaymentService"
+            "odoo.addons.payment_buckaroo_official.models.payment_method_giftcard.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
             self.brand_boekenbon._buckaroo_create_refund(source_tx, refund_tx, client)
@@ -1523,13 +1572,9 @@ class TestGiftcardRefundRoutingAllBrands(_GiftcardTestBase):
         mock_builder.refund.assert_called_once()
 
     def test_ideal_refund_does_not_route_through_giftcards_builder(self):
-        source_tx = self._create_buckaroo_tx(
-            reference="SRC-IDEAL-RT", amount=50.0
-        )
+        source_tx = self._create_buckaroo_tx(reference="SRC-IDEAL-RT", amount=50.0)
         source_tx.provider_reference = "SRC_IDEAL_RT_KEY"
-        refund_tx = self._create_buckaroo_tx(
-            reference="REF-IDEAL-RT", amount=-50.0
-        )
+        refund_tx = self._create_buckaroo_tx(reference="REF-IDEAL-RT", amount=-50.0)
         client = MagicMock()
         mock_builder, _ = make_mock_sdk_builder()
         with (
@@ -1538,17 +1583,14 @@ class TestGiftcardRefundRoutingAllBrands(_GiftcardTestBase):
                 "payment_method_giftcard.PaymentService"
             ) as MockGiftPS,
             patch(
-                "odoo.addons.payment_buckaroo_official.models."
-                "payment_method.PaymentService"
+                "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
             ) as MockBasePS,
         ):
             MockBasePS.return_value.create_payment.return_value = mock_builder
             self.ideal._buckaroo_create_refund(source_tx, refund_tx, client)
             MockGiftPS.return_value.create_payment.assert_not_called()
             MockBasePS.return_value.create_payment.assert_called_once()
-            service_arg, params = (
-                MockBasePS.return_value.create_payment.call_args[0]
-            )
+            service_arg, params = MockBasePS.return_value.create_payment.call_args[0]
         self.assertEqual(service_arg, "ideal")
         self.assertNotIn("giftcard_name", params)
         mock_builder.refund.assert_called_once()
@@ -1588,15 +1630,18 @@ class TestGiftcardRedirectModeRemainderPush(_GiftcardTestBase):
 
     def _giftcard_done_tx(self, reference, amount=25.00):
         tx = self._create_buckaroo_tx(
-            reference=reference, amount=amount, payment_method=self.brand_boekenbon,
+            reference=reference,
+            amount=amount,
+            payment_method=self.brand_boekenbon,
         )
         tx.provider_reference = "GC_DONE_KEY"
         tx.buckaroo_official_service_code = "boekenbon"
         tx._set_done()
         return tx
 
-    def _remainder_push(self, reference, amount=38.00, method="ideal",
-                        key="IDEAL_REM_KEY", related="GC_DONE_KEY"):
+    def _remainder_push(
+        self, reference, amount=38.00, method="ideal", key="IDEAL_REM_KEY", related="GC_DONE_KEY"
+    ):
         return parsed_from_form(
             {
                 "brq_invoicenumber": reference,
@@ -1697,7 +1742,8 @@ class TestGiftcardRedirectModeRemainderPush(_GiftcardTestBase):
         the provider, skip the split rather than blowing up."""
         gc_tx = self._giftcard_done_tx("TX-GC-RP-RPSH-007")
         push = self._remainder_push(
-            "TX-GC-RP-RPSH-007", method="not_a_real_buckaroo_service",
+            "TX-GC-RP-RPSH-007",
+            method="not_a_real_buckaroo_service",
         )
         self.assertFalse(gc_tx._buckaroo_split_remainder_push(push))
 
@@ -1834,13 +1880,17 @@ class TestGiftcardPartialRefund690Hint(_GiftcardTestBase):
 
     def _refund_tx(self, reference="R-TX-GC-690-001"):
         source_tx = self._create_buckaroo_tx(
-            reference="TX-GC-690-SRC-001", amount=5.00, payment_method=self.brand_vvv,
+            reference="TX-GC-690-SRC-001",
+            amount=5.00,
+            payment_method=self.brand_vvv,
         )
         source_tx.provider_reference = "GC_PARTIAL_KEY"
         source_tx.buckaroo_official_service_code = "vvvgiftcard"
         source_tx._set_done()
         refund_tx = self._create_buckaroo_tx(
-            reference=reference, amount=-5.00, payment_method=self.brand_vvv,
+            reference=reference,
+            amount=-5.00,
+            payment_method=self.brand_vvv,
         )
         refund_tx.source_transaction_id = source_tx.id
         return refund_tx
@@ -1864,7 +1914,9 @@ class TestGiftcardPartialRefund690Hint(_GiftcardTestBase):
     def test_690_non_refund_operation_keeps_generic_message(self):
         """The hint is scoped to ``refund``; a 690 on capture/void stays generic."""
         tx = self._create_buckaroo_tx(
-            reference="TX-GC-690-CAP-001", amount=5.00, payment_method=self.brand_vvv,
+            reference="TX-GC-690-CAP-001",
+            amount=5.00,
+            payment_method=self.brand_vvv,
         )
         response = self._refund_response_690()
         tx._buckaroo_official_handle_response_status(response, "capture")
@@ -1885,13 +1937,17 @@ class TestGiftcardPartialRefund690Hint(_GiftcardTestBase):
         """H1: the Intersolve hint must NOT fire on a non-Intersolve refund
         (e.g. iDEAL, fashioncheque). Generic message only."""
         source_tx = self._create_buckaroo_tx(
-            reference="TX-IDEAL-690-SRC-001", amount=5.00, payment_method=self.ideal,
+            reference="TX-IDEAL-690-SRC-001",
+            amount=5.00,
+            payment_method=self.ideal,
         )
         source_tx.provider_reference = "IDEAL_KEY"
         source_tx.buckaroo_official_service_code = "ideal"
         source_tx._set_done()
         refund_tx = self._create_buckaroo_tx(
-            reference="R-TX-IDEAL-690-001", amount=-5.00, payment_method=self.ideal,
+            reference="R-TX-IDEAL-690-001",
+            amount=-5.00,
+            payment_method=self.ideal,
         )
         refund_tx.source_transaction_id = source_tx.id
         response = self._refund_response_690()
@@ -2048,9 +2104,7 @@ class TestGiftcardPbnkSuppression(_GiftcardTestBase):
 
     def test_gcr_child_keeps_pbnk(self):
         parent = self._gc_tx("GC-PBNK-PARENT", self.order_total - 10.0)
-        child = self._gc_tx(
-            "GC-PBNK-PARENT-GCR-K", 10.0, payment_method=self.ideal, source=parent
-        )
+        child = self._gc_tx("GC-PBNK-PARENT-GCR-K", 10.0, payment_method=self.ideal, source=parent)
         self.assertFalse(child.payment_method_id._buckaroo_skip_payment_creation(child))
 
     def test_non_giftcard_keeps_pbnk(self):
@@ -2093,6 +2147,11 @@ class TestGiftcardGroupRemainder(_GiftcardTestBase):
     remainder reconcile as one group transaction, with the shopper staying on
     the merchant checkout instead of being sent to Buckaroo's hosted page."""
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.giftcard.buckaroo_official_giftcard_method = "inline"
+
     def test_extract_group_key_reads_pay_remainder_details(self):
         response = _make_partial_response(consumed=5.00, group_key="GROUP-KEY-1")
         self.assertEqual(
@@ -2102,9 +2161,7 @@ class TestGiftcardGroupRemainder(_GiftcardTestBase):
 
     def test_extract_group_key_returns_none_without_details(self):
         response = _make_partial_response(consumed=5.00)
-        self.assertIsNone(
-            self.brand_vvv._buckaroo_extract_group_transaction_key(response)
-        )
+        self.assertIsNone(self.brand_vvv._buckaroo_extract_group_transaction_key(response))
 
     def test_extract_group_key_falls_back_to_related_transaction(self):
         # No PayRemainderDetails, but a RelatedTransactions entry carries the key.
@@ -2116,7 +2173,8 @@ class TestGiftcardGroupRemainder(_GiftcardTestBase):
 
     def test_inline_partial_stores_group_key_on_order(self):
         tx = self._create_buckaroo_tx(
-            reference="TX-GC-GROUP-001", amount=self.order_total,
+            reference="TX-GC-GROUP-001",
+            amount=self.order_total,
             payment_method=self.brand_vvv,
         ).with_context(
             buckaroo_giftcard_cardnumber="VVV-PART-001",
@@ -2131,9 +2189,7 @@ class TestGiftcardGroupRemainder(_GiftcardTestBase):
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
             tx._get_specific_processing_values({})
-        self.assertEqual(
-            self.order.buckaroo_official_group_transaction_key, "GROUP-KEY-2"
-        )
+        self.assertEqual(self.order.buckaroo_official_group_transaction_key, "GROUP-KEY-2")
 
     def test_remainder_group_key_empty_for_giftcard_leg(self):
         self.order.buckaroo_official_group_transaction_key = "GROUP-KEY-3"
@@ -2143,9 +2199,7 @@ class TestGiftcardGroupRemainder(_GiftcardTestBase):
     def test_remainder_group_key_returned_for_remainder_leg(self):
         self.order.buckaroo_official_group_transaction_key = "GROUP-KEY-4"
         rem_tx = self._gc_tx("TX-GC-GROUP-REM", 60.0, payment_method=self.ideal)
-        self.assertEqual(
-            rem_tx._buckaroo_giftcard_remainder_group_key(), "GROUP-KEY-4"
-        )
+        self.assertEqual(rem_tx._buckaroo_giftcard_remainder_group_key(), "GROUP-KEY-4")
 
     def test_remainder_leg_creates_pay_remainder_with_group_key(self):
         self.order.buckaroo_official_group_transaction_key = "GROUP-KEY-5"
@@ -2159,9 +2213,7 @@ class TestGiftcardGroupRemainder(_GiftcardTestBase):
             MockPS.return_value.create_payment.return_value = mock_builder
             self.ideal._buckaroo_create_payment(rem_tx, client)
 
-        mock_builder.pay_remainder.assert_called_once_with(
-            original_transaction_key="GROUP-KEY-5"
-        )
+        mock_builder.pay_remainder.assert_called_once_with(original_transaction_key="GROUP-KEY-5")
         mock_builder.pay.assert_not_called()
 
     def test_order_without_group_key_uses_plain_pay(self):

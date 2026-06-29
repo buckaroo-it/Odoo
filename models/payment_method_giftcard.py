@@ -103,20 +103,13 @@ class PaymentMethodGiftcard(models.Model):
 
         amount = kwargs.get("amount")
         if amount is None and kwargs.get("sale_order_id"):
-            order = (
-                self.env["sale.order"]
-                .sudo()
-                .browse(kwargs["sale_order_id"])
-                .exists()
-            )
+            order = self.env["sale.order"].sudo().browse(kwargs["sale_order_id"]).exists()
             if order:
                 amount = order.amount_total
         if amount is not None:
             unfiltered = surfaced
             surfaced = surfaced.filtered(
-                lambda pm: pm._buckaroo_official_is_amount_compatible(
-                    amount, buckaroo_provider_ids
-                )
+                lambda pm: pm._buckaroo_official_is_amount_compatible(amount, buckaroo_provider_ids)
             )
             payment_utils.add_to_report(
                 report,
@@ -147,13 +140,11 @@ class PaymentMethodGiftcard(models.Model):
         """Comma-joined SDK service codes the gateway picker offers: brand
         sub-methods first, then other active top-level methods on the provider."""
         brand_codes = [
-            m.buckaroo_official_sdk_service_name
-            for m in primary.brand_ids.filtered("active")
+            m.buckaroo_official_sdk_service_name for m in primary.brand_ids.filtered("active")
         ]
         other_codes = [
             m.buckaroo_official_sdk_service_name
-            for m in provider.payment_method_ids
-            .filtered("active")
+            for m in provider.payment_method_ids.filtered("active")
             .filtered(lambda m: not m.primary_payment_method_id)
             .filtered(lambda m: m.id != primary.id)
         ]
@@ -170,7 +161,8 @@ class PaymentMethodGiftcard(models.Model):
 
         if not self.primary_payment_method_id:
             params["services_selectable_by_client"] = self._buckaroo_giftcard_selectable_services(
-                primary, transaction.provider_id,
+                primary,
+                transaction.provider_id,
             )
             return PaymentService(client).create_payment("giftcards", params).pay_redirect()
 
@@ -370,11 +362,14 @@ class PaymentMethodGiftcard(models.Model):
         return PaymentService(client).create_payment("giftcards", params).refund()
 
     def _buckaroo_require_giftcard_brand(self, source_tx):
-        return self._buckaroo_require_service_code(source_tx, _(
-            "Giftcard brand unknown on the original transaction. The "
-            "original may have been recorded before service-code "
-            "tracking was enabled."
-        ))
+        return self._buckaroo_require_service_code(
+            source_tx,
+            _(
+                "Giftcard brand unknown on the original transaction. The "
+                "original may have been recorded before service-code "
+                "tracking was enabled."
+            ),
+        )
 
     def _buckaroo_extract_amount_data(self, transaction, payment_data):
         # Partial-pay slices are intentionally < tx.amount.
@@ -633,14 +628,16 @@ class AccountMoveGiftcard(models.Model):
         }
         sum_available = sum(available.values())
         if currency.compare_amounts(sum_available, remaining) < 0:
-            raise UserError(_(
-                "Credit note %(cn)s exceeds the total available for refund "
-                "on linked Buckaroo transactions (%(avail)s). Some legs may "
-                "already be refunded or in error. Refund individual payments "
-                "from the payment record instead.",
-                cn=currency.format(remaining),
-                avail=currency.format(sum_available),
-            ))
+            raise UserError(
+                _(
+                    "Credit note %(cn)s exceeds the total available for refund "
+                    "on linked Buckaroo transactions (%(avail)s). Some legs may "
+                    "already be refunded or in error. Refund individual payments "
+                    "from the payment record instead.",
+                    cn=currency.format(remaining),
+                    avail=currency.format(sum_available),
+                )
+            )
         ordered = transactions.sorted(lambda t: available.get(t.id, 0.0), reverse=True)
         refunded_txs_sudo = self.env["payment.transaction"].sudo()
         for tx in ordered:
@@ -651,9 +648,7 @@ class AccountMoveGiftcard(models.Model):
                 continue
             take = min(tx_available, remaining)
             refunded_txs_sudo |= (
-                tx.sudo()
-                .with_context(payment_backend_action=True)
-                ._refund(amount_to_refund=take)
+                tx.sudo().with_context(payment_backend_action=True)._refund(amount_to_refund=take)
             )
             remaining = currency.round(remaining - take)
         return refunded_txs_sudo._build_action_feedback_notification()

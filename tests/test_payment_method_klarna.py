@@ -803,9 +803,7 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
         mock_response = make_mock_sdk_response(190)
 
         with (
-            patch.object(
-                PaymentMethod, "_buckaroo_create_capture", return_value=mock_response
-            ),
+            patch.object(PaymentMethod, "_buckaroo_create_capture", return_value=mock_response),
             patch.object(
                 type(tx.provider_id),
                 "_buckaroo_official_get_client",

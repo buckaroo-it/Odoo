@@ -437,9 +437,7 @@ class PaymentMethod(models.Model):
         # a capture child (operation copies parent's, so filter out refunds).
         # Not atomic: a concurrent admin Capture + Plaza push could both pass
         # this check and spawn duplicate capture children. Single-writer assumed.
-        if transaction.child_transaction_ids.filtered(
-            lambda t: t.operation != "refund"
-        ):
+        if transaction.child_transaction_ids.filtered(lambda t: t.operation != "refund"):
             return None
         child_amount = payment_data.amount or transaction.amount
         return transaction._create_child_transaction(child_amount)
@@ -476,9 +474,7 @@ class PaymentMethod(models.Model):
         # "Latest wins" assumes a single full capture (support_manual_capture is
         # full_only). Mixed Odoo+Plaza partial captures are out of scope.
         capture_child = source_tx.child_transaction_ids.filtered(
-            lambda t: t.state == "done"
-            and t.operation != "refund"
-            and t.provider_reference
+            lambda t: t.state == "done" and t.operation != "refund" and t.provider_reference
         ).sorted("id")[-1:]
         if capture_child:
             return capture_child.provider_reference

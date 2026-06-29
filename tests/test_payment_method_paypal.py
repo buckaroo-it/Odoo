@@ -306,9 +306,7 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
 
     def test_non_paypal_method_delegates_to_base(self):
         tx = self._create_buckaroo_tx(reference="TX-IDEAL-NR")
-        result = self.ideal._buckaroo_handle_no_redirect_response(
-            tx, make_mock_sdk_response(190)
-        )
+        result = self.ideal._buckaroo_handle_no_redirect_response(tx, make_mock_sdk_response(190))
         self.assertIsNone(result)
 
 
@@ -328,15 +326,11 @@ class TestPaypalMerchantIdAndConfig(BuckarooOfficialCommon):
 
     def test_merchant_id_is_sandbox_in_test_mode(self):
         self.buckaroo.state = "test"
-        self.assertEqual(
-            self.paypal._buckaroo_paypal_merchant_id_for(self.buckaroo), "SANDBOX-MID"
-        )
+        self.assertEqual(self.paypal._buckaroo_paypal_merchant_id_for(self.buckaroo), "SANDBOX-MID")
 
     def test_merchant_id_is_live_in_enabled_mode(self):
         self.buckaroo.state = "enabled"
-        self.assertEqual(
-            self.paypal._buckaroo_paypal_merchant_id_for(self.buckaroo), "LIVE-MID"
-        )
+        self.assertEqual(self.paypal._buckaroo_paypal_merchant_id_for(self.buckaroo), "LIVE-MID")
 
     def test_configured_requires_matching_mode_id(self):
         self.buckaroo.state = "test"

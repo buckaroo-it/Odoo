@@ -83,9 +83,7 @@ class TestPayPerEmailCreatePayment(BuckarooOfficialCommon):
 
     def test_single_word_name_falls_back_to_first_for_last_name(self):
         # Buckaroo requires CustomerLastName; a mononym partner must not send "".
-        mononym = self.env["res.partner"].create(
-            {"name": "Madonna", "email": "madonna@example.nl"}
-        )
+        mononym = self.env["res.partner"].create({"name": "Madonna", "email": "madonna@example.nl"})
         tx = self._create_tx(reference="TX-PPE-MONONYM")
         tx.partner_id = mononym
         client = MagicMock()

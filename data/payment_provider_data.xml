@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<odoo noupdate="0">
+<odoo>
+
+  <data noupdate="0">
 
     <record id="payment_provider_buckaroo_official" model="payment.provider">
         <field name="name">Buckaroo Official</field>
@@ -50,5 +52,15 @@
                    ref('payment_buckaroo_official.payment_method_brand_yourgift'),
                ])]"/>
     </record>
+
+  </data>
+
+  <data noupdate="1">
+
+    <record id="payment_provider_buckaroo_official" model="payment.provider">
+        <field name="pending_msg" type="html"><p>Your order has been received and is awaiting payment confirmation.</p></field>
+    </record>
+
+  </data>
 
 </odoo>

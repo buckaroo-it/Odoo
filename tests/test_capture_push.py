@@ -34,8 +34,13 @@ def _capture_push(reference, txn_key, amount="100.00"):
 
 def _route_push(env, parsed):
     """Drive the same split + process path the webhook controller runs."""
-    tx_sudo = env["payment.transaction"].sudo()._search_by_reference(
-        "buckaroo_official", parsed,
+    tx_sudo = (
+        env["payment.transaction"]
+        .sudo()
+        ._search_by_reference(
+            "buckaroo_official",
+            parsed,
+        )
     )
     if not tx_sudo:
         return None
@@ -177,12 +182,8 @@ class TestKlarnaCapturePush(BuckarooOfficialCommon):
 
         posted = []
         with (
-            patch(
-                "odoo.addons.payment_buckaroo_official.controllers.main.verify_signature"
-            ),
-            patch.object(
-                PaymentTransaction, "_post_process", lambda self: posted.append(self)
-            ),
+            patch("odoo.addons.payment_buckaroo_official.controllers.main.verify_signature"),
+            patch.object(PaymentTransaction, "_post_process", lambda self: posted.append(self)),
         ):
             BuckarooOfficialController._handle_push(req)
 
@@ -238,9 +239,7 @@ class TestCreditCardCapturePush(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref(
-            "payment_buckaroo_official.payment_method_creditcard"
-        )
+        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
         cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
         cls.creditcard.buckaroo_official_creditcard_authorize = "authorize"
 

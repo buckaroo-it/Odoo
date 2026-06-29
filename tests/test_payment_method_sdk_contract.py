@@ -154,7 +154,9 @@ class TestCreditcardSdkContract(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            _invoke_verb(self.creditcard, "pay", tx, client, session={"buckaroo_cc_brand": self.brand})
+            _invoke_verb(
+                self.creditcard, "pay", tx, client, session={"buckaroo_cc_brand": self.brand}
+            )
 
         self._assert_service_name(MockPS)
         mock_builder.pay.assert_called_once()
@@ -175,7 +177,9 @@ class TestCreditcardSdkContract(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            _invoke_verb(self.creditcard, "authorize", tx, client, session={"buckaroo_cc_brand": self.brand})
+            _invoke_verb(
+                self.creditcard, "authorize", tx, client, session={"buckaroo_cc_brand": self.brand}
+            )
 
         self._assert_service_name(MockPS)
         mock_builder.authorize.assert_called_once()

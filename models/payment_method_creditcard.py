@@ -41,7 +41,10 @@ class PaymentMethodCreditCard(models.Model):
     def _buckaroo_get_payment_action(self):
         """Return 'authorize' for creditcard when configured; else delegate."""
         self.ensure_one()
-        if self.code == "buckaroo_creditcard" and self.buckaroo_official_creditcard_authorize == "authorize":
+        if (
+            self.code == "buckaroo_creditcard"
+            and self.buckaroo_official_creditcard_authorize == "authorize"
+        ):
             return "authorize"
         return super()._buckaroo_get_payment_action()
 
@@ -136,8 +139,11 @@ class PaymentMethodCreditCard(models.Model):
     def _buckaroo_require_card_brand(self, source_tx):
         # Brand is written only on the root (authorize/pay) tx; capture/void
         # and refund chained off a capture must walk up source_transaction_id.
-        return self._buckaroo_require_service_code(source_tx, _(
-            "Card brand unknown on the original transaction. The "
-            "authorization may have been created before service code "
-            "tracking was enabled."
-        ))
+        return self._buckaroo_require_service_code(
+            source_tx,
+            _(
+                "Card brand unknown on the original transaction. The "
+                "authorization may have been created before service code "
+                "tracking was enabled."
+            ),
+        )

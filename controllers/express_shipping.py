@@ -118,10 +118,14 @@ class BuckarooWalletShippingController(Delivery):
                 # No carrier for a service-only order (mirrors the gate in
                 # `_get_express_shop_payment_values`): shipping the real cart
                 # can't charge would diverge the total and Buckaroo rejects.
-                methods = sorted(
-                    self._get_delivery_methods_express_checkout(order).items(),
-                    key=lambda item: item[1],
-                ) if order._has_deliverable_products() else []
+                methods = (
+                    sorted(
+                        self._get_delivery_methods_express_checkout(order).items(),
+                        key=lambda item: item[1],
+                    )
+                    if order._has_deliverable_products()
+                    else []
+                )
                 result = {
                     "delivery_methods": [
                         {"id": carrier.id, "name": carrier.name, "amount": currency.round(price)}

@@ -48,14 +48,18 @@ class TestPaypalProductExpressInitController(BuckarooOfficialCommon):
         fake_req.env = fake_env
 
         controller = BuckarooPaypalExpressController()
-        payload = express_payload if express_payload is not None else {
-            "amount": 12.34,
-            "minor_amount": 1234,
-            "currency": mock_cart.currency_id,
-            "partner_id": 7,
-            "transaction_route": "/shop/payment/transaction/99",
-            "shipping_info_required": False,
-        }
+        payload = (
+            express_payload
+            if express_payload is not None
+            else {
+                "amount": 12.34,
+                "minor_amount": 1234,
+                "currency": mock_cart.currency_id,
+                "partner_id": 7,
+                "transaction_route": "/shop/payment/transaction/99",
+                "shipping_info_required": False,
+            }
+        )
         import odoo.http
 
         with (
