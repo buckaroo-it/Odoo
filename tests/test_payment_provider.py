@@ -67,3 +67,13 @@ class TestPaymentProvider(BuckarooOfficialCommon):
         with self.assertRaises(UserError) as ctx:
             self.buckaroo._buckaroo_official_get_client()
         self.assertIn("disabled", str(ctx.exception).lower())
+
+    def test_default_pending_message(self):
+        """Buckaroo ships the new default pending message, not the base one."""
+        provider = self.env.ref(
+            "payment_buckaroo_official.payment_provider_buckaroo_official"
+        )
+        expected = "Your order has been received and is awaiting payment confirmation."
+        self.assertIn(expected, provider.pending_msg)
+        self.assertNotIn("waiting for approval", provider.pending_msg)
+        self.assertEqual(provider._get_status_message("pending"), provider.pending_msg)

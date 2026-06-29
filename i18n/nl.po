@@ -1491,8 +1491,8 @@ msgstr "Uw betaling is geannuleerd."
 
 #. module: payment_buckaroo_official
 #: model_terms:payment.provider,pending_msg:payment_buckaroo_official.payment_provider_buckaroo_official
-msgid "Your payment has been processed but is waiting for approval."
-msgstr "Uw betaling is verwerkt maar wacht op goedkeuring."
+msgid "Your order has been received and is awaiting payment confirmation."
+msgstr "Uw bestelling is ontvangen en wacht op betalingsbevestiging."
 
 #. module: payment_buckaroo_official
 #: model_terms:payment.provider,done_msg:payment_buckaroo_official.payment_provider_buckaroo_official
