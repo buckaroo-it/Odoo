@@ -2147,6 +2147,11 @@ class TestGiftcardGroupRemainder(_GiftcardTestBase):
     remainder reconcile as one group transaction, with the shopper staying on
     the merchant checkout instead of being sent to Buckaroo's hosted page."""
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.giftcard.buckaroo_official_giftcard_method = "inline"
+
     def test_extract_group_key_reads_pay_remainder_details(self):
         response = _make_partial_response(consumed=5.00, group_key="GROUP-KEY-1")
         self.assertEqual(
