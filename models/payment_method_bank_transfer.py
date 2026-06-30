@@ -16,7 +16,6 @@ _BANK_TRANSFER_PARAM_MAP = {
     "PaymentReference": "buckaroo_official_bank_payment_reference",
 }
 
-
 class PaymentMethodBankTransfer(models.Model):
     _inherit = "payment.method"
 
@@ -40,7 +39,16 @@ class PaymentMethodBankTransfer(models.Model):
         # customer may close the browser before reading the on-page details.
         builder.add_parameter("sendmail", "true")
 
+        builder.culture(self._buckaroo_bank_transfer_culture())
+
         return builder.pay()
+
+    def _buckaroo_bank_transfer_culture(self):
+        """The shopper's active-context language as a Buckaroo ``Culture``
+        (BCP-47, hyphen form — e.g. ``nl_NL`` → ``nl-NL``). Empty when there's
+        no active lang; the SDK then omits the header and the gateway defaults
+        to en-US."""
+        return (self.env.context.get("lang") or "").replace("_", "-")
 
     def _buckaroo_handle_no_redirect_response(self, transaction, response):
         """Bank Transfer is async: Buckaroo returns pending (792) without

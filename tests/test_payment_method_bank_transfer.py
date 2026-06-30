@@ -296,18 +296,37 @@ class TestBankTransferCreatePaymentDispatch(BuckarooOfficialCommon):
             }
         )
 
-    def _create_tx(self, payment_method=None):
+    def _create_tx(self, payment_method=None, reference="TX-BT-001"):
         return self.env["payment.transaction"].create(
             {
                 "provider_id": self.buckaroo.id,
                 "payment_method_id": (payment_method or self.bank_transfer).id,
-                "reference": "TX-BT-001",
+                "reference": reference,
                 "amount": 50.0,
                 "currency_id": self.currency_euro.id,
                 "partner_id": self.partner_nl.id,
                 "operation": "online_redirect",
             }
         )
+
+    def _create_payment_with_lang(self, lang):
+        """Build the Bank Transfer Pay request with ``lang`` on the method's
+        active context and return the mock builder so callers can inspect
+        ``.culture(...)`` calls. ``lang`` must be an installed locale (or
+        ``None``); the ORM rejects unknown codes the moment a translated
+        field is read."""
+        tx = self._create_tx(reference="TX-BT-CULTURE-%s" % lang)
+        client = MagicMock()
+        mock_builder, _resp = make_mock_sdk_builder()
+        method = self.bank_transfer.with_context(lang=lang)
+
+        with patch(
+            "odoo.addons.payment_buckaroo_official.models.payment_method_bank_transfer.PaymentService"
+        ) as MockPS:
+            MockPS.return_value.create_payment.return_value = mock_builder
+            method._buckaroo_create_payment(tx, client)
+
+        return mock_builder
 
     def test_non_bank_transfer_falls_through_to_super(self):
         tx = self._create_tx(payment_method=self.ideal)
@@ -322,7 +341,35 @@ class TestBankTransferCreatePaymentDispatch(BuckarooOfficialCommon):
 
         mock_builder.pay.assert_called_once()
         mock_builder.add_parameter.assert_not_called()
+        mock_builder.culture.assert_not_called()
         self.assertEqual(result, mock_response)
+
+    def test_bank_transfer_maps_lang_to_culture(self):
+        cases = {
+            "en_US": "en-US",
+            "nl_NL": "nl-NL",
+            "fr_FR": "fr-FR",
+            "fr_BE": "fr-BE",
+            "de_DE": "de-DE",
+            "es_ES": "es-ES",
+        }
+        for lang, culture in cases.items():
+            with self.subTest(lang=lang):
+                mock_builder = self._create_payment_with_lang(lang)
+                self.assertEqual(mock_builder.culture.call_args[0][0], culture)
+
+    def test_bank_transfer_missing_lang_sends_empty_culture(self):
+        """No lang in context → empty culture; the SDK omits the header and
+        the gateway defaults to en-US."""
+        mock_builder = self._create_payment_with_lang(None)
+        self.assertEqual(mock_builder.culture.call_args[0][0], "")
+
+    def test_bank_transfer_lang_passed_through_in_bcp47_form(self):
+        """Any context lang is passed through as BCP-47 (``_`` → ``-``); no
+        allow-list. Asserted on the helper directly so an uninstalled code
+        (e.g. ``pl_PL``) doesn't trip the ORM's translated-field lookup."""
+        method = self.bank_transfer.with_context(lang="pl_PL")
+        self.assertEqual(method._buckaroo_bank_transfer_culture(), "pl-PL")
 
     def test_bank_transfer_adds_required_customer_parameters(self):
         tx = self._create_tx()
