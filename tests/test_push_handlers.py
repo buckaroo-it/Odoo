@@ -498,6 +498,35 @@ class TestPlazaRefundPush(BuckarooOfficialCommon):
         refunds = tx.child_transaction_ids.filtered(lambda t: t.operation == "refund")
         self.assertEqual(len(refunds), 1)
 
+    def test_two_distinct_partial_refunds_each_registered(self):
+        tx = self._done_ideal_tx("IDEAL-RF-004", "IDEAL_KEY_4")
+
+        _route_push(
+            self.env,
+            _refund_push("IDEAL-RF-004", "IDEAL_KEY_4", "IDEAL_REFUND_KEY_4A", credit="20.00"),
+        )
+        _route_push(
+            self.env,
+            _refund_push("IDEAL-RF-004", "IDEAL_KEY_4", "IDEAL_REFUND_KEY_4B", credit="15.00"),
+        )
+
+        refunds = tx.child_transaction_ids.filtered(lambda t: t.operation == "refund")
+        self.assertEqual(len(refunds), 2)
+
+        refund_a = refunds.filtered(lambda t: t.provider_reference == "IDEAL_REFUND_KEY_4A")
+        refund_b = refunds.filtered(lambda t: t.provider_reference == "IDEAL_REFUND_KEY_4B")
+        self.assertEqual(len(refund_a), 1)
+        self.assertEqual(len(refund_b), 1)
+
+        self.assertEqual(refund_a.reference, "R-IDEAL-RF-004")
+        self.assertEqual(refund_b.reference, "R-IDEAL-RF-004-1")
+
+        self.assertEqual(refund_a.amount, -20.0)
+        self.assertEqual(refund_b.amount, -15.0)
+
+        self.assertEqual(refund_a.state, "done")
+        self.assertEqual(refund_b.state, "done")
+
     def test_duplicate_190_without_refund_relation_does_not_spawn(self):
         tx = self._done_ideal_tx("IDEAL-RF-003", "IDEAL_KEY_3")
 

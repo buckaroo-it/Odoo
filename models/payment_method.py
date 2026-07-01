@@ -3,8 +3,6 @@
 import logging
 import re
 
-from psycopg2.errors import UniqueViolation
-
 from buckaroo.services.payment_service import PaymentService
 
 from odoo import _, api, fields, models
@@ -359,32 +357,14 @@ class PaymentMethod(models.Model):
             )
             if existing:
                 return existing
-        refund_ref = f"R-{transaction.reference}"
-        vals = {
-            "provider_id": transaction.provider_id.id,
-            "payment_method_id": transaction.payment_method_id.id,
-            "reference": refund_ref,
-            "amount": -amount,
-            "currency_id": currency.id,
-            "partner_id": transaction.partner_id.id,
-            "operation": "refund",
-            "source_transaction_id": transaction.id,
-            "provider_reference": txn_key,
-            "buckaroo_official_service_code": (
+        refund_tx = transaction._create_child_transaction(
+            amount,
+            is_refund=True,
+            provider_reference=txn_key,
+            buckaroo_official_service_code=(
                 payment_data.service_code or transaction.buckaroo_official_service_code
             ),
-        }
-        try:
-            with transaction.env.cr.savepoint():
-                refund_tx = transaction.create(vals)
-        except UniqueViolation:
-            return transaction.search(
-                [
-                    ("provider_id", "=", transaction.provider_id.id),
-                    ("reference", "=", refund_ref),
-                ],
-                limit=1,
-            )
+        )
         refund_tx._set_done()
         refund_tx._post_process()
         _logger.info(
