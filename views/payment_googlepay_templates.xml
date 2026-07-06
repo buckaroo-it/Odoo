@@ -7,7 +7,7 @@
         <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
             <t t-if="pm_sudo.code == 'buckaroo_googlepay'">
                 <t t-set="gp_partner"
-                   t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id) or request.env['res.partner']"/>
+                   t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id).exists() or request.env['res.partner']"/>
                 <t t-set="gp_country"
                    t-value="(gp_partner and gp_partner.country_id) or provider_sudo.company_id.country_id"/>
                 <div id="o_buckaroo_googlepay_container"
@@ -28,7 +28,7 @@
         <t t-set="gp_method" t-value="provider_sudo.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_googlepay' and m.buckaroo_official_googlepay_show_on_cart and m._buckaroo_googlepay_is_configured())[:1]"/>
         <t t-if="gp_method">
             <t t-set="gp_partner"
-               t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id) or request.env['res.partner']"/>
+               t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id).exists() or request.env['res.partner']"/>
             <t t-set="gp_country"
                t-value="(gp_partner and gp_partner.country_id) or provider_sudo.company_id.country_id"/>
             <div name="o_express_checkout_container"

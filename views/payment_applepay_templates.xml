@@ -7,7 +7,7 @@
         <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
             <t t-if="pm_sudo.code == 'buckaroo_applepay'">
                 <t t-set="ap_partner"
-                   t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id) or request.env['res.partner']"/>
+                   t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id).exists() or request.env['res.partner']"/>
                 <t t-set="ap_country"
                    t-value="(ap_partner and ap_partner.country_id) or provider_sudo.company_id.country_id"/>
                 <div id="o_buckaroo_applepay_container"
@@ -28,7 +28,7 @@
         <t t-set="ap_method" t-value="provider_sudo.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_applepay' and m.buckaroo_official_applepay_integration_mode == 'inline' and m.buckaroo_official_applepay_show_on_cart and m._buckaroo_applepay_is_configured())[:1]"/>
         <t t-if="ap_method">
             <t t-set="ap_partner"
-               t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id) or request.env['res.partner']"/>
+               t-value="partner_id and request.env['res.partner'].sudo().browse(partner_id).exists() or request.env['res.partner']"/>
             <t t-set="ap_country"
                t-value="(ap_partner and ap_partner.country_id) or provider_sudo.company_id.country_id"/>
             <div name="o_buckaroo_applepay_express_container"
