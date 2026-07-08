@@ -415,8 +415,10 @@ class PaymentMethod(models.Model):
             return None
         # Skip on redelivery and when the admin-button path already spawned
         # a capture child (operation copies parent's, so filter out refunds).
-        # Not atomic: a concurrent admin Capture + Plaza push could both pass
-        # this check and spawn duplicate capture children. Single-writer assumed.
+        # A concurrent second Plaza push racing this check is serialized by the
+        # ``FOR UPDATE NOWAIT`` lock in the controller's ``_handle_push``: the
+        # loser retries with a fresh snapshot and sees this child. An admin
+        # Capture races through a separate flow and is not covered here.
         if transaction.child_transaction_ids.filtered(lambda t: t.operation != "refund"):
             return None
         child_amount = payment_data.amount or transaction.amount

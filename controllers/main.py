@@ -56,6 +56,22 @@ class BuckarooOfficialController(http.Controller):
         )
         if tx_sudo:
             verify_signature(parsed, tx_sudo.provider_id)
+            # Serialize concurrent pushes for the same transaction. Buckaroo can
+            # deliver several pushes for one order at once (e.g. two separate
+            # refunds, each spawning a child whose reference core derives from
+            # the parent as ``R-{order}``). Odoo cursors run at REPEATABLE READ,
+            # so a blocking lock wouldn't help: the second push keeps its stale
+            # snapshot, recomputes the same reference and still hits the unique
+            # constraint (HTTP 422 "Reference must be unique!"). NOWAIT instead
+            # raises LockNotAvailable, which Odoo's request layer retries with a
+            # fresh snapshot; the retry sees the committed sibling and computes
+            # the next reference (``R-{order}-1``). This relies on push
+            # processing below staying free of external side-effects (gateway
+            # calls, outbound mail) so a retried request is safe to re-run.
+            req.env.cr.execute(
+                "SELECT id FROM payment_transaction WHERE id = %s FOR UPDATE NOWAIT",
+                [tx_sudo.id],
+            )
             remainder_tx = tx_sudo._buckaroo_split_remainder_push(parsed)
             target = remainder_tx or tx_sudo
             target._process("buckaroo_official", parsed)
