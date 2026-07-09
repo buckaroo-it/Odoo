@@ -652,11 +652,10 @@ class TestGiftcardInlinePartial(_GiftcardTestBase):
         self.assertEqual(tx.state, "pending")
 
     def test_inline_giftcard_partial_leg_keeps_pbnk(self):
-        """Inline mode: the giftcard slice is an independent payment — it KEEPS
-        its PBNK so it is refundable from Odoo (unlike redirect, which skips it
-        and refunds via Plaza)."""
+        """The giftcard slice is an independent payment — it creates its PBNK
+        so it is refundable from Odoo like any other payment."""
         tx = self._gc_tx("GC-INLINE-PBNK", self.order_total - 10.0, payment_method=self.brand_vvv)
-        self.assertFalse(tx.payment_method_id._buckaroo_skip_payment_creation(tx))
+        self.assertTrue(tx._create_payment())
 
 
 @tagged("post_install", "-at_install")
@@ -1663,7 +1662,10 @@ class TestGiftcardRedirectModeRemainderPush(_GiftcardTestBase):
         self.assertNotEqual(sibling.id, gc_tx.id)
         self.assertEqual(sibling.payment_method_id, self.ideal)
         self.assertEqual(sibling.amount, 38.00)
-        self.assertEqual(sibling.source_transaction_id, gc_tx)
+        # Independent leg, not a child of the giftcard tx — so Odoo does not
+        # treat it as a refund of the giftcard payment (see _buckaroo_split_
+        # remainder_push). Matches inline mode.
+        self.assertFalse(sibling.source_transaction_id)
         self.assertEqual(sibling.provider_id, gc_tx.provider_id)
         self.assertEqual(sibling.partner_id, gc_tx.partner_id)
         self.assertEqual(sibling.currency_id, gc_tx.currency_id)
@@ -2009,7 +2011,6 @@ class TestGiftcardRefundTargetResolution(_GiftcardTestBase):
                 "currency_id": self.currency_euro.id,
                 "partner_id": self.partner.id,
                 "operation": "online_redirect",
-                "source_transaction_id": parent.id,
             }
         )
         child.provider_reference = "GCR_CHILD_KEY"
@@ -2052,7 +2053,7 @@ class TestGiftcardSameBrandMultiPartial(_GiftcardTestBase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_same_brand_remainder_push_spawns_child(self):
+    def test_same_brand_remainder_push_spawns_sibling_leg(self):
         vvv_service = self.brand_vvv.buckaroo_official_sdk_service_name
         parent = self._create_buckaroo_tx(
             reference="GC-SB-001", amount=10.0, payment_method=self.giftcard
@@ -2076,40 +2077,55 @@ class TestGiftcardSameBrandMultiPartial(_GiftcardTestBase):
             ),
         )
 
-        children = parent.child_transaction_ids
-        self.assertEqual(len(children), 1, "same-brand 2nd leg must spawn a child")
-        self.assertEqual(children.provider_reference, "LEG2_KEY")
-        self.assertEqual(children.amount, 5.0)
-        self.assertEqual(children.source_transaction_id, parent)
+        # The 2nd leg spawns its own tx (3-leg chains must not drop the middle
+        # leg) as an INDEPENDENT payment — not a child of the parent, so its
+        # amount is never treated as a refund of the parent's payment.
+        sibling = self.env["payment.transaction"].search(
+            [("reference", "=", "GC-SB-001-GCR-LEG2_KEY")]
+        )
+        self.assertEqual(len(sibling), 1, "same-brand 2nd leg must spawn its own tx")
+        self.assertEqual(sibling.provider_reference, "LEG2_KEY")
+        self.assertEqual(sibling.amount, 5.0)
+        self.assertFalse(sibling.source_transaction_id)
+        self.assertFalse(parent.child_transaction_ids)
 
 
 @tagged("post_install", "-at_install")
 class TestGiftcardPbnkSuppression(_GiftcardTestBase):
-    """Redirect mode: ``_buckaroo_skip_payment_creation`` vetoes PBNK only for
-    giftcard partial slices (Plaza-only refund) — not full-cover giftcard
-    payments, GCR children, or non-giftcard methods."""
+    """Redirect mode: giftcard legs keep their PBNK just like inline mode —
+    partial slices, full-cover payments, GCR children, same-brand remainder
+    legs, and non-giftcard methods are all independently refundable from
+    Odoo."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.giftcard.buckaroo_official_giftcard_method = "redirect"
 
-    def test_partial_giftcard_leg_skips_pbnk(self):
+    def test_partial_giftcard_leg_keeps_pbnk(self):
         tx = self._gc_tx("GC-PBNK-PARTIAL", self.order_total - 10.0)
-        self.assertTrue(tx.payment_method_id._buckaroo_skip_payment_creation(tx))
+        payment = tx._create_payment()
+        self.assertTrue(payment)
+        self.assertEqual(payment.amount, self.order_total - 10.0)
 
     def test_full_cover_giftcard_keeps_pbnk(self):
         tx = self._gc_tx("GC-PBNK-FULL", self.order_total)
-        self.assertFalse(tx.payment_method_id._buckaroo_skip_payment_creation(tx))
+        payment = tx._create_payment()
+        self.assertTrue(payment)
+        self.assertEqual(payment.amount, self.order_total)
 
     def test_gcr_child_keeps_pbnk(self):
         parent = self._gc_tx("GC-PBNK-PARENT", self.order_total - 10.0)
         child = self._gc_tx("GC-PBNK-PARENT-GCR-K", 10.0, payment_method=self.ideal, source=parent)
-        self.assertFalse(child.payment_method_id._buckaroo_skip_payment_creation(child))
+        payment = child._create_payment()
+        self.assertTrue(payment)
+        self.assertEqual(payment.amount, 10.0)
 
     def test_non_giftcard_keeps_pbnk(self):
         tx = self._gc_tx("GC-PBNK-IDEAL", self.order_total - 10.0, payment_method=self.ideal)
-        self.assertFalse(tx.payment_method_id._buckaroo_skip_payment_creation(tx))
+        payment = tx._create_payment()
+        self.assertTrue(payment)
+        self.assertEqual(payment.amount, self.order_total - 10.0)
 
     def test_same_brand_gcr_child_keeps_pbnk(self):
         """A redirect-spawned GCR sibling that happens to be a giftcard brand
@@ -2119,12 +2135,14 @@ class TestGiftcardPbnkSuppression(_GiftcardTestBase):
         child = self._gc_tx(
             "GC-PBNK-SBPARENT-GCR-K", 10.0, payment_method=self.brand_vvv, source=parent
         )
-        self.assertFalse(child.payment_method_id._buckaroo_skip_payment_creation(child))
+        payment = child._create_payment()
+        self.assertTrue(payment)
+        self.assertEqual(payment.amount, 10.0)
 
-    def test_redirect_second_giftcard_brand_leg_skips_pbnk(self):
-        """Redirect mode: a second giftcard-brand partial leg is below the order
-        total and refunded via Plaza, so it skips PBNK. The controller leaves it
-        an independent payment — no ``source_transaction_id`` linkage."""
+    def test_redirect_second_giftcard_brand_leg_keeps_pbnk(self):
+        """Redirect mode: a second giftcard-brand partial leg still gets its
+        own PBNK, same as any other leg. The controller leaves it an
+        independent payment — no ``source_transaction_id`` linkage."""
         root = self._gc_tx("GC-PBNK-LINK-ROOT", 40.0)
         root.provider_reference = "LINK_ROOT_KEY"
         root.buckaroo_official_service_code = self.brand_vvv.buckaroo_official_sdk_service_name
@@ -2136,8 +2154,75 @@ class TestGiftcardPbnkSuppression(_GiftcardTestBase):
         GiftcardPaymentPortal()._validate_transaction_for_order(leg, self.order)
 
         self.assertFalse(leg.source_transaction_id)
-        self.assertTrue(leg.payment_method_id._buckaroo_skip_payment_creation(leg))
-        self.assertFalse(leg._create_payment())
+        payment = leg._create_payment()
+        self.assertTrue(payment)
+        self.assertEqual(payment.amount, 60.0)
+
+
+@tagged("post_install", "-at_install")
+class TestGiftcardRedirectPbnkEndToEnd(_GiftcardTestBase):
+    """Redirect mode: a giftcard slice plus its iDEAL remainder push each
+    surface as an independent, refundable ``account.payment`` on the order,
+    each refundable for its own full amount. Regression for order S00223
+    (giftcard leg had ``payment_id=False`` and was invisible/unrefundable in
+    Odoo, and once given a PBNK its refundable amount was understated by the
+    remainder)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.giftcard.buckaroo_official_giftcard_method = "redirect"
+
+    def test_redirect_giftcard_slice_and_remainder_each_get_refundable_payment(self):
+        gc_tx = self._gc_tx("TX-GC-E2E-001", 60.0, payment_method=self.brand_vvv)
+        gc_tx.provider_reference = "E2E_GC_KEY"
+        gc_tx.buckaroo_official_service_code = "vvvgiftcard"
+        gc_tx._set_done()
+
+        remainder_push = parsed_from_form(
+            {
+                "brq_invoicenumber": gc_tx.reference,
+                "brq_amount": "40.00",
+                "brq_currency": "EUR",
+                "brq_statuscode": "190",
+                "brq_transactions": "E2E_IDEAL_KEY",
+                "brq_transaction_method": "ideal",
+                "brq_relatedtransaction_partialpayment": "E2E_GC_KEY",
+            }
+        )
+        remainder_tx = gc_tx._buckaroo_split_remainder_push(remainder_push)
+
+        self.assertTrue(remainder_tx)
+        self.assertNotEqual(remainder_tx, gc_tx)
+        self.assertEqual(remainder_tx.amount, 40.0)
+        self.assertEqual(remainder_tx.payment_method_id, self.ideal)
+        # The remainder must NOT be linked as a child of the giftcard tx, or
+        # Odoo would treat it as a refund of the giftcard payment and understate
+        # the giftcard leg's amount_available_for_refund (regression: it showed
+        # 60 - 40 = 20, which also blocked full credit-note refunds).
+        self.assertFalse(remainder_tx.source_transaction_id)
+        remainder_tx.provider_reference = "E2E_IDEAL_KEY"
+        remainder_tx._set_done()
+        self.assertEqual(len(self.order.transaction_ids), 2)
+
+        # Each leg becomes an independent, refundable account.payment, each
+        # refundable for its own full amount.
+        gc_payment = gc_tx._create_payment()
+        remainder_payment = remainder_tx._create_payment()
+        self.assertEqual(gc_payment.amount, 60.0)
+        self.assertEqual(remainder_payment.amount, 40.0)
+        self.assertFalse(remainder_payment.source_payment_id)
+        self.assertEqual(gc_payment.amount_available_for_refund, 60.0)
+        self.assertEqual(remainder_payment.amount_available_for_refund, 40.0)
+
+        # Refunding the giftcard leg must target the giftcard's own key, not
+        # the iDEAL remainder key. (If the remainder were a child of the
+        # giftcard tx, _buckaroo_resolve_original_transaction_key would pick the
+        # iDEAL key as a "capture child" and misroute the refund.)
+        self.assertEqual(
+            gc_tx.payment_method_id._buckaroo_resolve_original_transaction_key(gc_tx),
+            gc_tx.provider_reference,
+        )
 
 
 @tagged("post_install", "-at_install")

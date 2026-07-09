@@ -379,12 +379,6 @@ class PaymentMethod(models.Model):
         self.ensure_one()
         return
 
-    def _buckaroo_skip_payment_creation(self, transaction):
-        """Veto ``account.payment`` (PBNK) creation for *transaction*.
-        Overridden per method; base never skips."""
-        self.ensure_one()
-        return False
-
     def _buckaroo_split_remainder_push(self, transaction, payment_data):
         self.ensure_one()
         capture_child = self._buckaroo_spawn_capture_from_push(transaction, payment_data)

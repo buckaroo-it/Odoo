@@ -414,31 +414,6 @@ class PaymentMethodGiftcard(models.Model):
             return
         return super()._buckaroo_handle_duplicate_push(transaction, payment_data)
 
-    def _buckaroo_skip_payment_creation(self, transaction):
-        """Whether to veto ``account.payment`` (PBNK) creation for a giftcard tx.
-
-        Inline mode: each leg (giftcard slice + on-site remainder) is an
-        independent payment, so the slice KEEPS its PBNK and is refundable from
-        Odoo like any other payment.
-
-        Redirect mode: the gateway groups the slice with a GCR remainder child.
-        The GCR child (reference ``{ORDER}-GCR-{key}``, created by
-        ``_buckaroo_split_remainder_push``) keeps its PBNK; the giftcard slice
-        (amount < order total) is refunded via Plaza, so skip its PBNK and avoid
-        the post-process race that would otherwise create a stray PBNK with the
-        wrong ``amount_available_for_refund``."""
-        primary = self._buckaroo_giftcard_primary()
-        if not primary:
-            return super()._buckaroo_skip_payment_creation(transaction)
-        if (primary.buckaroo_official_giftcard_method or "redirect") == "inline":
-            return False
-        if "-GCR-" in transaction.reference:
-            return False  # redirect remainder child, not a partial slice
-        order = transaction.sale_order_ids[:1]
-        if not order:
-            return False
-        return transaction.currency_id.compare_amounts(transaction.amount, order.amount_total) < 0
-
     def _buckaroo_adjust_amount_on_success(self, transaction, payment_data):
         """Shrink the tx to the actually-drawn slice on a partial-pay push."""
         if not self._is_buckaroo_giftcard():
@@ -496,7 +471,11 @@ class PaymentMethodGiftcard(models.Model):
             "currency_id": transaction.currency_id.id,
             "partner_id": transaction.partner_id.id,
             "operation": "online_redirect",
-            "source_transaction_id": transaction.id,
+            # No source_transaction_id: the remainder is an INDEPENDENT payment
+            # leg, not a child of the giftcard tx (same as inline mode). Linking
+            # it would make Odoo treat this leg as a refund of the giftcard
+            # payment (source_payment_id), understating the giftcard leg's
+            # amount_available_for_refund and blocking full credit-note refunds.
             "sale_order_ids": [Command.set(transaction.sale_order_ids.ids)],
         }
         # Concurrent redelivery may race past the existing-check; rely on the

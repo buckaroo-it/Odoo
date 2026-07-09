@@ -16,6 +16,7 @@ _BANK_TRANSFER_PARAM_MAP = {
     "PaymentReference": "buckaroo_official_bank_payment_reference",
 }
 
+
 class PaymentMethodBankTransfer(models.Model):
     _inherit = "payment.method"
 
