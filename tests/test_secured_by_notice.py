@@ -61,9 +61,7 @@ class TestSecuredByNotice(BuckarooOfficialCommon):
     def test_non_buckaroo_method_form_notice_unchanged(self):
         # The dummy provider (code 'none') keeps its auto-generated label.
         label = dict(
-            self.dummy_provider._fields["code"]._description_selection(
-                self.dummy_provider.env
-            )
+            self.dummy_provider._fields["code"]._description_selection(self.dummy_provider.env)
         )[self.dummy_provider.code]
         self.dummy_provider.payment_method_ids = [Command.link(self.payment_method.id)]
 
