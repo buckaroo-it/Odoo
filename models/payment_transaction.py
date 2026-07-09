@@ -298,14 +298,3 @@ class PaymentTransaction(models.Model):
             self._set_error("Buckaroo: payment failed with status code: %s" % status_code)
         else:
             self._set_error("Buckaroo: unhandled status code: %s" % status_code)
-
-    def _create_payment(self, **extra_create_values):
-        """Let the payment method veto ``account.payment`` (PBNK) creation.
-        Method-specific rules live on the method class, not here."""
-        if (
-            self.provider_code == const.PROVIDER_CODE
-            and self.payment_method_id._buckaroo_skip_payment_creation(self)
-        ):
-            _logger.info("Skipping PBNK creation for %s", self.reference)
-            return self.env["account.payment"]
-        return super()._create_payment(**extra_create_values)
