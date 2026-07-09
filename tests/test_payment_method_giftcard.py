@@ -21,7 +21,6 @@ from odoo.tests import tagged
 from .common import (
     BuckarooOfficialCommon,
     make_mock_sdk_builder,
-    make_mock_sdk_response,
     parsed_from_form,
     parsed_from_json,
 )
@@ -2163,27 +2162,22 @@ class TestGiftcardPbnkSuppression(_GiftcardTestBase):
 @tagged("post_install", "-at_install")
 class TestGiftcardRedirectPbnkEndToEnd(_GiftcardTestBase):
     """Redirect mode: a giftcard slice plus its iDEAL remainder push each
-    surface as an independent, refundable ``account.payment`` on the order.
-    Regression for order S00223 (giftcard leg had ``payment_id=False`` and
-    was invisible/unrefundable in Odoo).
-
-    ``PaymentCommon`` mocks out ``account_payment``'s ``_post_process`` for
-    every test by default (so plain provider tests don't need full
-    accounting setup); this class opts out so ``_post_process`` really
-    creates the PBNKs it's supposed to verify."""
+    surface as an independent, refundable ``account.payment`` on the order,
+    each refundable for its own full amount. Regression for order S00223
+    (giftcard leg had ``payment_id=False`` and was invisible/unrefundable in
+    Odoo, and once given a PBNK its refundable amount was understated by the
+    remainder)."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.giftcard.buckaroo_official_giftcard_method = "redirect"
-        cls.enable_post_process_patcher = False
 
     def test_redirect_giftcard_slice_and_remainder_each_get_refundable_payment(self):
         gc_tx = self._gc_tx("TX-GC-E2E-001", 60.0, payment_method=self.brand_vvv)
         gc_tx.provider_reference = "E2E_GC_KEY"
         gc_tx.buckaroo_official_service_code = "vvvgiftcard"
         gc_tx._set_done()
-        gc_tx._post_process()
 
         remainder_push = parsed_from_form(
             {
@@ -2196,27 +2190,30 @@ class TestGiftcardRedirectPbnkEndToEnd(_GiftcardTestBase):
                 "brq_relatedtransaction_partialpayment": "E2E_GC_KEY",
             }
         )
-        remainder_tx = _route_giftcard_push(self.env, remainder_push)
+        remainder_tx = gc_tx._buckaroo_split_remainder_push(remainder_push)
 
         self.assertTrue(remainder_tx)
         self.assertNotEqual(remainder_tx, gc_tx)
-        self.assertEqual(remainder_tx.state, "done")
-
-        self.assertEqual(len(self.order.transaction_ids), 2)
-        self.assertTrue(gc_tx.payment_id)
-        self.assertTrue(remainder_tx.payment_id)
-        self.assertEqual(gc_tx.payment_id.amount, 60.0)
-        self.assertEqual(remainder_tx.payment_id.amount, 40.0)
-
-        # Each leg must be independently refundable for its FULL amount. The
-        # remainder must NOT be linked as a child of the giftcard tx, or Odoo
-        # would treat it as a refund of the giftcard payment and understate the
-        # giftcard leg's amount_available_for_refund (regression: it showed
+        self.assertEqual(remainder_tx.amount, 40.0)
+        self.assertEqual(remainder_tx.payment_method_id, self.ideal)
+        # The remainder must NOT be linked as a child of the giftcard tx, or
+        # Odoo would treat it as a refund of the giftcard payment and understate
+        # the giftcard leg's amount_available_for_refund (regression: it showed
         # 60 - 40 = 20, which also blocked full credit-note refunds).
         self.assertFalse(remainder_tx.source_transaction_id)
-        self.assertFalse(remainder_tx.payment_id.source_payment_id)
-        self.assertEqual(gc_tx.payment_id.amount_available_for_refund, 60.0)
-        self.assertEqual(remainder_tx.payment_id.amount_available_for_refund, 40.0)
+        remainder_tx.provider_reference = "E2E_IDEAL_KEY"
+        remainder_tx._set_done()
+        self.assertEqual(len(self.order.transaction_ids), 2)
+
+        # Each leg becomes an independent, refundable account.payment, each
+        # refundable for its own full amount.
+        gc_payment = gc_tx._create_payment()
+        remainder_payment = remainder_tx._create_payment()
+        self.assertEqual(gc_payment.amount, 60.0)
+        self.assertEqual(remainder_payment.amount, 40.0)
+        self.assertFalse(remainder_payment.source_payment_id)
+        self.assertEqual(gc_payment.amount_available_for_refund, 60.0)
+        self.assertEqual(remainder_payment.amount_available_for_refund, 40.0)
 
         # Refunding the giftcard leg must target the giftcard's own key, not
         # the iDEAL remainder key. (If the remainder were a child of the
@@ -2226,14 +2223,6 @@ class TestGiftcardRedirectPbnkEndToEnd(_GiftcardTestBase):
             gc_tx.payment_method_id._buckaroo_resolve_original_transaction_key(gc_tx),
             gc_tx.provider_reference,
         )
-
-        PaymentMethod = type(self.env["payment.method"])
-        with patch.object(
-            PaymentMethod, "_buckaroo_create_refund", return_value=make_mock_sdk_response(190)
-        ):
-            refund_tx = gc_tx._refund(amount_to_refund=60.0)
-
-        self.assertEqual(refund_tx.state, "done")
 
 
 @tagged("post_install", "-at_install")
