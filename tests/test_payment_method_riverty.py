@@ -353,8 +353,14 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
         cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
         cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
 
-    def _invoke(self, **kwargs):
-        """Fire the Riverty controller handler; it raises before super() is reached."""
+    def _invoke(self, order_id=1, **kwargs):
+        """Fire the Riverty controller handler.
+
+        Input-only validations (birthdate/salutation) raise before the order
+        is ever looked up, so those tests keep the default ``order_id``. Tests
+        that reach the ``_document_check_access`` token check must pass a real
+        order id (a bogus/absent id raises ``MissingError``).
+        """
         import odoo.http
         from odoo.addons.payment_buckaroo_official.controllers.riverty import (
             RivertyPaymentPortal,
@@ -377,11 +383,16 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
             ),
         ):
             return controller.shop_payment_transaction(
-                order_id=1,
+                order_id=order_id,
                 access_token="ignored",
                 payment_method_id=self.riverty.id,
                 **kwargs,
             )
+
+    def _make_order(self, partner):
+        return self.env["sale.order"].create(
+            {"partner_id": partner.id, "partner_invoice_id": partner.id}
+        )
 
     def test_missing_birthdate_raises(self):
         with self.assertRaises(ValidationError) as ctx:
@@ -420,18 +431,15 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
 
         partner = self.env.user.partner_id
         partner.buckaroo_riverty_birthdate = False
+        # A B2C order (no company, no NL/BE country) keeps this test focused on
+        # birthdate persistence: no salutation and no identification number are
+        # required, so nothing blocks reaching super().
+        b2c_order = self._make_order(self.env["res.partner"].create({"name": "Jan de Vries"}))
         with patch(
             "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
             return_value="SUPER_OK",
         ):
-            # order_id=1 (the ``_invoke`` fixture default) is a B2B
-            # order in this dev database; supply an identification
-            # number so the new B2B guard doesn't block this
-            # birthdate-persistence assertion.
-            self._invoke(
-                riverty_birthdate="1990-05-15",
-                riverty_identification_number="12345678",
-            )
+            self._invoke(order_id=b2c_order.id, riverty_birthdate="1990-05-15")
         self.assertEqual(partner.buckaroo_riverty_birthdate, date(1990, 5, 15))
 
     def test_b2b_order_missing_identification_number_raises(self):
