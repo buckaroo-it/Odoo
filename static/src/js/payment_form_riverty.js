@@ -20,6 +20,12 @@ patch(PaymentForm.prototype, {
             if (salutation && salutation.value) {
                 params.riverty_salutation = salutation.value;
             }
+            const identificationNumber = document.querySelector(
+                '.o_buckaroo_riverty_identification_number'
+            );
+            if (identificationNumber && identificationNumber.value) {
+                params.riverty_identification_number = identificationNumber.value;
+            }
         }
         return params;
     },

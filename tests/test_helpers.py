@@ -5,8 +5,9 @@
 These tests use only mocks and do not require a database connection.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+from odoo.exceptions import ValidationError
 from odoo.tests import BaseCase
 
 from odoo.addons.payment_buckaroo_official.helpers.articles import get_order_articles
@@ -15,7 +16,9 @@ from odoo.addons.payment_buckaroo_official.helpers.customer import (
     get_shipping_partner,
     is_b2b,
     parse_street,
+    resolve_b2b_registry,
     sanitize_phone,
+    validate_bnpl_registry,
 )
 
 
@@ -438,3 +441,116 @@ class TestGetShippingPartner(BaseCase):
             ],
         )
         self.assertEqual(get_shipping_partner(tx), ship1)
+
+
+class TestResolveB2BRegistry(BaseCase):
+    def test_session_value_wins(self):
+        mock_req = MagicMock()
+        mock_req.session = {"buckaroo_b2b_registry": "12345678"}
+        partner = make_partner(company_registry="87654321")
+        tx = make_transaction(partner=partner)
+        with patch("odoo.http.request", mock_req):
+            self.assertEqual(resolve_b2b_registry(tx, "buckaroo_b2b_registry"), "12345678")
+
+    def test_falls_back_to_partner_company_registry(self):
+        mock_req = MagicMock()
+        mock_req.session = {}
+        partner = make_partner(company_registry="87654321")
+        tx = make_transaction(partner=partner)
+        with patch("odoo.http.request", mock_req):
+            self.assertEqual(resolve_b2b_registry(tx, "buckaroo_b2b_registry"), "87654321")
+
+    def test_returns_empty_when_neither_present(self):
+        mock_req = MagicMock()
+        mock_req.session = {}
+        partner = make_partner(company_registry=None)
+        tx = make_transaction(partner=partner)
+        with patch("odoo.http.request", mock_req):
+            self.assertEqual(resolve_b2b_registry(tx, "buckaroo_b2b_registry"), "")
+
+    def test_raises_when_missing_error_supplied_and_nothing_found(self):
+        mock_req = MagicMock()
+        mock_req.session = {}
+        partner = make_partner(company_registry=None)
+        tx = make_transaction(partner=partner)
+        with patch("odoo.http.request", mock_req):
+            with self.assertRaises(ValidationError):
+                resolve_b2b_registry(
+                    tx,
+                    "buckaroo_b2b_registry",
+                    missing_error="Please enter your registry number.",
+                )
+
+
+class TestValidateBnplRegistry(BaseCase):
+    def _make_request(self, session=None, is_public=False):
+        mock_req = MagicMock()
+        mock_req.session = session if session is not None else {}
+        user = MagicMock()
+        user._is_public.return_value = is_public
+        mock_req.env.user = user
+        return mock_req, user
+
+    def test_raises_when_empty(self):
+        mock_req, _user = self._make_request()
+        with patch("odoo.http.request", mock_req):
+            with self.assertRaises(ValidationError):
+                validate_bnpl_registry(
+                    {},
+                    registry_kwarg="registry",
+                    session_key="buckaroo_b2b_registry",
+                    missing_msg="Please enter your registry number.",
+                )
+
+    def test_raises_when_whitespace_only(self):
+        mock_req, _user = self._make_request()
+        with patch("odoo.http.request", mock_req):
+            with self.assertRaises(ValidationError):
+                validate_bnpl_registry(
+                    {"registry": "   "},
+                    registry_kwarg="registry",
+                    session_key="buckaroo_b2b_registry",
+                    missing_msg="Please enter your registry number.",
+                )
+
+    def test_persists_session_and_logged_in_partner(self):
+        mock_req, user = self._make_request(is_public=False)
+        with patch("odoo.http.request", mock_req):
+            result = validate_bnpl_registry(
+                {"registry": "12345678"},
+                registry_kwarg="registry",
+                session_key="buckaroo_b2b_registry",
+                missing_msg="Please enter your registry number.",
+            )
+        self.assertEqual(result, "12345678")
+        self.assertEqual(mock_req.session["buckaroo_b2b_registry"], "12345678")
+        self.assertEqual(user.partner_id.sudo().company_registry, "12345678")
+
+    def test_skips_partner_write_for_public_user(self):
+        mock_req, user = self._make_request(is_public=True)
+        with patch("odoo.http.request", mock_req):
+            validate_bnpl_registry(
+                {"registry": "12345678"},
+                registry_kwarg="registry",
+                session_key="buckaroo_b2b_registry",
+                missing_msg="Please enter your registry number.",
+            )
+        self.assertEqual(mock_req.session["buckaroo_b2b_registry"], "12345678")
+        user.partner_id.sudo.assert_not_called()
+
+    def test_persists_trimmed_value_not_raw_input(self):
+        # A value with stray leading/trailing whitespace must be stored
+        # trimmed everywhere (session, partner, return value) — Buckaroo
+        # can reject a registry number with stray whitespace even though
+        # it passes the "is it non-empty" validation.
+        mock_req, user = self._make_request(is_public=False)
+        with patch("odoo.http.request", mock_req):
+            result = validate_bnpl_registry(
+                {"registry": "  12345678  "},
+                registry_kwarg="registry",
+                session_key="buckaroo_b2b_registry",
+                missing_msg="Please enter your registry number.",
+            )
+        self.assertEqual(result, "12345678")
+        self.assertEqual(mock_req.session["buckaroo_b2b_registry"], "12345678")
+        self.assertEqual(user.partner_id.sudo().company_registry, "12345678")

@@ -8,11 +8,13 @@ from odoo.exceptions import ValidationError
 from ..helpers.articles import get_order_articles
 from ..helpers.customer import (
     pop_session_value,
+    resolve_b2b_registry,
     resolve_birthdate,
     resolve_bnpl_customer_data,
     sanitize_phone,
     split_house_number,
 )
+from ..utils import const
 
 
 class PaymentMethodRiverty(models.Model):
@@ -93,7 +95,8 @@ class PaymentMethodRiverty(models.Model):
 
         if data["is_b2b"]:
             customer["CompanyName"] = data["company_name"]
-            customer["IdentificationNumber"] = data["chamber_of_commerce"]
+            if data["chamber_of_commerce"]:
+                customer["IdentificationNumber"] = data["chamber_of_commerce"]
 
         return customer
 
@@ -133,6 +136,17 @@ class PaymentMethodRiverty(models.Model):
 
         billing_data, shipping_data, _same = resolve_bnpl_customer_data(transaction)
 
+        # Resolve (and thus pop) the session key unconditionally, like
+        # Billink, so a stale value from an earlier B2B attempt never
+        # survives to leak into a later order. The formatter only emits
+        # IdentificationNumber when is_b2b, so this is harmless for B2C.
+        # Only billing_data is force-set: when shipping is a different
+        # company, its own partner-derived chamber_of_commerce (from
+        # get_customer_data) must not be overwritten by the checkout
+        # value collected for the billing company.
+        registry = resolve_b2b_registry(transaction, "buckaroo_riverty_identification_number")
+        billing_data["chamber_of_commerce"] = registry
+
         if billing_data["country_code"] in ("NL", "BE") and not salutation:
             raise ValidationError(_("Please select a salutation to proceed with Riverty."))
 
@@ -160,6 +174,39 @@ class PaymentMethodRiverty(models.Model):
         if self.buckaroo_official_riverty_authorize == "authorize":
             return builder.authorize()
         return builder.pay()
+
+    def _buckaroo_handle_no_redirect_response(self, transaction, response):
+        """A Riverty ``pay``/``authorize`` can be approved synchronously: the
+        response carries no redirect URL, so the generic flow would mistake it
+        for an error. Settle the tx from the sync response, honouring the frozen
+        pay/authorize action.
+
+        A synchronously-settled tx is routed to ``/payment/status`` (like the
+        giftcard inline-success hook), whose poll runs ``_post_process()`` in a
+        fresh request so the order confirms now. ``/shop/payment/validate`` does
+        NOT post-process, and ``sale.order.amount_paid`` is a non-stored compute
+        keyed only on ``transaction_ids`` - so settling and confirming in the
+        same request reads a stale amount and the order would sit unconfirmed
+        until the 10-min cron. Pending stays on ``/shop/payment/validate``: it's
+        an open-ended offline wait, so a poll spinner makes no sense."""
+        if self.code != "buckaroo_riverty":
+            return super()._buckaroo_handle_no_redirect_response(transaction, response)
+        status_code = (
+            response.status.code.code if response.status and response.status.code else None
+        )
+        base_url = transaction.provider_id.get_base_url().rstrip("/")
+        if status_code == const.BuckarooStatusCode.SUCCESS:
+            transaction.provider_reference = response.key
+            if transaction.buckaroo_official_payment_action == "authorize":
+                transaction._set_authorized()
+            else:
+                transaction._set_done()
+            return {"api_url": f"{base_url}/payment/status"}
+        if response.is_pending():
+            transaction.provider_reference = response.key
+            transaction._set_pending()
+            return {"api_url": f"{base_url}/shop/payment/validate"}
+        return None
 
     def _buckaroo_create_refund(self, source_tx, refund_tx, client):
         """Riverty refund: full only.

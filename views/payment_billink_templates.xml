@@ -11,6 +11,16 @@
             <t t-if="pm_sudo.code == 'buckaroo_billink'">
                 <t t-set="billink_saved_birthdate"
                    t-value="(not request.env.user._is_public()) and request.env.user.partner_id.buckaroo_billink_birthdate and request.env.user.partner_id.buckaroo_billink_birthdate.isoformat() or ''"/>
+                <!-- B2B detection must key off the order's billing/invoice
+                     partner, not the checkout contact (partner_id) — the
+                     controller and model gate B2B the same way via
+                     order.partner_invoice_id, so the template must agree
+                     or a B2B shopper with a different invoice address gets
+                     stuck (field hidden, server still requires it). -->
+                <t t-set="billink_invoice_partner"
+                   t-value="(sale_order and sale_order.sudo().partner_invoice_id) or (partner_id and request.env['res.partner'].sudo().browse(partner_id).exists()) or request.env['res.partner']"/>
+                <t t-set="billink_is_b2b"
+                   t-value="bool(billink_invoice_partner and (billink_invoice_partner.is_company or billink_invoice_partner.commercial_company_name))"/>
                 <div class="mt-2">
                     <div class="mb-2">
                         <label class="form-label mb-1"
@@ -22,6 +32,17 @@
                                id="o_buckaroo_billink_birthdate"
                                required="required"
                                t-att-value="billink_saved_birthdate"/>
+                    </div>
+                    <div class="mb-2" t-if="billink_is_b2b">
+                        <label class="form-label mb-1"
+                               for="o_buckaroo_billink_chamber_of_commerce">
+                            Chamber of Commerce number
+                        </label>
+                        <input type="text"
+                               class="form-control o_buckaroo_billink_chamber_of_commerce"
+                               id="o_buckaroo_billink_chamber_of_commerce"
+                               required="required"
+                               t-att-value="billink_invoice_partner.company_registry or ''"/>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input o_buckaroo_billink_tc"

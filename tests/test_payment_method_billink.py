@@ -431,7 +431,7 @@ class TestBillinkShopPaymentControllerValidations(BuckarooOfficialCommon):
         cls.billink = cls.env.ref("payment_buckaroo_official.payment_method_billink")
         cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
 
-    def _invoke(self, **kwargs):
+    def _invoke(self, order_id=1, **kwargs):
         """Fire the Billink controller handler; it raises before super() is reached."""
         import odoo.http
         from odoo.addons.payment_buckaroo_official.controllers.billink import (
@@ -449,13 +449,22 @@ class TestBillinkShopPaymentControllerValidations(BuckarooOfficialCommon):
                 "odoo.addons.payment_buckaroo_official.controllers.billink.request",
                 new=mock_request,
             ),
+            patch(
+                "odoo.addons.portal.controllers.portal.request",
+                new=mock_request,
+            ),
         ):
             return controller.shop_payment_transaction(
-                order_id=1,
+                order_id=order_id,
                 access_token="ignored",
                 payment_method_id=self.billink.id,
                 **kwargs,
             )
+
+    def _make_order(self, partner):
+        return self.env["sale.order"].create(
+            {"partner_id": partner.id, "partner_invoice_id": partner.id}
+        )
 
     def test_missing_terms_raises(self):
         with self.assertRaises(ValidationError) as ctx:
@@ -483,12 +492,60 @@ class TestBillinkShopPaymentControllerValidations(BuckarooOfficialCommon):
 
         partner = self.env.user.partner_id
         partner.buckaroo_billink_birthdate = False
+        # A B2C order keeps this test focused on birthdate persistence:
+        # the B2B Chamber-of-Commerce branch only engages for a company
+        # invoice partner.
+        b2c_order = self._make_order(self.env["res.partner"].create({"name": "Jan de Vries"}))
         with patch(
             "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
             return_value="SUPER_OK",
         ):
-            self._invoke(billink_tc_accepted=True, billink_birthdate="1990-05-15")
+            self._invoke(
+                order_id=b2c_order.id,
+                billink_tc_accepted=True,
+                billink_birthdate="1990-05-15",
+            )
         self.assertEqual(partner.buckaroo_billink_birthdate, date(1990, 5, 15))
+
+    def test_b2b_order_missing_chamber_of_commerce_raises(self):
+        b2b_partner = self.env["res.partner"].create({"name": "Acme BV", "is_company": True})
+        order = self._make_order(b2b_partner)
+        with self.assertRaises(ValidationError) as ctx:
+            self._invoke(
+                order_id=order.id,
+                billink_tc_accepted=True,
+                billink_birthdate="1990-01-01",
+            )
+        self.assertIn("Chamber of Commerce", str(ctx.exception))
+
+    def test_b2b_order_with_chamber_of_commerce_succeeds(self):
+        b2b_partner = self.env["res.partner"].create({"name": "Acme BV", "is_company": True})
+        order = self._make_order(b2b_partner)
+        with patch(
+            "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
+            return_value="SUPER_OK",
+        ):
+            result = self._invoke(
+                order_id=order.id,
+                billink_tc_accepted=True,
+                billink_birthdate="1990-01-01",
+                billink_chamber_of_commerce="87654321",
+            )
+        self.assertEqual(result, "SUPER_OK")
+
+    def test_b2c_order_skips_chamber_of_commerce_validation(self):
+        partner = self.env["res.partner"].create({"name": "Jan de Vries"})
+        order = self._make_order(partner)
+        with patch(
+            "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
+            return_value="SUPER_OK",
+        ):
+            result = self._invoke(
+                order_id=order.id,
+                billink_tc_accepted=True,
+                billink_birthdate="1990-01-01",
+            )
+        self.assertEqual(result, "SUPER_OK")
 
 
 @tagged("post_install", "-at_install")
@@ -576,6 +633,116 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
         self.assertIn("shippingCustomer", param_names)
         mock_builder.pay.assert_called_once()
         self.assertEqual(result, mock_response)
+
+    def test_billink_b2b_uses_checkout_supplied_chamber_of_commerce(self):
+        """Checkout-supplied CoC number overrides an empty partner value."""
+        b2b_partner = self.env["res.partner"].create(
+            {
+                "name": "Acme BV",
+                "is_company": True,
+                "street": "Keizersgracht 424",
+                "zip": "1016 GC",
+                "city": "Amsterdam",
+                "country_id": self.env.ref("base.nl").id,
+                "email": "info@acme.example",
+                "phone": "+31612345678",
+                "company_registry": "",
+            }
+        )
+        tx = self.env["payment.transaction"].create(
+            {
+                "provider_id": self.buckaroo.id,
+                "payment_method_id": self.billink.id,
+                "reference": "TX-BL-B2B-001",
+                "amount": 50.0,
+                "currency_id": self.currency_euro.id,
+                "partner_id": b2b_partner.id,
+                "operation": "online_redirect",
+            }
+        )
+
+        client = MagicMock()
+        mock_builder, mock_response = make_mock_sdk_builder()
+
+        with (
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_billink.PaymentService"
+            ) as MockPS,
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_billink.resolve_birthdate",
+                return_value="",
+            ),
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_billink.resolve_b2b_registry",
+                return_value="87654321",
+            ),
+        ):
+            MockPS.return_value.create_payment.return_value = mock_builder
+            result = self.billink._buckaroo_create_payment(tx, client)
+
+        calls = {call[0][0]: call[0][1][0] for call in mock_builder.add_parameter.call_args_list}
+        self.assertEqual(calls["billingCustomer"]["ChamberOfCommerce"], "87654321")
+        self.assertEqual(calls["shippingCustomer"]["ChamberOfCommerce"], "87654321")
+        self.assertEqual(result, mock_response)
+
+    def test_billink_b2b_registry_not_applied_to_different_shipping_company(self):
+        """When shipping is a different company than billing (separate
+        legal entity), the checkout-collected registry number must only
+        land on billingCustomer — shippingCustomer keeps its own
+        partner-derived chamber_of_commerce."""
+        tx = self.env["payment.transaction"].create(
+            {
+                "provider_id": self.buckaroo.id,
+                "payment_method_id": self.billink.id,
+                "reference": "TX-BL-B2BSHIP",
+                "amount": 50.0,
+                "currency_id": self.currency_euro.id,
+                "partner_id": self.partner_nl.id,
+                "operation": "online_redirect",
+            }
+        )
+        billing_data = get_customer_data(
+            make_partner(
+                is_company=True,
+                commercial_company_name="Acme BV",
+                company_registry=None,
+            )
+        )
+        shipping_data = get_customer_data(
+            make_partner(
+                is_company=True,
+                commercial_company_name="Other Company BV",
+                company_registry="SHIP-COC-1",
+            )
+        )
+
+        client = MagicMock()
+        mock_builder, _mock_response = make_mock_sdk_builder()
+
+        with (
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_billink.PaymentService"
+            ) as MockPS,
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_billink.resolve_birthdate",
+                return_value="",
+            ),
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_billink."
+                "resolve_bnpl_customer_data",
+                return_value=(billing_data, shipping_data, False),
+            ),
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_billink.resolve_b2b_registry",
+                return_value="12345678",
+            ),
+        ):
+            MockPS.return_value.create_payment.return_value = mock_builder
+            self.billink._buckaroo_create_payment(tx, client)
+
+        calls = {call[0][0]: call[0][1][0] for call in mock_builder.add_parameter.call_args_list}
+        self.assertEqual(calls["billingCustomer"]["ChamberOfCommerce"], "12345678")
+        self.assertEqual(calls["shippingCustomer"]["ChamberOfCommerce"], "SHIP-COC-1")
 
 
 class TestBillinkOrderLineFormatting(BaseCase):
@@ -744,3 +911,16 @@ class TestFormatBillinkCustomer(BaseCase):
         self.assertEqual(result["Category"], "B2B")
         self.assertEqual(result["CareOf"], "Acme BV")
         self.assertEqual(result["ChamberOfCommerce"], "12345678")
+
+    def test_b2b_customer_without_registry_omits_chamber_of_commerce(self):
+        data = get_customer_data(
+            make_partner(
+                is_company=True,
+                commercial_company_name="Acme BV",
+                company_registry=None,
+            )
+        )
+        result = BillinkPaymentMethod._format_billink_customer(data)
+        self.assertEqual(result["Category"], "B2B")
+        self.assertEqual(result["CareOf"], "Acme BV")
+        self.assertNotIn("ChamberOfCommerce", result)

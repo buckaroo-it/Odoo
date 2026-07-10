@@ -132,25 +132,33 @@ class PaymentMethodPaypal(models.Model):
         """PayPal Express captures during ``pay``: a successful response carries
         no redirect URL (the buyer already approved in the PayPal sheet), so the
         generic flow would mistake it for an error. Settle the tx from the sync
-        response - which also carries the buyer's address - and route via
-        ``/shop/payment/validate`` so the order is confirmed (mirrors Bank
-        Transfer's inline-completion handling)."""
+        response, which also carries the buyer's address.
+
+        A synchronously-settled tx routes to ``/payment/status`` (like the
+        giftcard / Riverty inline-success hooks): its poll runs
+        ``_post_process()`` in a fresh request so the order confirms now.
+        ``/shop/payment/validate`` does NOT post-process, and
+        ``sale.order.amount_paid`` is a non-stored compute keyed only on
+        ``transaction_ids`` - so settling and confirming in the same request
+        reads a stale amount and the order would sit unconfirmed until the
+        10-min cron. Pending stays on ``/shop/payment/validate``: it's an
+        open-ended offline wait, so a poll spinner makes no sense."""
         if self.code != "buckaroo_paypal":
             return super()._buckaroo_handle_no_redirect_response(transaction, response)
         status_code = (
             response.status.code.code if response.status and response.status.code else None
         )
+        base_url = transaction.provider_id.get_base_url().rstrip("/")
         if status_code == const.BuckarooStatusCode.SUCCESS:
             transaction.provider_reference = response.key
             self._buckaroo_paypal_write_address(transaction, response)
             transaction._set_done()
-        elif response.is_pending():
+            return {"api_url": f"{base_url}/payment/status"}
+        if response.is_pending():
             transaction.provider_reference = response.key
             transaction._set_pending()
-        else:
-            return None
-        base_url = transaction.provider_id.get_base_url().rstrip("/")
-        return {"api_url": f"{base_url}/shop/payment/validate"}
+            return {"api_url": f"{base_url}/shop/payment/validate"}
+        return None
 
     def _buckaroo_apply_push_metadata(self, transaction, payment_data):
         if self.code != "buckaroo_paypal":

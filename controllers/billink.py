@@ -1,12 +1,12 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, ValidationError
 from odoo.http import request, route
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
-from ..helpers.customer import validate_bnpl_birthdate
+from ..helpers.customer import is_b2b, validate_bnpl_birthdate, validate_bnpl_registry
 
 
 class BillinkPaymentPortal(PaymentPortal):
@@ -35,4 +35,24 @@ class BillinkPaymentPortal(PaymentPortal):
             invalid_msg=_("Invalid date of birth."),
             underage_msg=_("You must be at least 18 years old to use Billink."),
         )
+
+        # Validate the access token before reading any order metadata, so
+        # this override can't become an is_b2b oracle for an
+        # unauthenticated caller. Mirrors core's own check.
+        try:
+            order_sudo = self._document_check_access("sale.order", order_id, access_token)
+        except AccessError as exc:
+            raise ValidationError(_("The access token is invalid.")) from exc
+        if is_b2b(order_sudo.partner_invoice_id):
+            validate_bnpl_registry(
+                kwargs,
+                registry_kwarg="billink_chamber_of_commerce",
+                session_key="buckaroo_billink_chamber_of_commerce",
+                missing_msg=_(
+                    "Please enter your Chamber of Commerce number to proceed with Billink."
+                ),
+            )
+        else:
+            kwargs.pop("billink_chamber_of_commerce", None)
+
         return super().shop_payment_transaction(order_id, access_token, **kwargs)

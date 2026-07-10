@@ -6,6 +6,7 @@ from odoo import fields, models
 
 from ..helpers.articles import get_order_articles
 from ..helpers.customer import (
+    resolve_b2b_registry,
     resolve_birthdate,
     resolve_bnpl_customer_data,
     sanitize_phone,
@@ -50,7 +51,8 @@ class PaymentMethodBillink(models.Model):
 
         if data["is_b2b"]:
             customer["CareOf"] = data["company_name"]
-            customer["ChamberOfCommerce"] = data["chamber_of_commerce"]
+            if data["chamber_of_commerce"]:
+                customer["ChamberOfCommerce"] = data["chamber_of_commerce"]
         else:
             customer["CareOf"] = ""
 
@@ -71,6 +73,12 @@ class PaymentMethodBillink(models.Model):
             builder.add_parameter("article", self._format_billink_articles(articles))
 
         billing_data, shipping_data, _same = resolve_bnpl_customer_data(transaction)
+        # Only billing_data is force-set: when shipping is a different
+        # company, its own partner-derived chamber_of_commerce (from
+        # get_customer_data) must not be overwritten by the checkout
+        # value collected for the billing company.
+        registry = resolve_b2b_registry(transaction, "buckaroo_billink_chamber_of_commerce")
+        billing_data["chamber_of_commerce"] = registry
         billing_customer = self._format_billink_customer(billing_data)
         billing_customer["BirthDate"] = resolve_birthdate(
             transaction,

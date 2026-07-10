@@ -72,6 +72,24 @@ def resolve_birthdate(
     return ""
 
 
+def resolve_b2b_registry(transaction, session_key, *, missing_error=None):
+    """Resolve a B2B registry number (Chamber of Commerce / VAT id) from session → partner.
+
+    *session_key* is consumed via :func:`pop_session_value`; the partner
+    fallback reads the billing partner's ``company_registry``. Returns
+    ``''`` when neither is present unless *missing_error* is supplied,
+    in which case :class:`ValidationError` is raised with that message.
+    """
+    registry = (
+        pop_session_value(session_key) or get_billing_partner(transaction).company_registry or ""
+    )
+    if not registry and missing_error is not None:
+        from odoo.exceptions import ValidationError  # noqa: PLC0415
+
+        raise ValidationError(missing_error)
+    return registry
+
+
 def split_house_number(raw):
     """``"1A"`` → ``("1", "A")``; ``"42"`` → ``("42", "")``.
 
@@ -183,6 +201,30 @@ def validate_bnpl_birthdate(
     if not user._is_public():
         setattr(user.partner_id.sudo(), partner_field, dob)
     return dob
+
+
+def validate_bnpl_registry(kwargs, *, registry_kwarg, session_key, missing_msg):
+    """Pop and validate a B2B registry number from controller *kwargs*.
+
+    Raises :class:`ValidationError` with *missing_msg* on empty /
+    whitespace-only input. On success persists the raw value to
+    ``request.session[session_key]`` and, for a logged-in user, to
+    ``request.env.user.partner_id.company_registry`` for the next
+    checkout to prefill.
+    """
+    from odoo.exceptions import ValidationError  # noqa: PLC0415
+    from odoo.http import request as http_request  # noqa: PLC0415
+
+    raw = kwargs.pop(registry_kwarg, None)
+    cleaned = (raw or "").strip()
+    if not cleaned:
+        raise ValidationError(missing_msg)
+
+    http_request.session[session_key] = cleaned
+    user = http_request.env.user
+    if not user._is_public():
+        user.partner_id.sudo().company_registry = cleaned
+    return cleaned
 
 
 def get_billing_partner(transaction):

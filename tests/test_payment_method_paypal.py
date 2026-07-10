@@ -268,13 +268,15 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
         response.get_service_parameter.side_effect = lambda name: addr.get(name)
         return response
 
-    def test_success_sets_done_writes_address_and_routes_to_validate(self):
+    def test_success_sets_done_writes_address_and_routes_to_payment_status(self):
         tx = self._express_tx()
         response = self._response_with_address(190)
 
         result = self.paypal._buckaroo_handle_no_redirect_response(tx, response)
 
-        self.assertTrue(result["api_url"].endswith("/shop/payment/validate"))
+        # Success routes to /payment/status so the poll post-processes the tx
+        # in a fresh request and the order confirms now, not on the cron.
+        self.assertTrue(result["api_url"].endswith("/payment/status"))
         self.assertEqual(tx.provider_reference, response.key)
         self.assertEqual(tx.state, "done")
         partner = tx.partner_id
