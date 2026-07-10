@@ -21,6 +21,16 @@
                    t-value="(riverty_partner and riverty_partner.country_id and riverty_partner.country_id.code) or ''"/>
                 <t t-set="riverty_salutation_required"
                    t-value="riverty_country_code in ('NL', 'BE') or not riverty_country_code"/>
+                <!-- B2B detection must key off the order's billing/invoice
+                     partner, not the checkout contact (partner_id) — the
+                     controller and model gate B2B the same way via
+                     order.partner_invoice_id, so the template must agree
+                     or a B2B shopper with a different invoice address gets
+                     stuck (field hidden, server still requires it). -->
+                <t t-set="riverty_invoice_partner"
+                   t-value="(sale_order and sale_order.sudo().partner_invoice_id) or (partner_id and request.env['res.partner'].sudo().browse(partner_id).exists()) or request.env['res.partner']"/>
+                <t t-set="riverty_is_b2b"
+                   t-value="bool(riverty_invoice_partner and (riverty_invoice_partner.is_company or riverty_invoice_partner.commercial_company_name))"/>
                 <div class="mt-2">
                     <div class="mb-2">
                         <label class="form-label mb-1"
@@ -46,6 +56,17 @@
                                id="o_buckaroo_riverty_birthdate"
                                required="required"
                                t-att-value="riverty_saved_birthdate"/>
+                    </div>
+                    <div class="mb-2" t-if="riverty_is_b2b">
+                        <label class="form-label mb-1"
+                               for="o_buckaroo_riverty_identification_number">
+                            Identification number (Chamber of Commerce / VAT id)
+                        </label>
+                        <input type="text"
+                               class="form-control o_buckaroo_riverty_identification_number"
+                               id="o_buckaroo_riverty_identification_number"
+                               required="required"
+                               t-att-value="riverty_invoice_partner.company_registry or ''"/>
                     </div>
                 </div>
             </t>

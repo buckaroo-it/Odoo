@@ -18,6 +18,12 @@ patch(PaymentForm.prototype, {
             if (birthdate && birthdate.value) {
                 params.billink_birthdate = birthdate.value;
             }
+            const chamberOfCommerce = document.querySelector(
+                '.o_buckaroo_billink_chamber_of_commerce'
+            );
+            if (chamberOfCommerce && chamberOfCommerce.value) {
+                params.billink_chamber_of_commerce = chamberOfCommerce.value;
+            }
         }
         return params;
     },

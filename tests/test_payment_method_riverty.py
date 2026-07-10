@@ -88,8 +88,12 @@ class TestRivertyPaymentCreation(BuckarooOfficialCommon):
         self.assertEqual(result["api_url"], "https://rv/pay/X")
         self.assertEqual(tx.provider_reference, "STORED_KEY")
 
-    def test_payment_creation_missing_redirect_raises(self):
-        response = self._sdk_response(redirect_url=None)
+    def test_payment_creation_missing_redirect_and_failure_raises(self):
+        # No redirect URL AND a failure status: the no-redirect handler can't
+        # settle it (returns None), so the flow falls through to the error
+        # path. A no-redirect SUCCESS instead settles synchronously — covered
+        # by TestRivertyNoRedirectSettlement.
+        response = make_mock_sdk_response(490)
         tx = self._create_tx()
         PaymentMethod = type(tx.payment_method_id)
 
@@ -367,6 +371,10 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
                 "odoo.addons.payment_buckaroo_official.controllers.riverty.request",
                 new=mock_request,
             ),
+            patch(
+                "odoo.addons.portal.controllers.portal.request",
+                new=mock_request,
+            ),
         ):
             return controller.shop_payment_transaction(
                 order_id=1,
@@ -416,8 +424,101 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
             "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
             return_value="SUPER_OK",
         ):
-            self._invoke(riverty_birthdate="1990-05-15")
+            # order_id=1 (the ``_invoke`` fixture default) is a B2B
+            # order in this dev database; supply an identification
+            # number so the new B2B guard doesn't block this
+            # birthdate-persistence assertion.
+            self._invoke(
+                riverty_birthdate="1990-05-15",
+                riverty_identification_number="12345678",
+            )
         self.assertEqual(partner.buckaroo_riverty_birthdate, date(1990, 5, 15))
+
+    def test_b2b_order_missing_identification_number_raises(self):
+        """A B2B order (company invoice partner) must supply an
+        identification number to proceed with Riverty, enforced via the
+        shared ``validate_bnpl_registry`` helper."""
+        import odoo.http
+        from odoo.addons.payment_buckaroo_official.controllers.riverty import (
+            RivertyPaymentPortal,
+        )
+
+        company_partner = self.env["res.partner"].create(
+            {"name": "Acme BV", "is_company": True}
+        )
+        order = self.env["sale.order"].create({"partner_id": company_partner.id})
+        controller = RivertyPaymentPortal()
+        mock_request = MagicMock()
+        mock_request.env = self.env
+        mock_request.session = {}
+        with (
+            patch.object(odoo.http, "request", mock_request),
+            patch(
+                "odoo.addons.payment_buckaroo_official.controllers.riverty.request",
+                new=mock_request,
+            ),
+            patch(
+                "odoo.addons.portal.controllers.portal.request",
+                new=mock_request,
+            ),
+        ):
+            with self.assertRaises(ValidationError) as ctx:
+                controller.shop_payment_transaction(
+                    order_id=order.id,
+                    access_token="ignored",
+                    payment_method_id=self.riverty.id,
+                    riverty_birthdate="1990-05-15",
+                    riverty_salutation="Mr",
+                )
+        self.assertIn("identification number", str(ctx.exception).lower())
+
+    def test_b2c_order_identification_number_kwarg_popped_before_super(self):
+        """A B2C order doesn't require an identification number; a
+        stray value must still be popped so it never leaks into the
+        super() call's kwargs."""
+        import odoo.http
+        from odoo.addons.payment_buckaroo_official.controllers.riverty import (
+            RivertyPaymentPortal,
+        )
+
+        person_partner = self.env["res.partner"].create({"name": "Jan de Vries"})
+        order = self.env["sale.order"].create({"partner_id": person_partner.id})
+        controller = RivertyPaymentPortal()
+        mock_request = MagicMock()
+        mock_request.env = self.env
+        mock_request.session = {}
+        captured = {}
+
+        def fake_super(order_id, access_token, **kwargs):
+            captured.update(kwargs)
+            return "SUPER_OK"
+
+        with (
+            patch.object(odoo.http, "request", mock_request),
+            patch(
+                "odoo.addons.payment_buckaroo_official.controllers.riverty.request",
+                new=mock_request,
+            ),
+            patch(
+                "odoo.addons.portal.controllers.portal.request",
+                new=mock_request,
+            ),
+            patch(
+                "odoo.addons.website_sale.controllers.payment.PaymentPortal."
+                "shop_payment_transaction",
+                side_effect=fake_super,
+            ),
+        ):
+            result = controller.shop_payment_transaction(
+                order_id=order.id,
+                access_token="ignored",
+                payment_method_id=self.riverty.id,
+                riverty_birthdate="1990-05-15",
+                riverty_salutation="Mr",
+                riverty_identification_number="12345678",
+            )
+        self.assertEqual(result, "SUPER_OK")
+        self.assertNotIn("riverty_identification_number", captured)
 
     def test_non_riverty_method_passes_through(self):
         """Non-riverty payment methods must NOT trigger birthdate validation."""
@@ -694,6 +795,143 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         }
         self.assertEqual(params_by_name["billingCustomer"][0]["BirthDate"], "15-05-1990")
         mock_builder.pay.assert_called_once()
+
+    def test_create_payment_b2b_registry_overrides_empty_partner_value(self):
+        """A checkout-supplied identification number overrides an empty
+        partner ``company_registry`` and lands in ``IdentificationNumber``
+        for both billing and shipping customer groups — this is the bug
+        being fixed."""
+        tx = self._make_tx_with_product(reference="TX-RV-B2BREG")
+        client = MagicMock()
+        mock_builder, _mock_response = make_mock_sdk_builder()
+        b2b_data = get_customer_data(
+            make_partner(
+                is_company=True,
+                commercial_company_name="Acme BV",
+                company_registry=None,
+            )
+        )
+        ps, dob, sal = self._patch_dispatch_context()
+        with (
+            ps as MockPS,
+            dob,
+            sal,
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_riverty."
+                "resolve_bnpl_customer_data",
+                return_value=(b2b_data, b2b_data, True),
+            ),
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_riverty."
+                "resolve_b2b_registry",
+                return_value="12345678",
+            ),
+        ):
+            MockPS.return_value.create_payment.return_value = mock_builder
+            self.riverty._buckaroo_create_payment(tx, client)
+
+        params_by_name = {
+            call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
+        }
+        self.assertEqual(
+            params_by_name["billingCustomer"][0]["IdentificationNumber"], "12345678"
+        )
+        self.assertEqual(
+            params_by_name["shippingCustomer"][0]["IdentificationNumber"], "12345678"
+        )
+
+    def test_create_payment_b2b_registry_not_applied_to_different_shipping_company(self):
+        """When shipping is a different company than billing (separate
+        legal entity), the checkout-collected registry number must only
+        land on billingCustomer — shippingCustomer keeps its own
+        partner-derived chamber_of_commerce."""
+        tx = self._make_tx_with_product(reference="TX-RV-B2BSHIP")
+        client = MagicMock()
+        mock_builder, _mock_response = make_mock_sdk_builder()
+        billing_data = get_customer_data(
+            make_partner(
+                is_company=True,
+                commercial_company_name="Acme BV",
+                company_registry=None,
+            )
+        )
+        shipping_data = get_customer_data(
+            make_partner(
+                is_company=True,
+                commercial_company_name="Other Company BV",
+                company_registry="SHIP-COC-1",
+            )
+        )
+        ps, dob, sal = self._patch_dispatch_context()
+        with (
+            ps as MockPS,
+            dob,
+            sal,
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_riverty."
+                "resolve_bnpl_customer_data",
+                return_value=(billing_data, shipping_data, False),
+            ),
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_riverty."
+                "resolve_b2b_registry",
+                return_value="12345678",
+            ),
+        ):
+            MockPS.return_value.create_payment.return_value = mock_builder
+            self.riverty._buckaroo_create_payment(tx, client)
+
+        params_by_name = {
+            call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
+        }
+        self.assertEqual(
+            params_by_name["billingCustomer"][0]["IdentificationNumber"], "12345678"
+        )
+        self.assertEqual(
+            params_by_name["shippingCustomer"][0]["IdentificationNumber"], "SHIP-COC-1"
+        )
+
+    def test_create_payment_b2c_customer_has_no_identification_number(self):
+        """B2C orders never send ``IdentificationNumber`` / ``CompanyName``,
+        unchanged by the B2B registry resolution added for Riverty."""
+        tx = self._make_tx_with_product(reference="TX-RV-B2C")
+        client = MagicMock()
+        mock_builder, _mock_response = make_mock_sdk_builder()
+        ps, dob, sal = self._patch_dispatch_context()
+        with ps as MockPS, dob, sal:
+            MockPS.return_value.create_payment.return_value = mock_builder
+            self.riverty._buckaroo_create_payment(tx, client)
+
+        params_by_name = {
+            call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
+        }
+        billing = params_by_name["billingCustomer"][0]
+        self.assertNotIn("IdentificationNumber", billing)
+        self.assertNotIn("CompanyName", billing)
+
+    def test_b2c_order_still_consumes_stale_registry_session_key(self):
+        """A B2C order must still resolve (and thus pop) the identification
+        number session key, matching Billink's unconditional call — a
+        stale key left by an earlier B2B attempt must never survive to
+        leak into a later B2B order (matches Billink's behavior)."""
+        tx = self._make_tx_with_product(reference="TX-RV-B2CPOP")
+        client = MagicMock()
+        mock_builder, _mock_response = make_mock_sdk_builder()
+        ps, dob, sal = self._patch_dispatch_context()
+        with (
+            ps as MockPS,
+            dob,
+            sal,
+            patch(
+                "odoo.addons.payment_buckaroo_official.models.payment_method_riverty."
+                "resolve_b2b_registry",
+                return_value="",
+            ) as mock_resolve,
+        ):
+            MockPS.return_value.create_payment.return_value = mock_builder
+            self.riverty._buckaroo_create_payment(tx, client)
+
+        mock_resolve.assert_called_once_with(tx, "buckaroo_riverty_identification_number")
 
 
 @tagged("post_install", "-at_install")
@@ -1162,3 +1400,78 @@ class TestFormatRivertyCustomer(BaseCase):
         # B2C ``CareOf`` field is NOT used as a company-name carrier.
         self.assertEqual(result["CompanyName"], "Acme BV")
         self.assertEqual(result["IdentificationNumber"], "12345678")
+
+    def test_b2b_customer_omits_identification_number_when_empty(self):
+        """No registry number anywhere (partner nor checkout-supplied) —
+        Riverty must not receive an empty ``IdentificationNumber``."""
+        data = get_customer_data(
+            make_partner(
+                is_company=True,
+                commercial_company_name="Acme BV",
+                company_registry=None,
+            )
+        )
+        result = RivertyPaymentMethod._format_riverty_customer(data)
+        self.assertEqual(result["Category"], "Company")
+        self.assertEqual(result["CompanyName"], "Acme BV")
+        self.assertNotIn("IdentificationNumber", result)
+
+
+@tagged("post_install", "-at_install")
+class TestRivertyNoRedirectSettlement(BuckarooOfficialCommon):
+    """A Riverty ``pay``/``authorize`` can be approved synchronously and return
+    no redirect URL; ``_buckaroo_handle_no_redirect_response`` must settle the
+    tx from the sync response and route via ``/shop/payment/validate`` instead
+    of letting the generic flow treat it as a failure."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
+        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+
+    def test_success_pay_sets_done_and_routes_to_payment_status(self):
+        tx = self._create_buckaroo_tx(reference="TX-RIV-NR", payment_method=self.riverty)
+        response = make_mock_sdk_response(190)
+
+        result = self.riverty._buckaroo_handle_no_redirect_response(tx, response)
+
+        # Success routes to /payment/status so the poll post-processes the tx
+        # in a fresh request and the order confirms now, not on the cron.
+        self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self.assertEqual(tx.provider_reference, response.key)
+        self.assertEqual(tx.state, "done")
+
+    def test_success_authorize_sets_authorized_and_routes_to_payment_status(self):
+        tx = self._create_buckaroo_tx(reference="TX-RIV-NR-AUTH", payment_method=self.riverty)
+        tx.buckaroo_official_payment_action = "authorize"
+        response = make_mock_sdk_response(190)
+
+        result = self.riverty._buckaroo_handle_no_redirect_response(tx, response)
+
+        self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self.assertEqual(tx.state, "authorized")
+
+    def test_pending_sets_pending_and_routes_to_validate(self):
+        tx = self._create_buckaroo_tx(reference="TX-RIV-NR-PENDING", payment_method=self.riverty)
+        response = make_mock_sdk_response(791)
+
+        result = self.riverty._buckaroo_handle_no_redirect_response(tx, response)
+
+        self.assertTrue(result["api_url"].endswith("/shop/payment/validate"))
+        self.assertEqual(tx.provider_reference, response.key)
+        self.assertEqual(tx.state, "pending")
+
+    def test_failure_returns_none_to_fall_through_to_error_path(self):
+        tx = self._create_buckaroo_tx(reference="TX-RIV-NR-FAIL", payment_method=self.riverty)
+        response = make_mock_sdk_response(490)
+
+        result = self.riverty._buckaroo_handle_no_redirect_response(tx, response)
+
+        self.assertIsNone(result)
+        self.assertNotEqual(tx.state, "done")
+
+    def test_non_riverty_method_delegates_to_base(self):
+        tx = self._create_buckaroo_tx(reference="TX-RIV-NR-IDEAL")
+        result = self.ideal._buckaroo_handle_no_redirect_response(tx, make_mock_sdk_response(190))
+        self.assertIsNone(result)
