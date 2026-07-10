@@ -66,9 +66,7 @@ class RivertyPaymentPortal(PaymentPortal):
                 kwargs,
                 registry_kwarg="riverty_identification_number",
                 session_key="buckaroo_riverty_identification_number",
-                missing_msg=_(
-                    "Please enter your identification number to proceed with Riverty."
-                ),
+                missing_msg=_("Please enter your identification number to proceed with Riverty."),
             )
         else:
             kwargs.pop("riverty_identification_number", None)

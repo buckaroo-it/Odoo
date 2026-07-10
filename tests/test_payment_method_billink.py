@@ -495,9 +495,7 @@ class TestBillinkShopPaymentControllerValidations(BuckarooOfficialCommon):
         # A B2C order keeps this test focused on birthdate persistence:
         # the B2B Chamber-of-Commerce branch only engages for a company
         # invoice partner.
-        b2c_order = self._make_order(
-            self.env["res.partner"].create({"name": "Jan de Vries"})
-        )
+        b2c_order = self._make_order(self.env["res.partner"].create({"name": "Jan de Vries"}))
         with patch(
             "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
             return_value="SUPER_OK",
@@ -682,9 +680,7 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
             MockPS.return_value.create_payment.return_value = mock_builder
             result = self.billink._buckaroo_create_payment(tx, client)
 
-        calls = {
-            call[0][0]: call[0][1][0] for call in mock_builder.add_parameter.call_args_list
-        }
+        calls = {call[0][0]: call[0][1][0] for call in mock_builder.add_parameter.call_args_list}
         self.assertEqual(calls["billingCustomer"]["ChamberOfCommerce"], "87654321")
         self.assertEqual(calls["shippingCustomer"]["ChamberOfCommerce"], "87654321")
         self.assertEqual(result, mock_response)
@@ -744,9 +740,7 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
             MockPS.return_value.create_payment.return_value = mock_builder
             self.billink._buckaroo_create_payment(tx, client)
 
-        calls = {
-            call[0][0]: call[0][1][0] for call in mock_builder.add_parameter.call_args_list
-        }
+        calls = {call[0][0]: call[0][1][0] for call in mock_builder.add_parameter.call_args_list}
         self.assertEqual(calls["billingCustomer"]["ChamberOfCommerce"], "12345678")
         self.assertEqual(calls["shippingCustomer"]["ChamberOfCommerce"], "SHIP-COC-1")
 

@@ -80,7 +80,9 @@ def resolve_b2b_registry(transaction, session_key, *, missing_error=None):
     ``''`` when neither is present unless *missing_error* is supplied,
     in which case :class:`ValidationError` is raised with that message.
     """
-    registry = pop_session_value(session_key) or get_billing_partner(transaction).company_registry or ""
+    registry = (
+        pop_session_value(session_key) or get_billing_partner(transaction).company_registry or ""
+    )
     if not registry and missing_error is not None:
         from odoo.exceptions import ValidationError  # noqa: PLC0415
 

@@ -450,9 +450,7 @@ class TestResolveB2BRegistry(BaseCase):
         partner = make_partner(company_registry="87654321")
         tx = make_transaction(partner=partner)
         with patch("odoo.http.request", mock_req):
-            self.assertEqual(
-                resolve_b2b_registry(tx, "buckaroo_b2b_registry"), "12345678"
-            )
+            self.assertEqual(resolve_b2b_registry(tx, "buckaroo_b2b_registry"), "12345678")
 
     def test_falls_back_to_partner_company_registry(self):
         mock_req = MagicMock()
@@ -460,9 +458,7 @@ class TestResolveB2BRegistry(BaseCase):
         partner = make_partner(company_registry="87654321")
         tx = make_transaction(partner=partner)
         with patch("odoo.http.request", mock_req):
-            self.assertEqual(
-                resolve_b2b_registry(tx, "buckaroo_b2b_registry"), "87654321"
-            )
+            self.assertEqual(resolve_b2b_registry(tx, "buckaroo_b2b_registry"), "87654321")
 
     def test_returns_empty_when_neither_present(self):
         mock_req = MagicMock()

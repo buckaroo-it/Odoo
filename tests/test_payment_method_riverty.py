@@ -443,9 +443,7 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
             RivertyPaymentPortal,
         )
 
-        company_partner = self.env["res.partner"].create(
-            {"name": "Acme BV", "is_company": True}
-        )
+        company_partner = self.env["res.partner"].create({"name": "Acme BV", "is_company": True})
         order = self.env["sale.order"].create({"partner_id": company_partner.id})
         controller = RivertyPaymentPortal()
         mock_request = MagicMock()
@@ -833,12 +831,8 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         params_by_name = {
             call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
         }
-        self.assertEqual(
-            params_by_name["billingCustomer"][0]["IdentificationNumber"], "12345678"
-        )
-        self.assertEqual(
-            params_by_name["shippingCustomer"][0]["IdentificationNumber"], "12345678"
-        )
+        self.assertEqual(params_by_name["billingCustomer"][0]["IdentificationNumber"], "12345678")
+        self.assertEqual(params_by_name["shippingCustomer"][0]["IdentificationNumber"], "12345678")
 
     def test_create_payment_b2b_registry_not_applied_to_different_shipping_company(self):
         """When shipping is a different company than billing (separate
@@ -884,9 +878,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         params_by_name = {
             call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
         }
-        self.assertEqual(
-            params_by_name["billingCustomer"][0]["IdentificationNumber"], "12345678"
-        )
+        self.assertEqual(params_by_name["billingCustomer"][0]["IdentificationNumber"], "12345678")
         self.assertEqual(
             params_by_name["shippingCustomer"][0]["IdentificationNumber"], "SHIP-COC-1"
         )
