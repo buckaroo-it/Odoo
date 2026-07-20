@@ -28,3 +28,5 @@ from . import test_payment_method_sdk_contract
 from . import test_transaction_model_dispatch
 from . import test_account_move_refund
 from . import test_secured_by_notice
+from . import test_payment_method_przelewy24
+from . import test_payment_method_trustly
