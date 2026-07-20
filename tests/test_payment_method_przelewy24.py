@@ -100,7 +100,9 @@ class TestPrzelewy24PaymentCreation(BuckarooOfficialCommon):
     def test_other_method_delegates_to_generic_path(self):
         tx = self._create_tx(method=self.ideal, reference="P24-TX-IDEAL")
 
-        mock_builder, _response, _result, MockOwn, MockGeneric = self._create_payment(self.ideal, tx)
+        mock_builder, _response, _result, MockOwn, MockGeneric = self._create_payment(
+            self.ideal, tx
+        )
 
         MockOwn.return_value.create_payment.assert_not_called()
         MockGeneric.return_value.create_payment.assert_called_once()
