@@ -29,6 +29,7 @@ from .common import (
     parsed_from_json,
 )
 from ..helpers.customer import get_customer_data
+from ..models.payment_method import PaymentMethod as BasePaymentMethod
 from ..models.payment_method_riverty import PaymentMethodRiverty as RivertyPaymentMethod
 from .test_helpers import make_partner
 
@@ -1471,7 +1472,50 @@ class TestRivertyNoRedirectSettlement(BuckarooOfficialCommon):
         self.assertIsNone(result)
         self.assertNotEqual(tx.state, "done")
 
+    def _spy_on_base(self):
+        """Spy on the base handler while keeping its real behaviour.
+
+        Asserting on the result alone cannot prove delegation: the base
+        handler is byte-identical to Riverty's, so dropping the ``self.code``
+        guard would keep those assertions green. Spying on the base is what
+        actually fails when the guard goes away.
+        """
+        return patch.object(
+            BasePaymentMethod,
+            "_buckaroo_handle_no_redirect_response",
+            autospec=True,
+            side_effect=BasePaymentMethod._buckaroo_handle_no_redirect_response,
+        )
+
     def test_non_riverty_method_delegates_to_base(self):
+        # A non-Riverty method falls through to the base handler, which settles
+        # an inline SUCCESS generically (routes to /payment/status, tx done).
         tx = self._create_buckaroo_tx(reference="TX-RIV-NR-IDEAL")
-        result = self.ideal._buckaroo_handle_no_redirect_response(tx, make_mock_sdk_response(190))
+        with self._spy_on_base() as base:
+            result = self.ideal._buckaroo_handle_no_redirect_response(
+                tx, make_mock_sdk_response(190)
+            )
+        self.assertTrue(base.called)
+        self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self.assertEqual(tx.state, "done")
+
+    def test_non_riverty_method_delegates_to_base_returns_none_on_failure(self):
+        # A non-success inline response still falls through to the error path.
+        tx = self._create_buckaroo_tx(reference="TX-RIV-NR-IDEAL-FAIL")
+        with self._spy_on_base() as base:
+            result = self.ideal._buckaroo_handle_no_redirect_response(
+                tx, make_mock_sdk_response(490)
+            )
+        self.assertTrue(base.called)
         self.assertIsNone(result)
+
+    def test_riverty_method_does_not_delegate_to_base(self):
+        # The mirror of the two tests above: Riverty handles its own inline
+        # success, so the base handler must not run at all.
+        tx = self._create_buckaroo_tx(reference="TX-RIV-NR-OWN", payment_method=self.riverty)
+        with self._spy_on_base() as base:
+            result = self.riverty._buckaroo_handle_no_redirect_response(
+                tx, make_mock_sdk_response(190)
+            )
+        self.assertFalse(base.called)
+        self.assertTrue(result["api_url"].endswith("/payment/status"))

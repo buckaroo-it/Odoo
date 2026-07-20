@@ -67,6 +67,67 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
             with self.assertRaises(ValidationError):
                 tx._get_specific_processing_values({})
 
+    def test_direct_success_without_redirect_completes_payment(self):
+        """A redirect method that settles inline (EPS in test mode returns
+        SUCCESS 190 with no redirect URL and no RequiredAction) must complete
+        the payment instead of raising its status message as an error.
+
+        Regression for the EPS bug (BTI-1190): the create leg read "no redirect
+        URL" as failure and surfaced "Transaction successfully processed" via
+        ``get_some_error()``, rolling back the request so no transaction or
+        order was created.
+        """
+        eps = self.env.ref("payment_buckaroo_official.payment_method_eps")
+        self.buckaroo.payment_method_ids = [Command.link(eps.id)]
+        response = make_mock_sdk_response(190)
+        response.key = "EPS_DIRECT_KEY"
+        response.get_redirect_url.return_value = None
+        response.required_action = None
+
+        tx = self._create_transaction(payment_method_id=eps.id, reference="TX-EPS-DIRECT")
+        PaymentMethod = type(tx.payment_method_id)
+        with patch.object(PaymentMethod, "_buckaroo_create_payment", return_value=response):
+            result = tx._get_specific_processing_values({})
+
+        # Success routes to /payment/status so the poll post-processes the tx
+        # in a fresh request and the order confirms now, not on the cron.
+        self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self.assertEqual(tx.state, "done")
+        self.assertEqual(tx.provider_reference, "EPS_DIRECT_KEY")
+
+    def test_inline_settled_tx_survives_duplicate_push(self):
+        """A tx settled inline on the create leg (EPS direct success) must
+        stay ``done`` when Buckaroo also delivers a webhook push for it: the
+        duplicate 190 push is deduped (no state change, no spawned refund
+        child), so no second account.payment can be created."""
+        eps = self.env.ref("payment_buckaroo_official.payment_method_eps")
+        self.buckaroo.payment_method_ids = [Command.link(eps.id)]
+        response = make_mock_sdk_response(190)
+        response.key = "EPS_DIRECT_KEY"
+        response.get_redirect_url.return_value = None
+        response.required_action = None
+
+        tx = self._create_transaction(payment_method_id=eps.id, reference="TX-EPS-DUP")
+        PaymentMethod = type(tx.payment_method_id)
+        with patch.object(PaymentMethod, "_buckaroo_create_payment", return_value=response):
+            tx._get_specific_processing_values({})
+        self.assertEqual(tx.state, "done")
+
+        # The async webhook lands afterwards, carrying the same 190 success.
+        push = parsed_from_form(
+            {
+                "brq_invoicenumber": "TX-EPS-DUP",
+                "brq_amount": "50.00",
+                "brq_currency": "EUR",
+                "brq_statuscode": "190",
+                "brq_transactions": "EPS_DIRECT_KEY",
+            }
+        )
+        tx._apply_updates(push)
+
+        self.assertEqual(tx.state, "done")
+        self.assertFalse(tx.child_transaction_ids)
+
     def test_processing_blocks_method_outside_configured_amount_limits(self):
         """Buckaroo should reject processing when the selected method is out of range."""
         self.ideal.write({"buckaroo_official_max_amount": "25.00"})
