@@ -17,3 +17,5 @@ from . import sale_order
 from . import account_move
 from . import payment_method_giftcard
 from . import payment_method_alipay
+from . import payment_method_przelewy24
+from . import payment_method_trustly
