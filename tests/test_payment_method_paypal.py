@@ -307,8 +307,17 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
         self.assertNotEqual(tx.state, "done")
 
     def test_non_paypal_method_delegates_to_base(self):
+        # A non-PayPal method falls through to the base handler, which settles
+        # an inline SUCCESS generically (routes to /payment/status, tx done).
         tx = self._create_buckaroo_tx(reference="TX-IDEAL-NR")
         result = self.ideal._buckaroo_handle_no_redirect_response(tx, make_mock_sdk_response(190))
+        self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self.assertEqual(tx.state, "done")
+
+    def test_non_paypal_method_delegates_to_base_returns_none_on_failure(self):
+        # A non-success inline response still falls through to the error path.
+        tx = self._create_buckaroo_tx(reference="TX-IDEAL-NR-FAIL")
+        result = self.ideal._buckaroo_handle_no_redirect_response(tx, make_mock_sdk_response(490))
         self.assertIsNone(result)
 
 

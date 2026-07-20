@@ -268,9 +268,38 @@ class PaymentMethod(models.Model):
         """Hook for methods that legitimately return no external redirect
         (e.g. Bank Transfer's merchant-display mode). Return ``None`` to
         fall through to the default error path, or a dict like
-        ``{'api_url': '...'}`` to short-circuit ``_get_specific_processing_values``."""
+        ``{'api_url': '...'}`` to short-circuit ``_get_specific_processing_values``.
+
+        A redirect method can also settle inline: the gateway completes the
+        payment on the Pay call and returns SUCCESS (190) with no
+        RequiredAction and no redirect URL (e.g. EPS in test mode). Without
+        this, the caller reads that as "no redirect URL" and raises the
+        response's status message ("Transaction successfully processed") as an
+        error, rolling back the whole request so no transaction or order is
+        created. Settle a terminal success instead: record the key, move the
+        tx to its terminal state, and route to ``/payment/status`` so its poll
+        post-processes the tx in a fresh request (see the PayPal override for
+        why not ``/shop/payment/validate``). Return ``None`` for any
+        non-success response so the caller falls through to its error
+        handling.
+
+        The inline path intentionally skips ``_validate_amount`` (which only
+        runs on the push/return ``_process`` path): the amount is echoed from
+        the create request we just sent, so it is trusted here — consistent
+        with the PayPal and Riverty inline-settlement hooks."""
         self.ensure_one()
-        return None
+        status_code = (
+            response.status.code.code if response.status and response.status.code else None
+        )
+        if status_code != const.BuckarooStatusCode.SUCCESS:
+            return None
+        transaction.provider_reference = response.key
+        if transaction.buckaroo_official_payment_action == "authorize":
+            transaction._set_authorized()
+        else:
+            transaction._set_done()
+        base_url = transaction.provider_id.get_base_url().rstrip("/")
+        return {"api_url": f"{base_url}/payment/status"}
 
     def _buckaroo_handle_redirect_response(self, transaction, response):
         self.ensure_one()

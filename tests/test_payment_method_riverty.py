@@ -1472,6 +1472,15 @@ class TestRivertyNoRedirectSettlement(BuckarooOfficialCommon):
         self.assertNotEqual(tx.state, "done")
 
     def test_non_riverty_method_delegates_to_base(self):
+        # A non-Riverty method falls through to the base handler, which settles
+        # an inline SUCCESS generically (routes to /payment/status, tx done).
         tx = self._create_buckaroo_tx(reference="TX-RIV-NR-IDEAL")
         result = self.ideal._buckaroo_handle_no_redirect_response(tx, make_mock_sdk_response(190))
+        self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self.assertEqual(tx.state, "done")
+
+    def test_non_riverty_method_delegates_to_base_returns_none_on_failure(self):
+        # A non-success inline response still falls through to the error path.
+        tx = self._create_buckaroo_tx(reference="TX-RIV-NR-IDEAL-FAIL")
+        result = self.ideal._buckaroo_handle_no_redirect_response(tx, make_mock_sdk_response(490))
         self.assertIsNone(result)
