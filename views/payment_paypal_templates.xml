@@ -58,7 +58,9 @@
                      t-att-data-payment-method-id="pm_sudo.id"
                      t-att-data-merchant-id="pm_sudo._buckaroo_paypal_merchant_id_for(provider_sudo)"
                      t-att-data-website-key="provider_sudo.buckaroo_official_website_key or ''"
-                     t-att-data-test-mode="provider_sudo.state == 'test'"/>
+                     t-att-data-test-mode="provider_sudo.state == 'test'"
+                     t-att-data-amount="amount"
+                     t-att-data-currency-name="currency and currency.name.lower()"/>
             </t>
         </xpath>
     </template>

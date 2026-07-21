@@ -4,9 +4,12 @@ import inspect
 from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import UserError
+from odoo.fields import Command
 from odoo.tests import tagged
 
-from .common import BuckarooOfficialCommon
+from .common import BuckarooOfficialCommon, make_mock_sdk_builder
+
+_PAYPAL_PS = "odoo.addons.payment_buckaroo_official.models.payment_method_paypal.PaymentService"
 
 
 @tagged("post_install", "-at_install")
@@ -179,3 +182,61 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
         result, session = self._call(pm_code="buckaroo_ideal")
         self.assertEqual(result, {"ok": True})
         self.assertNotIn("buckaroo_paypal_order_id", session)
+
+    def test_checkout_transaction_route_call_stash_is_consumable_by_create_payment(self):
+        """The checkout ("Pay now") entry point never runs an express
+        pre-step (no cart/product bind, no `finalize_express_transaction`
+        RPC) - the only thing that stashes the order id is this controller,
+        driven straight off the `buckaroo_paypal_order_id` transaction-route
+        param the `PaymentForm` patch injects. Chain the controller call into
+        `_buckaroo_create_payment` to prove that stash is exactly what it
+        needs to pop."""
+        paypal = self.env.ref("payment_buckaroo_official.payment_method_paypal")
+        self.buckaroo.payment_method_ids = [Command.link(paypal.id)]
+
+        from ..controllers.paypal import PaypalPaymentPortal
+        from odoo.addons.website_sale.controllers.payment import PaymentPortal
+
+        session = {}
+        pm = MagicMock()
+        pm.code = "buckaroo_paypal"
+
+        fake_env = MagicMock()
+        fake_env.__getitem__.return_value.sudo.return_value.browse.return_value = pm
+
+        fake_req = MagicMock()
+        fake_req.env = fake_env
+        fake_req.session = session
+
+        controller = PaypalPaymentPortal()
+        with (
+            patch(
+                "odoo.addons.payment_buckaroo_official.controllers.paypal.request",
+                new=fake_req,
+            ),
+            patch.object(
+                PaymentPortal,
+                "shop_payment_transaction",
+                new=lambda self_, order_id_, access_token, **kw: {"ok": True},
+            ),
+        ):
+            controller.shop_payment_transaction(
+                1,
+                "tok",
+                payment_method_id=5,
+                buckaroo_paypal_order_id="PP-CHECKOUT-1",
+            )
+        self.assertEqual(session.get("buckaroo_paypal_order_id"), "PP-CHECKOUT-1")
+
+        tx = self._create_buckaroo_tx(reference="TX-PP-CHECKOUT", payment_method=paypal)
+        client = MagicMock()
+        mock_builder, _ = make_mock_sdk_builder()
+        with patch(_PAYPAL_PS) as MockPS, patch("odoo.http.request", fake_req):
+            MockPS.return_value.create_payment.return_value = mock_builder
+            paypal._buckaroo_create_payment(tx, client)
+
+        self.assertNotIn("buckaroo_paypal_order_id", session)
+        param_calls = {
+            call.args[0]: call.args[1] for call in mock_builder.add_parameter.call_args_list
+        }
+        self.assertEqual(param_calls.get("payPalOrderId"), "PP-CHECKOUT-1")

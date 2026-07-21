@@ -390,3 +390,66 @@ class TestPaypalMerchantIdAndConfig(BuckarooOfficialCommon):
         self.buckaroo.state = "enabled"
         self.paypal.buckaroo_official_paypal_merchant_id = False
         self.assertFalse(self.paypal._buckaroo_paypal_is_configured())
+
+
+@tagged("post_install", "-at_install")
+class TestPaypalCheckoutListCompatFilter(BuckarooOfficialCommon):
+    """`_get_compatible_payment_methods` gating for PayPal as a regular
+    checkout-list entry, mirroring the Google Pay coverage in
+    ``test_payment_method_googlepay.py``."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.paypal = cls.env.ref("payment_buckaroo_official.payment_method_paypal")
+        cls.buckaroo.payment_method_ids = [Command.link(cls.paypal.id)]
+
+    def _checkout_compatible_codes(self):
+        methods = self.env["payment.method"]._get_compatible_payment_methods(
+            provider_ids=self.buckaroo.ids,
+            partner_id=self.env.ref("base.partner_admin").id,
+            currency_id=self.env.ref("base.EUR").id,
+            is_express_checkout=False,
+        )
+        return set(methods.mapped("code"))
+
+    def _express_compatible_codes(self):
+        methods = self.env["payment.method"]._get_compatible_payment_methods(
+            provider_ids=self.buckaroo.ids,
+            partner_id=self.env.ref("base.partner_admin").id,
+            currency_id=self.env.ref("base.EUR").id,
+            is_express_checkout=True,
+        )
+        return set(methods.mapped("code"))
+
+    def test_configured_and_show_on_checkout_keeps_paypal_in_inline_list(self):
+        self.paypal.write(
+            {
+                "buckaroo_official_paypal_sandbox_merchant_id": "SANDBOX-MID",
+                "buckaroo_official_paypal_show_on_checkout": True,
+            }
+        )
+        self.assertIn("buckaroo_paypal", self._checkout_compatible_codes())
+
+    def test_missing_merchant_id_drops_paypal_from_inline_list(self):
+        self.paypal.buckaroo_official_paypal_sandbox_merchant_id = False
+        self.assertNotIn("buckaroo_paypal", self._checkout_compatible_codes())
+
+    def test_show_on_checkout_false_drops_paypal_from_inline_list(self):
+        self.paypal.write(
+            {
+                "buckaroo_official_paypal_sandbox_merchant_id": "SANDBOX-MID",
+                "buckaroo_official_paypal_show_on_checkout": False,
+            }
+        )
+        self.assertNotIn("buckaroo_paypal", self._checkout_compatible_codes())
+
+    def test_show_on_checkout_false_does_not_affect_express_cart_flow(self):
+        self.paypal.write(
+            {
+                "buckaroo_official_paypal_sandbox_merchant_id": "SANDBOX-MID",
+                "buckaroo_official_paypal_show_on_checkout": False,
+                "buckaroo_official_paypal_show_on_cart": True,
+            }
+        )
+        self.assertIn("buckaroo_paypal", self._express_compatible_codes())
