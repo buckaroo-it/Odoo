@@ -3,7 +3,9 @@
 import { _t } from "@web/core/l10n/translation";
 import { loadJS } from "@web/core/assets";
 import { rpc } from '@web/core/network/rpc';
+import { patch } from '@web/core/utils/patch';
 import { registry } from '@web/core/registry';
+import { PaymentForm } from '@payment/interactions/payment_form';
 import { ExpressCheckout } from '@payment/interactions/express_checkout';
 import {
     bindProductCart,
@@ -191,6 +193,14 @@ function _ppOnClick(interaction, container) {
 // PayPal approved the order: stash the PayPal order id (the controller writes it
 // to the session for `_buckaroo_create_payment`) and start the transaction.
 async function _ppCreatePayment(interaction, container, paymentMethodId, data) {
+    if (container.dataset.placement === 'checkout') {
+        // No cart to address-update here (the order's address is already
+        // known), so skip the express finalize entirely and hand the order id
+        // to the core "Pay now" flow via the `PaymentForm` patch below - it
+        // injects it into the transaction route and submits normally.
+        interaction.env.bus.trigger('buckaroo_paypal_checkout_approved', { orderID: data.orderID });
+        return;
+    }
     if (container.dataset.placement === 'product') {
         const bound = await interaction._ppBindPromise;
         if (!bound) {
@@ -225,8 +235,6 @@ function _ppInitiate(interaction, container, merchantId, websiteKey, paymentMeth
         currency: _ppCurrencyCode(interaction, container),
         amount: _ppInitialAmount(interaction, container),
         createPaymentHandler: (data) => _ppCreatePayment(interaction, container, paymentMethodId, data),
-        onShippingChangeHandler: (data, actions) =>
-            _ppOnShippingChange(interaction, options, container, data, actions),
         onClickCallback: () => _ppOnClick(interaction, container),
         onCancelCallback: () => { interaction._ppBindPromise = null; },
         // The SDK calls this unconditionally after `createPaymentHandler`
@@ -239,6 +247,13 @@ function _ppInitiate(interaction, container, merchantId, websiteKey, paymentMeth
             ));
         },
     };
+    if (container.dataset.placement !== 'checkout') {
+        // At checkout the buyer already chose address + carrier through the
+        // normal Odoo flow; a PayPal-sheet shipping change must not overwrite
+        // them, so cart/product are the only placements that get this handler.
+        options.onShippingChangeHandler = (data, actions) =>
+            _ppOnShippingChange(interaction, options, container, data, actions);
+    }
     interaction._ppOptions = options;
     BuckarooSdk.PayPal.initiate(options);
 }
@@ -296,21 +311,69 @@ async function _ppMountButton(interaction) {
     });
 }
 
-// One interaction drives all three placements via `data-placement`. PayPal's own
-// button owns the click + popup, so (unlike Apple/Google Pay) no PaymentForm
-// patch is needed: every surface runs the same express finalize on approval.
+// Checkout-only: the inline form renders PayPal's own button alongside the
+// core "Pay now" button, and only the former knows how to open the PayPal
+// sheet. Hide "Pay now" while PayPal is selected so it can't be submitted
+// without an order id (the direct cause of "PayPal order ID is missing"), and
+// carry the order id `_ppCreatePayment` captured through to the transaction
+// route once the PayPal button itself drives the submit.
+patch(PaymentForm.prototype, {
+
+    setup() {
+        super.setup();
+        this._buckarooPaypalOrderId = null;
+        this.env.bus.addEventListener('buckaroo_paypal_checkout_approved', (ev) =>
+            this._buckarooPaypalSubmit(ev.detail.orderID));
+    },
+
+    async _buckarooPaypalSubmit(orderID) {
+        this._buckarooPaypalOrderId = orderID;
+        try {
+            await this.submitForm(new Event('BuckarooPaypalCheckoutApproved'));
+        } finally {
+            // Single-use; clear so a retry can't resubmit a stale order id.
+            this._buckarooPaypalOrderId = null;
+        }
+    },
+
+    async _prepareInlineForm(_providerId, providerCode, _paymentOptionId, paymentMethodCode, _flow) {
+        if (providerCode !== 'buckaroo_official' || paymentMethodCode !== 'buckaroo_paypal') {
+            await super._prepareInlineForm(...arguments);
+            return;
+        }
+        this._hideInputs();
+    },
+
+    _prepareTransactionRouteParams() {
+        const params = super._prepareTransactionRouteParams(...arguments);
+        if (!this._buckarooPaypalOrderId) {
+            return params;
+        }
+        const radio = this.el.querySelector('input[name="o_payment_radio"]:checked');
+        if (!radio
+            || radio.dataset.providerCode !== 'buckaroo_official'
+            || radio.dataset.paymentMethodCode !== 'buckaroo_paypal') {
+            return params;
+        }
+        params.buckaroo_paypal_order_id = this._buckarooPaypalOrderId;
+        return params;
+    },
+});
+
+// One interaction drives all three placements via `data-placement`. PayPal's
+// own button owns the click + popup on cart/product, so its approval finalizes
+// the express transaction directly. At checkout a competing "Pay now" button
+// exists, so that surface instead hands off to the `PaymentForm` patch above.
 export class BuckarooPaypalExpress extends ExpressCheckout {
     static selector = 'div[name="o_buckaroo_paypal_express_container"]';
 
     setup() {
         this.paymentContext = { ...this.el.dataset };
         this.paymentContext.shippingInfoRequired = truthyData(this.paymentContext.shippingInfoRequired);
-        if (this.paymentContext.placement !== 'product') {
-            // Cart/checkout: the live express context (routes, partner, amount)
-            // lives on the express form - inside it on the cart page, elsewhere
-            // on the page on the checkout (inline-form) surface.
-            const form = this.el.closest('form[name="o_payment_express_checkout_form"]')
-                || document.querySelector('form[name="o_payment_express_checkout_form"]');
+        if (this.paymentContext.placement === 'cart') {
+            // The live express context (routes, partner, amount) lives on the
+            // enclosing express form.
+            const form = this.el.closest('form[name="o_payment_express_checkout_form"]');
             const d = form?.dataset || {};
             Object.assign(this.paymentContext, {
                 amount: d.amount,
@@ -324,6 +387,11 @@ export class BuckarooPaypalExpress extends ExpressCheckout {
                 shippingInfoRequired: truthyData(d.shippingInfoRequired),
             });
         }
+        // Checkout: amount and currency come off this container's own dataset
+        // (added by the inline-form template) via the spread above. The core
+        // payment form carries the transaction route/token/partner for
+        // whichever method is submitted - `_ppCreatePayment` hands off to it
+        // instead of reading those fields off this interaction.
     }
 
     async willStart() {
