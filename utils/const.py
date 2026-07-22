@@ -1,7 +1,5 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from buckaroo.models.payment_response import BuckarooStatusCode
-
 
 PROVIDER_CODE = "buckaroo_official"
 
@@ -39,17 +37,45 @@ DEFAULT_PAYMENT_METHOD_CODES = [
     "buckaroo_paypermail",
 ]
 
-# Buckaroo status code groupings — addon-owned mapping, kept in sync
-# with the gateway's documented codes. See
-# https://docs.buckaroo.io/docs/statuscodes
+class BuckarooStatusCode:
+    """Buckaroo gateway transaction status codes, owned by this addon.
+
+    These are the numeric codes the gateway sends on pushes and API
+    responses (``brq_statuscode`` / ``Status.Code.Code``); see
+    https://docs.buckaroo.io/docs/statuscodes. Held here as plain integers,
+    independent of the Python SDK's ``BuckarooStatusCode``: the SDK renamed
+    and renumbered its members in 0.2.0 (e.g. ``CANCELLED_BY_MERCHANT`` moved
+    891 -> 691), and this addon compares the raw integers below against the
+    mapping, so coupling to the SDK enum would break module import or silently
+    shift the state mapping on an SDK bump.
+    """
+
+    SUCCESS = 190
+
+    PENDING_INPUT = 790
+    PENDING_PROCESSING = 791
+    AWAITING_CONSUMER = 792
+    ON_HOLD = 793
+
+    FAILED = 490
+    VALIDATION_FAILURE = 491
+    TECHNICAL_FAILURE = 492
+    REJECTED = 690
+
+    CANCELLED_BY_USER = 890
+    CANCELLED_BY_MERCHANT = 891
+
+
+# Buckaroo status code groupings -> Odoo tx states. Compared against the raw
+# integer status code from the push/response, so the values are what matter.
 BUCKAROO_STATUS_CODES_MAPPING = {
     "done": frozenset({BuckarooStatusCode.SUCCESS}),
     "pending": frozenset(
         {
             BuckarooStatusCode.PENDING_INPUT,
             BuckarooStatusCode.PENDING_PROCESSING,
-            BuckarooStatusCode.PENDING_CONSUMER,
-            BuckarooStatusCode.AWAITING_TRANSFER,
+            BuckarooStatusCode.AWAITING_CONSUMER,
+            BuckarooStatusCode.ON_HOLD,
         }
     ),
     "cancel": frozenset(
@@ -64,8 +90,6 @@ BUCKAROO_STATUS_CODES_MAPPING = {
             BuckarooStatusCode.VALIDATION_FAILURE,
             BuckarooStatusCode.TECHNICAL_FAILURE,
             BuckarooStatusCode.REJECTED,
-            BuckarooStatusCode.REJECTED_BY_USER,
-            BuckarooStatusCode.REJECTED_TECHNICAL,
         }
     ),
 }
