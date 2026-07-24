@@ -23,7 +23,7 @@ First official release of the Buckaroo payment provider for Odoo 19.
 - Available in English, Dutch, German and French.
 
 ### Payment methods
-- iDEAL and iDEAL | Wero
+- iDEAL | Wero
 - Bancontact
 - Wero
 - Credit cards: Visa, Mastercard, American Express, Maestro, Visa Electron, V PAY, Carte Bancaire, Carte Bleue Visa, Dankort, Nexi, PostePay
