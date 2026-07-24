@@ -36,7 +36,7 @@ First official release of the Buckaroo payment provider for Odoo 19.
 - Riverty
 - Bank Transfer
 - Pay Per Email
-- Giftcards: VVV Giftcard, Fashioncheque, TCS, Boekenbon, Webshop Giftcard, YourGift
+- Giftcards: VVV Giftcard, Fashioncheque, Boekenbon, Webshop Giftcard, YourGift
 - EPS
 - Belfius
 - KBC

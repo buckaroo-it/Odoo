@@ -494,21 +494,6 @@
         <field name="support_refund">partial</field>
     </record>
 
-    <record id="payment_method_brand_tcs" model="payment.method">
-        <field name="name">TCS</field>
-        <field name="code">buckaroo_tcs</field>
-        <field name="sequence">130</field>
-        <field name="active">True</field>
-        <field name="primary_payment_method_id" ref="payment_method_giftcard"/>
-        <field name="buckaroo_official_sdk_service_name">tcs</field>
-        <field name="buckaroo_official_giftcard_backend">tcs</field>
-        <field name="buckaroo_official_giftcard_cardnumber_param">TCSCardnumber</field>
-        <field name="buckaroo_official_giftcard_pin_param">TCSValidationCode</field>
-        <field name="image" type="base64"
-               file="payment_buckaroo_official/static/src/img/brand_tcs.png"/>
-        <field name="support_refund">partial</field>
-    </record>
-
     <record id="payment_method_brand_boekenbon" model="payment.method">
         <field name="name">Boekenbon</field>
         <field name="code">buckaroo_boekenbon</field>

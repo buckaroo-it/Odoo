@@ -34,7 +34,6 @@ class PaymentMethodGiftcard(models.Model):
         selection=[
             ("intersolve", "Intersolve"),
             ("fashioncheque", "Fashioncheque"),
-            ("tcs", "TCS"),
         ],
         help="Backend that processes this giftcard brand. Drives inline "
         "parameter names and refund requirements (Intersolve needs LastName/Email).",
