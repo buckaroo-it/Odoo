@@ -65,5 +65,5 @@ authorize & capture, Pay Per Email and optional payment surcharges.
     "author": "Buckaroo",
     "website": "https://www.buckaroo.eu/",
     "support": "support@buckaroo.nl",
-    "license": "LGPL-3",
+    "license": "Other OSI approved licence",
 }
