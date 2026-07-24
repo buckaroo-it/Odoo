@@ -37,6 +37,7 @@ DEFAULT_PAYMENT_METHOD_CODES = [
     "buckaroo_paypermail",
 ]
 
+
 class BuckarooStatusCode:
     """Buckaroo gateway transaction status codes, owned by this addon.
 
