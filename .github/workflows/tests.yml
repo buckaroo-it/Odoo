@@ -38,7 +38,9 @@ jobs:
           path: payment_buckaroo_official
 
       - name: Install Buckaroo SDK
-        run: pip3 install --no-cache-dir --break-system-packages buckaroo-sdk==0.1.0
+        run: |
+          pip3 install --no-cache-dir --break-system-packages \
+            -r payment_buckaroo_official/requirements.txt
 
       - name: Stage addon for Odoo
         run: |

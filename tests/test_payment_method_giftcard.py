@@ -4,7 +4,7 @@
 
 After the rework, giftcard follows the credit-card pattern: a parent
 ``giftcard`` method with brand children (vvvgiftcard, fashioncheque,
-tcs, boekenbon, webshopgiftcard, yourgift) linked via
+boekenbon, webshopgiftcard, yourgift) linked via
 ``primary_payment_method_id``.
 """
 
@@ -42,7 +42,6 @@ def _route_giftcard_push(env, parsed):
 BRAND_CODES = (
     "vvvgiftcard",
     "fashioncheque",
-    "tcs",
     "boekenbon",
     "webshopgiftcard",
     "yourgift",
@@ -58,7 +57,6 @@ class _GiftcardTestBase(BuckarooOfficialCommon):
         cls.brand_fashioncheque = cls.env.ref(
             "payment_buckaroo_official.payment_method_brand_fashioncheque"
         )
-        cls.brand_tcs = cls.env.ref("payment_buckaroo_official.payment_method_brand_tcs")
         cls.brand_boekenbon = cls.env.ref(
             "payment_buckaroo_official.payment_method_brand_boekenbon"
         )
@@ -70,7 +68,6 @@ class _GiftcardTestBase(BuckarooOfficialCommon):
             Command.link(cls.giftcard.id),
             Command.link(cls.brand_vvv.id),
             Command.link(cls.brand_fashioncheque.id),
-            Command.link(cls.brand_tcs.id),
             Command.link(cls.brand_boekenbon.id),
             Command.link(cls.brand_webshop.id),
             Command.link(cls.brand_yourgift.id),
@@ -108,13 +105,13 @@ class _GiftcardTestBase(BuckarooOfficialCommon):
 
 @tagged("post_install", "-at_install")
 class TestGiftcardBrandRecords(_GiftcardTestBase):
-    """6 brand records exist, all linked to the giftcard parent."""
+    """5 brand records exist, all linked to the giftcard parent."""
 
-    def test_six_brand_children_exist(self):
+    def test_five_brand_children_exist(self):
         children = self.env["payment.method"].search(
             [("primary_payment_method_id", "=", self.giftcard.id)]
         )
-        self.assertEqual(len(children), 6)
+        self.assertEqual(len(children), 5)
 
     def test_brand_codes_match_expected_set(self):
         children = self.env["payment.method"].search(
@@ -361,7 +358,6 @@ class TestGiftcardBrandInline(_GiftcardTestBase):
                 "IntersolveCardnumber",
                 "IntersolvePIN",
             ),
-            ("brand_tcs", "tcs", "TCS-CARD", "7777", "TCSCardnumber", "TCSValidationCode"),
         ]
         for brand_attr, sdk_name, cardnumber, pin, card_param, pin_param in cases:
             with self.subTest(brand=sdk_name):
@@ -834,10 +830,7 @@ class TestGiftcardRefundParams(_GiftcardTestBase):
                 self.assertEqual(sp.get("Email"), "norbert.buyer@example.com")
 
     def test_non_intersolve_refund_params_exclude_lastname_and_email(self):
-        for brand, code in [
-            (self.brand_fashioncheque, "fashioncheque"),
-            (self.brand_tcs, "tcs"),
-        ]:
+        for brand, code in [(self.brand_fashioncheque, "fashioncheque")]:
             with self.subTest(brand=code):
                 source_tx, refund_tx = self._make_source_and_refund(
                     f"NONINT-{code}",
@@ -1339,7 +1332,6 @@ class TestGiftcardCheckoutVisibility(_GiftcardTestBase):
         for brand in (
             self.brand_vvv,
             self.brand_fashioncheque,
-            self.brand_tcs,
             self.brand_boekenbon,
             self.brand_webshop,
             self.brand_yourgift,
@@ -1354,7 +1346,6 @@ class TestGiftcardCheckoutVisibility(_GiftcardTestBase):
         for brand in (
             self.brand_vvv,
             self.brand_fashioncheque,
-            self.brand_tcs,
             self.brand_boekenbon,
             self.brand_webshop,
             self.brand_yourgift,
@@ -1375,7 +1366,6 @@ class TestGiftcardCheckoutVisibility(_GiftcardTestBase):
         for brand in (
             self.brand_vvv,
             self.brand_fashioncheque,
-            self.brand_tcs,
             self.brand_boekenbon,
             self.brand_webshop,
             self.brand_yourgift,
@@ -1525,7 +1515,6 @@ class TestGiftcardRefundRoutingAllBrands(_GiftcardTestBase):
         return (
             (self.brand_vvv, "vvvgiftcard"),
             (self.brand_fashioncheque, "fashioncheque"),
-            (self.brand_tcs, "tcs"),
             (self.brand_boekenbon, "boekenbon"),
             (self.brand_webshop, "webshopgiftcard"),
             (self.brand_yourgift, "yourgift"),

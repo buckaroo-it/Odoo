@@ -31,3 +31,4 @@ from . import test_account_move_refund
 from . import test_secured_by_notice
 from . import test_payment_method_przelewy24
 from . import test_payment_method_trustly
+from . import test_packaging
