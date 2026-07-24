@@ -18,7 +18,7 @@ class TestStatusCodeMapping(BaseCase):
     # Documented gateway codes per https://docs.buckaroo.io/docs/statuscodes.
     EXPECTED = {
         "done": {190},
-        "pending": {790, 791, 792, 793},
+        "pending": {790, 791, 792, 793, 794},
         "cancel": {890, 891},
         "error": {490, 491, 492, 690},
     }

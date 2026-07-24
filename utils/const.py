@@ -57,6 +57,7 @@ class BuckarooStatusCode:
     PENDING_PROCESSING = 791
     AWAITING_CONSUMER = 792
     ON_HOLD = 793
+    PENDING_APPROVAL = 794
 
     FAILED = 490
     VALIDATION_FAILURE = 491
@@ -77,6 +78,7 @@ BUCKAROO_STATUS_CODES_MAPPING = {
             BuckarooStatusCode.PENDING_PROCESSING,
             BuckarooStatusCode.AWAITING_CONSUMER,
             BuckarooStatusCode.ON_HOLD,
+            BuckarooStatusCode.PENDING_APPROVAL,
         }
     ),
     "cancel": frozenset(
