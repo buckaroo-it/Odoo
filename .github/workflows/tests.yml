@@ -34,13 +34,11 @@ jobs:
     steps:
       - name: Checkout addon
         uses: actions/checkout@v4
-        with:
-          path: payment_buckaroo_official
 
       - name: Install Buckaroo SDK
         run: |
           pip3 install --no-cache-dir --break-system-packages \
-            -r payment_buckaroo_official/requirements.txt
+            -r requirements.txt
 
       - name: Stage addon for Odoo
         run: |

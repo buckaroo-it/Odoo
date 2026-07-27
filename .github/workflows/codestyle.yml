@@ -27,3 +27,9 @@ jobs:
 
       - name: Run Ruff format check
         run: ruff format --check .
+
+      - name: Requirements copies match
+        # The root copy is what Odoo.sh installs (it looks in the folder that
+        # *contains* the modules, not in the module itself). The in-module copy
+        # ships inside the App Store archive. They must stay identical.
+        run: diff requirements.txt payment_buckaroo_official/requirements.txt
