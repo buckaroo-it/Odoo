@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="payment_method_form_buckaroo_official" model="ir.ui.view">
+        <field name="name">Buckaroo Official Payment Method Form</field>
+        <field name="model">payment.method</field>
+        <field name="inherit_id" ref="payment.payment_method_form"/>
+        <field name="arch" type="xml">
+            <field name="supported_currency_ids" position="after">
+                <field name="buckaroo_official_is_linked" invisible="1"/>
+                <group string="Buckaroo Official"
+                       invisible="not buckaroo_official_is_linked">
+                    <field name="buckaroo_official_min_amount"/>
+                    <field name="buckaroo_official_max_amount"/>
+                    <field name="buckaroo_official_fee_amount"/>
+                </group>
+                <group string="Credit Card Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_creditcard'">
+                    <field name="buckaroo_official_creditcard_method"/>
+                    <field name="buckaroo_official_creditcard_authorize"/>
+                    <field name="buckaroo_official_hosted_fields_client_id"
+                           invisible="buckaroo_official_creditcard_method != 'inline'"
+                           required="buckaroo_official_creditcard_method == 'inline'"/>
+                    <field name="buckaroo_official_hosted_fields_client_secret"
+                           invisible="buckaroo_official_creditcard_method != 'inline'"
+                           required="buckaroo_official_creditcard_method == 'inline'"
+                           password="True"/>
+                </group>
+                <group string="Giftcard Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_giftcard'">
+                    <field name="buckaroo_official_giftcard_method"/>
+                </group>
+                <group string="Riverty Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_riverty'">
+                    <field name="buckaroo_official_riverty_authorize"/>
+                </group>
+                <group string="Google Pay Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_googlepay'">
+                    <field name="buckaroo_official_googlepay_merchant_guid"/>
+                    <field name="buckaroo_official_googlepay_google_merchant_id"/>
+                </group>
+                <group string="Google Pay Placement &amp; Display"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_googlepay'">
+                    <field name="buckaroo_official_googlepay_show_on_product"/>
+                    <field name="buckaroo_official_googlepay_show_on_cart"/>
+                    <field name="buckaroo_official_googlepay_show_on_checkout"/>
+                    <field name="buckaroo_official_googlepay_button_style"/>
+                </group>
+                <group string="Apple Pay Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_applepay'">
+                    <field name="buckaroo_official_applepay_integration_mode"/>
+                    <field name="buckaroo_official_applepay_merchant_guid"/>
+                </group>
+                <group string="Apple Pay Placement &amp; Display"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_applepay'">
+                    <field name="buckaroo_official_applepay_show_on_product"/>
+                    <field name="buckaroo_official_applepay_show_on_cart"/>
+                    <field name="buckaroo_official_applepay_show_on_checkout"/>
+                    <field name="buckaroo_official_applepay_button_style"/>
+                </group>
+                <group string="PayPal Express Settings"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_paypal'">
+                    <field name="buckaroo_official_paypal_merchant_id"/>
+                    <field name="buckaroo_official_paypal_sandbox_merchant_id"/>
+                </group>
+                <group string="PayPal Express Placement &amp; Display"
+                       invisible="not buckaroo_official_is_linked or code != 'buckaroo_paypal'">
+                    <field name="buckaroo_official_paypal_show_on_product"/>
+                    <field name="buckaroo_official_paypal_show_on_cart"/>
+                    <field name="buckaroo_official_paypal_show_on_checkout"/>
+                </group>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_partner_form_buckaroo_official" model="ir.ui.view">
+        <field name="name">Buckaroo Official Partner Form</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='sales_purchases']" position="inside">
+                <group string="Buckaroo BNPL">
+                    <field name="buckaroo_klarna_gender"/>
+                    <field name="buckaroo_billink_birthdate"/>
+                    <field name="buckaroo_riverty_birthdate"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <data noupdate="0">
+
+    <record id="payment_provider_buckaroo_official" model="payment.provider">
+        <field name="name">Buckaroo Official</field>
+        <field name="code">buckaroo_official</field>
+        <field name="image_128" type="base64" file="payment_buckaroo_official/static/description/icon.png"/>
+        <field name="sequence">350</field>
+        <field name="redirect_form_view_id" ref="payment_buckaroo_official.redirect_form"/>
+        <field name="express_checkout_form_view_id"
+               ref="payment_buckaroo_official.buckaroo_express_checkout_form"/>
+        <field name="allow_express_checkout">True</field>
+        <field name="module_id" ref="base.module_payment_buckaroo_official"/>
+        <field name="payment_method_ids"
+               eval="[Command.set([
+                   ref('payment_buckaroo_official.payment_method_ideal'),
+                   ref('payment_buckaroo_official.payment_method_bancontact'),
+                   ref('payment_buckaroo_official.payment_method_wero'),
+                   ref('payment_buckaroo_official.payment_method_eps'),
+                   ref('payment_buckaroo_official.payment_method_belfius'),
+                   ref('payment_buckaroo_official.payment_method_kbc'),
+                   ref('payment_buckaroo_official.payment_method_alipay'),
+                   ref('payment_buckaroo_official.payment_method_wechatpay'),
+                   ref('payment_buckaroo_official.payment_method_payconiq'),
+                   ref('payment_buckaroo_official.payment_method_swish'),
+                   ref('payment_buckaroo_official.payment_method_bizum'),
+                   ref('payment_buckaroo_official.payment_method_mbway'),
+                   ref('payment_buckaroo_official.payment_method_multibanco'),
+                   ref('payment_buckaroo_official.payment_method_knaken'),
+                   ref('payment_buckaroo_official.payment_method_paypal'),
+                   ref('payment_buckaroo_official.payment_method_trustly'),
+                   ref('payment_buckaroo_official.payment_method_przelewy24'),
+                   ref('payment_buckaroo_official.payment_method_blik'),
+                   ref('payment_buckaroo_official.payment_method_twint'),
+                   ref('payment_buckaroo_official.payment_method_googlepay'),
+                   ref('payment_buckaroo_official.payment_method_applepay'),
+                   ref('payment_buckaroo_official.payment_method_billink'),
+                   ref('payment_buckaroo_official.payment_method_klarna'),
+                   ref('payment_buckaroo_official.payment_method_in3'),
+                   ref('payment_buckaroo_official.payment_method_riverty'),
+                   ref('payment_buckaroo_official.payment_method_bank_transfer'),
+                   ref('payment_buckaroo_official.payment_method_creditcard'),
+                   ref('payment_buckaroo_official.payment_method_paypermail'),
+                   ref('payment_buckaroo_official.payment_method_giftcard'),
+                   ref('payment_buckaroo_official.payment_method_brand_vvvgiftcard'),
+                   ref('payment_buckaroo_official.payment_method_brand_fashioncheque'),
+                   ref('payment_buckaroo_official.payment_method_brand_boekenbon'),
+                   ref('payment_buckaroo_official.payment_method_brand_webshopgiftcard'),
+                   ref('payment_buckaroo_official.payment_method_brand_yourgift'),
+               ])]"/>
+    </record>
+
+  </data>
+
+  <data noupdate="1">
+
+    <record id="payment_provider_buckaroo_official" model="payment.provider">
+        <field name="pending_msg" type="html"><p>Your order has been received and is awaiting payment confirmation.</p></field>
+    </record>
+
+  </data>
+
+</odoo>

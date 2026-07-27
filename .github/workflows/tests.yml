@@ -1,0 +1,82 @@
+name: Tests
+
+on:
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Odoo Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U odoo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    container:
+      image: odoo:19.0
+      options: --user root
+
+    steps:
+      - name: Checkout addon
+        uses: actions/checkout@v4
+        with:
+          path: payment_buckaroo_official
+
+      - name: Install Buckaroo SDK
+        run: |
+          pip3 install --no-cache-dir --break-system-packages \
+            -r payment_buckaroo_official/requirements.txt
+
+      - name: Stage addon for Odoo
+        run: |
+          mkdir -p /mnt/extra-addons
+          cp -a "$GITHUB_WORKSPACE/payment_buckaroo_official" /mnt/extra-addons/payment_buckaroo_official
+
+      - name: Create odoo.conf
+        run: |
+          cat > /etc/odoo/odoo.conf <<'CONF'
+          [options]
+          addons_path = /usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons
+          admin_passwd = admin
+          db_host = postgres
+          db_port = 5432
+          db_user = odoo
+          db_password = odoo
+          db_name = odoo_test
+          workers = 0
+          CONF
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            if pg_isready -h postgres -U odoo; then exit 0; fi
+            sleep 1
+          done
+          echo "Postgres not ready" >&2
+          exit 1
+
+      - name: Run Odoo test suite
+        run: |
+          odoo -c /etc/odoo/odoo.conf \
+            -d odoo_test \
+            -i payment_buckaroo_official \
+            --test-enable \
+            --test-tags /payment_buckaroo_official \
+            --stop-after-init \
+            --no-http \
+            --log-level=test

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="paypal_express_form"
+              name="Buckaroo PayPal Express Form">
+        <t t-set="pp_method" t-value="provider_sudo.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_paypal' and m.buckaroo_official_paypal_show_on_cart and m._buckaroo_paypal_is_configured())[:1]"/>
+        <t t-if="pp_method">
+            <div name="o_buckaroo_paypal_express_container"
+                 t-attf-id="o_buckaroo_paypal_express_container_{{provider_sudo.id}}"
+                 class="o_buckaroo_paypal_express_container o_buckaroo_wallet_button w-100 mt-2"
+                 t-att-data-placement="'cart'"
+                 t-att-data-provider-id="provider_sudo.id"
+                 t-att-data-provider-code="provider_sudo.code"
+                 t-att-data-payment-method-id="pp_method.id"
+                 t-att-data-merchant-id="pp_method._buckaroo_paypal_merchant_id_for(provider_sudo)"
+                 t-att-data-website-key="provider_sudo.buckaroo_official_website_key or ''"
+                 t-att-data-test-mode="provider_sudo.state == 'test'"/>
+        </t>
+    </template>
+
+    <template id="paypal_express_product_page"
+              name="Buckaroo PayPal Express on Product Page"
+              inherit_id="website_sale.cta_wrapper">
+        <xpath expr="//div[@id='add_to_cart_wrap']" position="before">
+            <t t-set="pp_provider" t-value="request.env['payment.provider'].sudo().search([('code', '=', 'buckaroo_official'), ('state', 'in', ['enabled', 'test']), ('allow_express_checkout', '=', True)], limit=1)"/>
+            <t t-set="pp_method" t-value="pp_provider and pp_provider.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_paypal' and m.active and m.buckaroo_official_paypal_show_on_product and m._buckaroo_paypal_is_configured())[:1]"/>
+            <t t-if="pp_provider and pp_method">
+                <t t-set="pp_currency"
+                   t-value="website.currency_id or pp_provider.company_id.currency_id"/>
+                <div name="o_buckaroo_paypal_express_container"
+                     t-attf-id="o_buckaroo_paypal_product_express_{{pp_provider.id}}"
+                     class="o_buckaroo_paypal_express_container o_buckaroo_paypal_product_express o_buckaroo_wallet_button w-100 mb-2"
+                     t-att-data-placement="'product'"
+                     t-att-data-provider-id="pp_provider.id"
+                     t-att-data-provider-code="pp_provider.code"
+                     t-att-data-payment-method-id="pp_method.id"
+                     t-att-data-merchant-id="pp_method._buckaroo_paypal_merchant_id_for(pp_provider)"
+                     t-att-data-website-key="pp_provider.buckaroo_official_website_key or ''"
+                     t-att-data-test-mode="pp_provider.state == 'test'"
+                     t-att-data-currency-code="pp_currency and pp_currency.name or ''"
+                     data-shipping-info-required="False"
+                     data-landing-route="/shop/payment/validate"/>
+            </t>
+        </xpath>
+    </template>
+
+    <template id="paypal_inline_form"
+              name="Buckaroo PayPal Inline Form"
+              inherit_id="payment.method_form">
+        <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
+            <t t-if="pm_sudo.code == 'buckaroo_paypal'">
+                <div name="o_buckaroo_paypal_express_container"
+                     t-attf-id="o_buckaroo_paypal_express_checkout_{{provider_sudo.id}}"
+                     class="o_buckaroo_paypal_express_container o_buckaroo_wallet_button w-100"
+                     t-att-data-placement="'checkout'"
+                     t-att-data-provider-id="provider_sudo.id"
+                     t-att-data-provider-code="provider_sudo.code"
+                     t-att-data-payment-method-id="pm_sudo.id"
+                     t-att-data-merchant-id="pm_sudo._buckaroo_paypal_merchant_id_for(provider_sudo)"
+                     t-att-data-website-key="provider_sudo.buckaroo_official_website_key or ''"
+                     t-att-data-test-mode="provider_sudo.state == 'test'"
+                     t-att-data-amount="amount"
+                     t-att-data-currency-name="currency and currency.name.lower()"/>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

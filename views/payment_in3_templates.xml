@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- In3: birthdate inside the payment method inline form.
+         Rendered only when the payment method is In3. -->
+    <template id="in3_inline_form"
+              name="Buckaroo In3 Inline Form"
+              inherit_id="payment.method_form">
+        <xpath expr="//div[@name='o_payment_inline_form']" position="inside">
+            <t t-if="pm_sudo.code == 'buckaroo_in3'">
+                <t t-set="in3_saved_birthdate"
+                   t-value="(not request.env.user._is_public()) and request.env.user.partner_id.buckaroo_in3_birthdate and request.env.user.partner_id.buckaroo_in3_birthdate.isoformat() or ''"/>
+                <div class="mt-2">
+                    <div class="mb-2">
+                        <label class="form-label mb-1"
+                               for="o_buckaroo_in3_birthdate">
+                            Date of birth
+                        </label>
+                        <input type="date"
+                               class="form-control o_buckaroo_in3_birthdate"
+                               id="o_buckaroo_in3_birthdate"
+                               required="required"
+                               t-att-value="in3_saved_birthdate"/>
+                    </div>
+                </div>
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

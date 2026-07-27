@@ -1,0 +1,19 @@
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["i18n", "static", "data", "views"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # line-too-long: handled by formatter; Odoo strings often exceed.
+    "E741",  # ambiguous-variable-name: Odoo idiomatically uses `lambda l:` in domain filters.
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Submodule re-exports register Odoo models / controllers; the imports look
+# unused to Ruff but are required for Odoo's module loader.
+"__init__.py" = ["F401"]
+# Tests sometimes assign for readability (e.g. capturing a return value while
+# asserting via the mock).
+"tests/*" = ["F841"]

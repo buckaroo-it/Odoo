@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="cart_total_buckaroo_giftcard"
+              inherit_id="website_sale.total"
+              name="Buckaroo Giftcard Order Summary">
+        <xpath expr="//tr[@name='o_order_total_untaxed']" position="before">
+            <t t-set="o_buckaroo_giftcard_txs"
+               t-value="website_sale_order._buckaroo_giftcard_done_transactions()"/>
+            <tr t-foreach="o_buckaroo_giftcard_txs"
+                t-as="o_buckaroo_gc_tx"
+                name="o_order_buckaroo_giftcard_paid">
+                <td class="ps-0 pt-0 pb-2 border-0 text-muted" colspan="2">
+                    <span>Paid with</span>
+                    <t t-out="o_buckaroo_gc_tx.payment_method_id.name"/>
+                </td>
+                <td class="text-end pe-0 pt-0 pb-2 border-0">
+                    <span t-out="-o_buckaroo_gc_tx.amount"
+                          class="monetary_field"
+                          style="white-space: nowrap;"
+                          t-options="{'widget': 'monetary', 'display_currency': website_sale_order.currency_id}"/>
+                </td>
+            </tr>
+        </xpath>
+        <xpath expr="//tr[@name='o_order_total']" position="after">
+            <t t-set="o_buckaroo_remainder" t-value="website_sale_order._buckaroo_partial_payment_remainder()"/>
+            <tr t-if="o_buckaroo_remainder"
+                name="o_order_buckaroo_remaining">
+                <td class="ps-0 pt-2 border-0" colspan="2">
+                    <strong>Remaining Amount</strong>
+                </td>
+                <td class="text-end pe-0 pt-2 border-0">
+                    <strong t-out="o_buckaroo_remainder"
+                            class="monetary_field"
+                            style="white-space: nowrap;"
+                            t-options="{'widget': 'monetary', 'display_currency': website_sale_order.currency_id}"/>
+                </td>
+            </tr>
+            <tr t-if="website_sale_order.currency_id.compare_amounts(website_sale_order.amount_paid, 0) &gt; 0"
+                name="o_order_buckaroo_already_paid">
+                <td class="ps-0 pt-2 border-0 text-muted" colspan="2">
+                    Already Paid
+                </td>
+                <td class="text-end pe-0 pt-2 border-0">
+                    <span t-out="website_sale_order.amount_paid"
+                          class="monetary_field"
+                          style="white-space: nowrap;"
+                          t-options="{'widget': 'monetary', 'display_currency': website_sale_order.currency_id}"/>
+                </td>
+            </tr>
+        </xpath>
+    </template>
+
+    <template id="payment_confirmation_status_buckaroo_giftcard"
+              inherit_id="website_sale.payment_confirmation_status"
+              name="Buckaroo Giftcard Confirmation Status">
+        <!-- Suppress the upstream amount-mismatch warning when the order is
+             fully paid via giftcard + remainder split. -->
+        <xpath expr="//t[@t-if=&quot;tx_sudo.state == 'done' and order.amount_total != tx_sudo.amount&quot;]"
+               position="attributes">
+            <attribute name="t-if">tx_sudo.state == 'done' and order.amount_total != tx_sudo.amount and order.currency_id.compare_amounts(order.amount_paid, order.amount_total) &lt; 0</attribute>
+        </xpath>
+        <xpath expr="//div[contains(@t-attf-class, 'alert')]" position="attributes">
+            <attribute name="t-attf-class">alert px-3 pb-0 pt-3 #{
+                    (tx_sudo.state == 'pending' and 'alert-info') or
+                    (tx_sudo.state == 'done' and order.currency_id.compare_amounts(order.amount_paid, order.amount_total) &gt;= 0 and 'alert-success') or
+                    (tx_sudo.state == 'done' and order.currency_id.compare_amounts(order.amount_paid, order.amount_total) &lt; 0 and 'alert-warning') or
+                    (tx_sudo.state == 'authorized' and 'alert-success') or
+                    'alert-danger'}</attribute>
+        </xpath>
+    </template>
+</odoo>

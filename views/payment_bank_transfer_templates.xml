@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="bank_transfer_thank_you_block"
+              inherit_id="website_sale.confirmation"
+              name="Buckaroo Bank Transfer instructions">
+        <xpath expr="//t[@t-call='website_sale.payment_confirmation_status']" position="after">
+            <t t-set="bt_tx" t-value="order.get_portal_last_transaction()"/>
+            <div t-if="bt_tx.payment_method_id.code == 'buckaroo_bank_transfer' and bt_tx.buckaroo_official_bank_iban"
+                 class="alert alert-info mt-3"
+                 name="buckaroo_bank_transfer_instructions">
+                <h5>Complete your payment</h5>
+                <p>
+                    To complete your order, please transfer the outstanding amount
+                    <strong t-out="'%s %s' % (bt_tx.amount, bt_tx.currency_id.name)"/>
+                    using the bank details below.
+                </p>
+                <table class="table table-sm w-auto mb-2">
+                    <tbody>
+                        <tr>
+                            <th class="pe-3">Amount</th>
+                            <td><span t-field="bt_tx.amount" t-options="{'widget': 'monetary', 'display_currency': bt_tx.currency_id}"/></td>
+                        </tr>
+                        <tr t-if="bt_tx.buckaroo_official_bank_payment_reference">
+                            <th class="pe-3">Payment reference</th>
+                            <td t-out="bt_tx.buckaroo_official_bank_payment_reference"/>
+                        </tr>
+                        <tr t-if="bt_tx.buckaroo_official_bank_account_holder">
+                            <th class="pe-3">Account holder</th>
+                            <td t-out="bt_tx.buckaroo_official_bank_account_holder"/>
+                        </tr>
+                        <tr>
+                            <th class="pe-3">IBAN</th>
+                            <td t-out="bt_tx.buckaroo_official_bank_iban"/>
+                        </tr>
+                        <tr t-if="bt_tx.buckaroo_official_bank_bic">
+                            <th class="pe-3">BIC</th>
+                            <td t-out="bt_tx.buckaroo_official_bank_bic"/>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="mb-0">
+                    <strong>Note:</strong>
+                    Quote the payment reference in the description of your transfer to ensure it can be processed.
+                </p>
+            </div>
+        </xpath>
+    </template>
+
+</odoo>
