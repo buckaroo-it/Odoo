@@ -1,1 +1,1 @@
-buckaroo-sdk==0.2.1
+buckaroo-sdk==1.0.0

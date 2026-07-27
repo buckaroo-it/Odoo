@@ -28,10 +28,10 @@ class TestPackagingRequirements(BaseCase):
     def test_requirements_pins_buckaroo_sdk(self):
         """requirements.txt declares an exact-pinned buckaroo-sdk release."""
         content = self._read_requirements()
-        match = re.search(r"^buckaroo-sdk==[\w.]+\s*$", content, re.MULTILINE)
+        match = re.search(r"^buckaroo-sdk==1\.0\.0\s*$", content, re.MULTILINE)
         self.assertIsNotNone(
             match,
-            "requirements.txt must pin an exact buckaroo-sdk==<version> release",
+            "requirements.txt must pin buckaroo-sdk==1.0.0",
         )
 
     def test_manifest_declares_buckaroo_external_dependency(self):
