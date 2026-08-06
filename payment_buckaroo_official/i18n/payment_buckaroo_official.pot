@@ -439,7 +439,7 @@ msgstr ""
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_provider.py:0
-msgid "Connection failed: the Website Key or Secret Key is incorrect."
+msgid "Connection failed: the Store Key or Secret Key is incorrect."
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -1457,6 +1457,11 @@ msgid "Show on Product"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
+msgid "Store Key"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_swish
 msgid "Swish"
 msgstr ""
@@ -1529,7 +1534,7 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
-msgid "The key used to identify the website with Buckaroo Official."
+msgid "The key used to identify the store with Buckaroo Official."
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -1636,11 +1641,6 @@ msgstr ""
 #. module: payment_buckaroo_official
 #: model:ir.model,name:payment_buckaroo_official.model_website
 msgid "Website"
-msgstr ""
-
-#. module: payment_buckaroo_official
-#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
-msgid "Website Key"
 msgstr ""
 
 #. module: payment_buckaroo_official

@@ -414,9 +414,9 @@ msgstr "Verbindung fehlgeschlagen: %s"
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_provider.py:0
-msgid "Connection failed: the Website Key or Secret Key is incorrect."
+msgid "Connection failed: the Store Key or Secret Key is incorrect."
 msgstr ""
-"Verbindung fehlgeschlagen: der Website-Schlüssel oder Geheimer "
+"Verbindung fehlgeschlagen: der Shop-Schlüssel oder Geheimer "
 "Schlüssel ist ungültig."
 
 #. module: payment_buckaroo_official
@@ -1306,6 +1306,11 @@ msgid "Show on Product"
 msgstr "Auf Produkt anzeigen"
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
+msgid "Store Key"
+msgstr "Shop-Schlüssel"
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_swish
 msgid "Swish"
 msgstr "Swish"
@@ -1370,8 +1375,8 @@ msgstr "Das angegebene Produkt existiert nicht."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
-msgid "The key used to identify the website with Buckaroo Official."
-msgstr "Der Schlüssel zur Identifizierung der Website bei Buckaroo Official."
+msgid "The key used to identify the store with Buckaroo Official."
+msgstr "Der Schlüssel zur Identifizierung des Shops bei Buckaroo Official."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_google_merchant_id
@@ -1464,11 +1469,6 @@ msgstr "Webshop Giftcard"
 #: model:ir.model,name:payment_buckaroo_official.model_website
 msgid "Website"
 msgstr "Website"
-
-#. module: payment_buckaroo_official
-#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
-msgid "Website Key"
-msgstr "Website-Schlüssel"
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_wero

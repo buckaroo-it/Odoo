@@ -21,8 +21,8 @@ class PaymentProvider(models.Model):
         ondelete={const.PROVIDER_CODE: "set default"},
     )
     buckaroo_official_website_key = fields.Char(
-        string="Website Key",
-        help="The key used to identify the website with Buckaroo Official.",
+        string="Store Key",
+        help="The key used to identify the store with Buckaroo Official.",
         required_if_provider=const.PROVIDER_CODE,
         copy=False,
     )
@@ -88,7 +88,7 @@ class PaymentProvider(models.Model):
             raise UserError(_("Connection failed: %s", e))
 
         if not is_valid:
-            raise UserError(_("Connection failed: the Website Key or Secret Key is incorrect."))
+            raise UserError(_("Connection failed: the Store Key or Secret Key is incorrect."))
 
         mode = self.state
         _logger.info("Buckaroo test connection successful (mode=%s).", mode)
