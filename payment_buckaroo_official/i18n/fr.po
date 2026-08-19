@@ -418,9 +418,9 @@ msgstr "Échec de la connexion : %s"
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_provider.py:0
-msgid "Connection failed: the Website Key or Secret Key is incorrect."
+msgid "Connection failed: the Store Key or Secret Key is incorrect."
 msgstr ""
-"Échec de la connexion : la clé du site web ou la clé secrète est "
+"Échec de la connexion : la clé de la boutique ou la clé secrète est "
 "incorrecte."
 
 #. module: payment_buckaroo_official
@@ -1299,6 +1299,11 @@ msgid "Show on Product"
 msgstr "Afficher sur le produit"
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
+msgid "Store Key"
+msgstr "Clé de la boutique"
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_swish
 msgid "Swish"
 msgstr "Swish"
@@ -1363,9 +1368,9 @@ msgstr "Le produit indiqué n'existe pas."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
-msgid "The key used to identify the website with Buckaroo Official."
+msgid "The key used to identify the store with Buckaroo Official."
 msgstr ""
-"La clé utilisée pour identifier le site web auprès de Buckaroo "
+"La clé utilisée pour identifier la boutique auprès de Buckaroo "
 "Official."
 
 #. module: payment_buckaroo_official
@@ -1459,11 +1464,6 @@ msgstr "Webshop Giftcard"
 #: model:ir.model,name:payment_buckaroo_official.model_website
 msgid "Website"
 msgstr "Site web"
-
-#. module: payment_buckaroo_official
-#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key
-msgid "Website Key"
-msgstr "Clé du site web"
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_wero
