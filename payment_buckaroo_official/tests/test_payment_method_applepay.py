@@ -892,6 +892,10 @@ class TestApplepayProductExpressInitController(BuckarooOfficialCommon):
                 "odoo.addons.website_sale.models.website.request",
                 new=fake_req,
             ),
+            patch(
+                "odoo.addons.website.models.website.request",
+                new=fake_req,
+            ),
             patch.object(
                 odoo.http,
                 "request",
