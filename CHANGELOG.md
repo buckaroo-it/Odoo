@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [19.0.1.0.1]
+
+### Changed
+- Renamed the "Website key" provider setting to "Store key", matching the name used in Buckaroo Plaza.
+- Applied the unified README.md layout for consistent styling across all Buckaroo plugin repos.
+
+---
+
 ## [19.0.1.0.0]
 
 First official release of the Buckaroo payment provider for Odoo 19.
