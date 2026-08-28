@@ -13,6 +13,13 @@
                ref="payment_buckaroo_official.buckaroo_express_checkout_form"/>
         <field name="allow_express_checkout">True</field>
         <field name="module_id" ref="base.module_payment_buckaroo_official"/>
+    </record>
+
+  </data>
+
+  <data noupdate="1">
+
+    <record id="payment_provider_buckaroo_official" model="payment.provider">
         <field name="payment_method_ids"
                eval="[Command.set([
                    ref('payment_buckaroo_official.payment_method_ideal'),
@@ -50,13 +57,6 @@
                    ref('payment_buckaroo_official.payment_method_brand_webshopgiftcard'),
                    ref('payment_buckaroo_official.payment_method_brand_yourgift'),
                ])]"/>
-    </record>
-
-  </data>
-
-  <data noupdate="1">
-
-    <record id="payment_provider_buckaroo_official" model="payment.provider">
         <field name="pending_msg" type="html"><p>Your order has been received and is awaiting payment confirmation.</p></field>
     </record>
 
