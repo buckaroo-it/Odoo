@@ -2,6 +2,7 @@
 
 from odoo.fields import Command
 from odoo.tests import tagged
+from odoo.tools import convert_file
 
 from .common import BuckarooOfficialCommon
 from ..utils import const
@@ -102,7 +103,7 @@ METHOD_DATA = [
 
 @tagged("post_install", "-at_install")
 class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
-    """Verify that all 22 payment.method XML records are correctly installed.
+    """Verify that all top-level payment methods are correctly installed.
 
     Checks record existence, support_refund, and per-method code/currency/country
     restrictions as defined in ``data/payment_method_data.xml``.
@@ -146,6 +147,85 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
                     set(method.supported_currency_ids.mapped("name")),
                     currencies,
                 )
+
+        giftcard = self.env.ref(
+            "payment_buckaroo_official.payment_method_giftcard"
+        )
+        self.assertFalse(giftcard.supported_country_ids)
+        self.assertEqual(
+            set(giftcard.supported_currency_ids.mapped("name")),
+            {"EUR"},
+        )
+
+    def _reload_payment_method_data(self):
+        for path in (
+            "data/payment_method_data.xml",
+            "data/payment_provider_data.xml",
+        ):
+            convert_file(
+                self.env,
+                "payment_buckaroo_official",
+                path,
+                {},
+                mode="update",
+            )
+
+    def test_module_upgrade_preserves_merchant_fields(self):
+        billink = self.env.ref(
+            "payment_buckaroo_official.payment_method_billink"
+        )
+        custom_image = self.env.ref(
+            "payment_buckaroo_official.payment_method_ideal"
+        ).image
+        self.assertNotEqual(custom_image, billink.image)
+        billink.write(
+            {
+                "name": "Custom Billink",
+                "active": False,
+                "sequence": 5,
+                "image": custom_image,
+                "supported_country_ids": [Command.set([self.env.ref("base.de").id])],
+                "supported_currency_ids": [Command.set([self.env.ref("base.USD").id])],
+                "buckaroo_official_min_amount": "10.00",
+                "buckaroo_official_max_amount": "20.00",
+            }
+        )
+        self.buckaroo.payment_method_ids = [Command.unlink(billink.id)]
+
+        self._reload_payment_method_data()
+
+        self.assertEqual(billink.name, "Custom Billink")
+        self.assertFalse(billink.active)
+        self.assertEqual(billink.sequence, 5)
+        self.assertEqual(billink.image, custom_image)
+        self.assertEqual(set(billink.supported_country_ids.mapped("code")), {"DE"})
+        self.assertEqual(set(billink.supported_currency_ids.mapped("name")), {"USD"})
+        self.assertEqual(billink.buckaroo_official_min_amount, "10.00")
+        self.assertEqual(billink.buckaroo_official_max_amount, "20.00")
+        self.assertNotIn(
+            billink,
+            self.buckaroo.with_context(active_test=False).payment_method_ids,
+        )
+
+    def test_module_upgrade_recreates_missing_method(self):
+        xml_id = "payment_buckaroo_official.payment_method_brand_nexi"
+        method = self.env.ref(xml_id)
+        self.env["ir.model.data"].search(
+            [
+                ("module", "=", "payment_buckaroo_official"),
+                ("name", "=", "payment_method_brand_nexi"),
+            ]
+        ).unlink()
+        method.unlink()
+
+        self._reload_payment_method_data()
+
+        recreated = self.env.ref(xml_id)
+        self.assertEqual(recreated.name, "Nexi")
+        self.assertEqual(recreated.code, "buckaroo_nexi")
+        self.assertTrue(recreated.active)
+        self.assertEqual(recreated.sequence, 250)
+        self.assertTrue(recreated.image)
 
     def test_methods_available_for_nl_partner(self):
         pm_ids = [
