@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [19.0.1.0.2]
+
+### Fixed
+- [BTI-1403] Preserved merchant payment method settings during module upgrades.
+
+---
+
 ## [19.0.1.0.1]
 
 ### Changed
