@@ -148,9 +148,7 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
                     currencies,
                 )
 
-        giftcard = self.env.ref(
-            "payment_buckaroo_official.payment_method_giftcard"
-        )
+        giftcard = self.env.ref("payment_buckaroo_official.payment_method_giftcard")
         self.assertFalse(giftcard.supported_country_ids)
         self.assertEqual(
             set(giftcard.supported_currency_ids.mapped("name")),
@@ -171,12 +169,8 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
             )
 
     def test_module_upgrade_preserves_merchant_fields(self):
-        billink = self.env.ref(
-            "payment_buckaroo_official.payment_method_billink"
-        )
-        custom_image = self.env.ref(
-            "payment_buckaroo_official.payment_method_ideal"
-        ).image
+        billink = self.env.ref("payment_buckaroo_official.payment_method_billink")
+        custom_image = self.env.ref("payment_buckaroo_official.payment_method_ideal").image
         self.assertNotEqual(custom_image, billink.image)
         billink.write(
             {
