@@ -35,7 +35,6 @@
                    ref('payment_buckaroo_official.payment_method_bizum'),
                    ref('payment_buckaroo_official.payment_method_mbway'),
                    ref('payment_buckaroo_official.payment_method_multibanco'),
-                   ref('payment_buckaroo_official.payment_method_knaken'),
                    ref('payment_buckaroo_official.payment_method_paypal'),
                    ref('payment_buckaroo_official.payment_method_trustly'),
                    ref('payment_buckaroo_official.payment_method_przelewy24'),

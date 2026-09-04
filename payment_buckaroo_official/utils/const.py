@@ -19,7 +19,6 @@ DEFAULT_PAYMENT_METHOD_CODES = [
     "buckaroo_bizum",
     "buckaroo_mbway",
     "buckaroo_multibanco",
-    "buckaroo_knaken",
     "buckaroo_paypal",
     "buckaroo_trustly",
     "buckaroo_przelewy24",

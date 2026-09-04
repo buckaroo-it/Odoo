@@ -1714,11 +1714,6 @@ msgid "e.g. Refund {order_number} - {shop_name}"
 msgstr ""
 
 #. module: payment_buckaroo_official
-#: model:payment.method,name:payment_buckaroo_official.payment_method_knaken
-msgid "goSettle"
-msgstr ""
-
-#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_ideal
 msgid "iDEAL | Wero"
 msgstr ""

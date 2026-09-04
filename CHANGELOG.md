@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [19.0.1.0.3]
+
+### Removed
+- [BTI-1345] Removed goSettle as a supported payment method. Existing databases keep their historical goSettle transactions; the method is archived on upgrade.
+
+---
+
 ## [19.0.1.0.2]
 
 ### Fixed
