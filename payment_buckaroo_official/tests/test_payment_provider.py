@@ -140,6 +140,4 @@ class TestPaymentProvider(BuckarooOfficialCommon):
 
         self.assertTrue(mock_send.called, "no HTTP request was attempted")
         prepared_request = mock_send.call_args[0][0]
-        self.assertEqual(
-            prepared_request.headers["Software"], _buckaroo_official_software_header()
-        )
+        self.assertEqual(prepared_request.headers["Software"], _buckaroo_official_software_header())
