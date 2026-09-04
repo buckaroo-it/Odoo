@@ -1,16 +1,55 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import dataclasses
 import logging
 
 import requests as req_lib
+from buckaroo.config.buckaroo_config import BuckarooConfig, create_config_from_mode
 from buckaroo.http.client import BuckarooApiError
 
-from odoo import _, fields, models
+from odoo import _, fields, models, release
 from odoo.exceptions import UserError
+from odoo.modules.module import get_manifest
 
 from ..utils import const
 
 _logger = logging.getLogger(__name__)
+
+
+def _buckaroo_official_software_header():
+    """Return the ``Software`` header value identifying this plugin and platform.
+
+    Support and reporting use it to tell which plugin and Odoo version a merchant
+    runs, in the shape the Buckaroo Magento plugin established.
+    """
+    plugin_version = get_manifest("payment_buckaroo_official")["version"]
+    # Odoo Online reports its version as e.g. ``saas~19.3``; report plain ``19.3``.
+    platform_version = release.version.removeprefix("saas~")
+    return f"Odoo v{plugin_version} by Buckaroo (Platform: Odoo {platform_version})"
+
+
+@dataclasses.dataclass
+class BuckarooOfficialConfig(BuckarooConfig):
+    """SDK config that adds the ``Software`` header to every request.
+
+    The SDK turns these headers into session-level defaults, so setting it here
+    covers payments, refunds, captures, cancels and the connection test alike.
+    """
+
+    software: str = ""
+
+    def get_request_headers(self):
+        headers = super().get_request_headers()
+        if self.software:
+            headers["Software"] = self.software
+        return headers
+
+    @classmethod
+    def from_mode(cls, mode):
+        """Build the config for ``mode``, keeping the SDK preset's values."""
+        preset = create_config_from_mode(mode)
+        values = {f.name: getattr(preset, f.name) for f in dataclasses.fields(preset)}
+        return cls(software=_buckaroo_official_software_header(), **values)
 
 
 class PaymentProvider(models.Model):
@@ -75,7 +114,7 @@ class PaymentProvider(models.Model):
         return BuckarooClient(
             self.buckaroo_official_website_key,
             self.buckaroo_official_secret_key,
-            mode=mode,
+            config=BuckarooOfficialConfig.from_mode(mode),
         )
 
     def action_buckaroo_official_test_connection(self):
