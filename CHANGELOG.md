@@ -6,8 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ## [19.0.1.0.3]
 
+### Changed
+- [BTI-1465] Renamed the "Buckaroo Min/Max Amount (EUR)" payment method settings to "Minimum amount" and "Maximum amount", and reworded both tooltips to refer to the configured currency instead of EUR.
+
 ### Removed
 - [BTI-1345] Removed goSettle as a supported payment method. Existing databases keep their historical goSettle transactions; the method is archived on upgrade.
+
+### Fixed
+- [BTI-1465] Corrected the Dutch, German and French tooltips of the amount limits, which told merchants to leave the limit at 0,00 instead of empty.
+- [BTI-1465] Corrected the Dutch, German and French name of the "Buckaroo Surcharge Amount" field, which was a copy of the maximum amount label.
 
 ---
 

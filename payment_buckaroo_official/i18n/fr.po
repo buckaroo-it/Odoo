@@ -201,8 +201,8 @@ msgstr "Buckaroo BNPL"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_max_amount
-msgid "Buckaroo Max Amount (EUR)"
-msgstr "Montant maximum Buckaroo (EUR)"
+msgid "Maximum amount"
+msgstr "Montant maximum"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_merchant_guid
@@ -211,8 +211,8 @@ msgstr "Buckaroo Merchant GUID"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_min_amount
-msgid "Buckaroo Min Amount (EUR)"
-msgstr "Montant minimum Buckaroo (EUR)"
+msgid "Minimum amount"
+msgstr "Montant minimum"
 
 #. module: payment_buckaroo_official
 #: model:payment.provider,name:payment_buckaroo_official.payment_provider_buckaroo_official
@@ -273,7 +273,7 @@ msgstr "Code de service Buckaroo"
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order__amount_buckaroo_surcharge
 msgid "Buckaroo Surcharge Amount"
-msgstr "Montant maximum Buckaroo (EUR)"
+msgstr "Montant du supplément Buckaroo"
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -887,22 +887,24 @@ msgstr "Mastercard"
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_max_amount
 msgid ""
-"Maximum order total in EUR for which this payment method is available with "
-"Buckaroo Official. Leave empty to disable the maximum limit."
+"Maximum order total in the configured currency for which this payment method"
+" is available with Buckaroo Official. Leave empty to disable the maximum "
+"limit."
 msgstr ""
-"Montant total maximum de commande en EUR pour lequel cette méthode de "
-"paiement est disponible avec Buckaroo Official. Laisser à 0,00 pour "
-"désactiver la limite maximale."
+"Montant total maximum de commande dans la devise configurée pour lequel "
+"cette méthode de paiement est disponible avec Buckaroo Official. Laisser "
+"vide pour désactiver la limite maximale."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_method__buckaroo_official_min_amount
 msgid ""
-"Minimum order total in EUR for which this payment method is available with "
-"Buckaroo Official. Leave empty to disable the minimum limit."
+"Minimum order total in the configured currency for which this payment method"
+" is available with Buckaroo Official. Leave empty to disable the minimum "
+"limit."
 msgstr ""
-"Montant total minimum de commande en EUR pour lequel cette méthode de "
-"paiement est disponible avec Buckaroo Official. Laisser à 0,00 pour "
-"désactiver la limite minimale."
+"Montant total minimum de commande dans la devise configurée pour lequel "
+"cette méthode de paiement est disponible avec Buckaroo Official. Laisser "
+"vide pour désactiver la limite minimale."
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__res_partner__buckaroo_riverty_salutation__miss
