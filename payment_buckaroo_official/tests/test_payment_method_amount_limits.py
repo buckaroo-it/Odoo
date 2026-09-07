@@ -23,7 +23,6 @@ METHODS_FIXTURE = [
     "bizum",
     "mbway",
     "multibanco",
-    "knaken",
     "trustly",
     "przelewy24",
     "blik",

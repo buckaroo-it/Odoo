@@ -60,7 +60,6 @@ METHOD_DATA = [
     ("bizum", {"EUR"}, set()),
     ("mbway", {"EUR"}, set()),
     ("multibanco", {"EUR"}, set()),
-    ("knaken", {"EUR"}, set()),
     ("paypal", _MULTI_CURRENCY, set()),
     ("trustly", {"EUR", "SEK", "NOK", "DKK", "GBP"}, set()),
     ("przelewy24", {"EUR", "PLN"}, set()),
