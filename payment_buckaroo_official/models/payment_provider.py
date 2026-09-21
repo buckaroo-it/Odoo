@@ -1,6 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import dataclasses
+import json
 import logging
 
 import requests as req_lib
@@ -20,12 +21,19 @@ def _buckaroo_official_software_header():
     """Return the ``Software`` header value identifying this plugin and platform.
 
     Support and reporting use it to tell which plugin and Odoo version a merchant
-    runs, in the shape the Buckaroo Magento plugin established.
+    runs. The gateway requires the JSON object Buckaroo's other plugins send and
+    rejects any other value with HTTP 400.
     """
-    plugin_version = get_manifest("payment_buckaroo_official")["version"]
-    # Odoo Online reports its version as e.g. ``saas~19.3``; report plain ``19.3``.
-    platform_version = release.version.removeprefix("saas~")
-    return f"Odoo v{plugin_version} by Buckaroo (Platform: Odoo {platform_version})"
+    return json.dumps(
+        {
+            "PlatformName": "Odoo",
+            # Odoo Online reports its version as e.g. ``saas~19.3``; report plain ``19.3``.
+            "PlatformVersion": release.version.removeprefix("saas~"),
+            "ModuleSupplier": "Buckaroo",
+            "ModuleName": "Odoo Payments Plugin",
+            "ModuleVersion": get_manifest("payment_buckaroo_official")["version"],
+        }
+    )
 
 
 @dataclasses.dataclass
