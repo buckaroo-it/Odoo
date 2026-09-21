@@ -96,7 +96,7 @@ class TestPaymentProvider(BuckarooOfficialCommon):
                 "PlatformName": "Odoo",
                 "PlatformVersion": "19.0-20260630",
                 "ModuleSupplier": "Buckaroo",
-                "ModuleName": "Odoo Payments Plugin",
+                "ModuleName": "Odoo",
                 "ModuleVersion": plugin_version,
             },
         )

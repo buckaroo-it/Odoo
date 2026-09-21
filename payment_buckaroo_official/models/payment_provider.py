@@ -30,7 +30,7 @@ def _buckaroo_official_software_header():
             # Odoo Online reports its version as e.g. ``saas~19.3``; report plain ``19.3``.
             "PlatformVersion": release.version.removeprefix("saas~"),
             "ModuleSupplier": "Buckaroo",
-            "ModuleName": "Odoo Payments Plugin",
+            "ModuleName": "Odoo",
             "ModuleVersion": get_manifest("payment_buckaroo_official")["version"],
         }
     )
