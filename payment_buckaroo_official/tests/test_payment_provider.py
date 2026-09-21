@@ -1,5 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import json
 from unittest.mock import MagicMock, patch
 
 import requests
@@ -85,21 +86,26 @@ class TestPaymentProvider(BuckarooOfficialCommon):
         self.assertEqual(provider._get_status_message("pending"), provider.pending_msg)
 
     def test_software_header_format(self):
-        """The Software header names the plugin and the Odoo platform version."""
+        """The Software header is the JSON object the Buckaroo gateway requires."""
         plugin_version = get_manifest("payment_buckaroo_official")["version"]
         with patch.object(odoo.release, "version", "19.0-20260630"):
-            self.assertEqual(
-                _buckaroo_official_software_header(),
-                f"Odoo v{plugin_version} by Buckaroo (Platform: Odoo 19.0-20260630)",
-            )
+            header = json.loads(_buckaroo_official_software_header())
+        self.assertEqual(
+            header,
+            {
+                "PlatformName": "Odoo",
+                "PlatformVersion": "19.0-20260630",
+                "ModuleSupplier": "Buckaroo",
+                "ModuleName": "Odoo",
+                "ModuleVersion": plugin_version,
+            },
+        )
 
     def test_software_header_strips_saas_prefix(self):
         """Odoo Online reports ``saas~19.3``; the header shows plain ``19.3``."""
         with patch.object(odoo.release, "version", "saas~19.3"):
-            self.assertTrue(
-                _buckaroo_official_software_header().endswith("(Platform: Odoo 19.3)"),
-                _buckaroo_official_software_header(),
-            )
+            header = json.loads(_buckaroo_official_software_header())
+        self.assertEqual(header["PlatformVersion"], "19.3")
 
     def test_client_config_sends_software_header(self):
         """The client config carries the Software header alongside the SDK defaults."""
