@@ -29,19 +29,19 @@ class PaymentMethod(models.Model):
     )
 
     buckaroo_official_min_amount = fields.Char(
-        string="Buckaroo Min Amount (EUR)",
+        string="Minimum amount",
         default="",
         help=(
-            "Minimum order total in EUR for which this payment method is available with "
-            "Buckaroo Official. Leave empty to disable the minimum limit."
+            "Minimum order total in the configured currency for which this payment method "
+            "is available with Buckaroo Official. Leave empty to disable the minimum limit."
         ),
     )
     buckaroo_official_max_amount = fields.Char(
-        string="Buckaroo Max Amount (EUR)",
+        string="Maximum amount",
         default="",
         help=(
-            "Maximum order total in EUR for which this payment method is available with "
-            "Buckaroo Official. Leave empty to disable the maximum limit."
+            "Maximum order total in the configured currency for which this payment method "
+            "is available with Buckaroo Official. Leave empty to disable the maximum limit."
         ),
     )
 

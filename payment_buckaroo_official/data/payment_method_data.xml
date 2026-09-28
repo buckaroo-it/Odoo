@@ -241,21 +241,6 @@
                eval="[Command.set([ref('base.EUR')])]"/>
     </record>
 
-    <record id="payment_method_knaken" model="payment.method">
-        <field name="name">goSettle</field>
-        <field name="code">buckaroo_knaken</field>
-        <field name="buckaroo_official_sdk_service_name">knaken</field>
-        <field name="sequence">1130</field>
-        <field name="active">True</field>
-        <field name="image" type="base64"
-               file="payment_buckaroo_official/static/src/img/knaken.png"/>
-        <field name="support_tokenization">False</field>
-        <field name="support_express_checkout">False</field>
-        <field name="support_manual_capture">none</field>
-        <field name="support_refund">partial</field>
-        <field name="supported_currency_ids"
-               eval="[Command.set([ref('base.EUR')])]"/>
-    </record>
 
     <record id="payment_method_paypal" model="payment.method">
         <field name="name">PayPal</field>

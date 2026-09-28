@@ -569,7 +569,6 @@ _NEW_METHODS = [
     "buckaroo_mbway",
     "buckaroo_multibanco",
     "buckaroo_twint",
-    "buckaroo_knaken",
 ]
 
 # Buckaroo status codes and their expected Odoo transaction states.
