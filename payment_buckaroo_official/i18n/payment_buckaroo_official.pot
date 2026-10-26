@@ -4,16 +4,29 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Odoo Server 19.0-20260630\n"
+"Project-Id-Version: Odoo Server 20.0-20261015\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-07 07:56+0000\n"
-"PO-Revision-Date: 2026-09-07 07:56+0000\n"
+"POT-Creation-Date: 2026-10-26 10:10+0000\n"
+"PO-Revision-Date: 2026-10-26 10:10+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: \n"
+
+#. module: payment_buckaroo_official
+#: model:ir.module.module,description:base.module_payment_buckaroo_official
+msgid ""
+"\n"
+"Buckaroo Payment Provider\n"
+"=========================\n"
+"\n"
+"Accept payments in Odoo through Buckaroo, with 30+ payment methods across Europe:\n"
+"iDEAL, Bancontact, credit cards, PayPal, Klarna, in3, Riverty, Billink, Apple Pay,\n"
+"Google Pay, gift cards and more. Includes express checkout, refunds from Odoo,\n"
+"authorize & capture, Pay Per Email and optional payment surcharges.\n"
+msgstr ""
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -29,17 +42,12 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
-msgid "<option value=\"\">Please select your gender</option>"
+msgid "Please select your gender"
 msgstr ""
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
-msgid "<option value=\"\">Prefer not to say</option>"
-msgstr ""
-
-#. module: payment_buckaroo_official
-#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.hosted_fields_inline_form
-msgid "<option value=\"\">Select your card type</option>"
+msgid "Prefer not to say"
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -95,6 +103,11 @@ msgstr ""
 #: code:addons/payment_buckaroo_official/models/payment_method.py:0
 #: code:addons/payment_buckaroo_official/models/payment_method_giftcard.py:0
 msgid "Amount outside the Buckaroo payment method limits."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.module.module,summary:base.module_payment_buckaroo_official
+msgid "An official Buckaroo payment provider for Odoo 20."
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -254,6 +267,7 @@ msgid "Google Pay Merchant GUID"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model:ir.module.module,shortdesc:base.module_payment_buckaroo_official
 #: model:payment.provider,name:payment_buckaroo_official.payment_provider_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.payment_method_form_buckaroo_official
 msgid "Buckaroo Official"
@@ -345,6 +359,13 @@ msgid "Buckaroo: payment request failed: %s"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_provider.py:0
+msgid ""
+"Cannot process payment: the Buckaroo Store Key or Secret Key is missing."
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_applepay_button_style
 msgid "Apple Pay Button Style"
 msgstr ""
@@ -357,7 +378,7 @@ msgstr ""
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_provider.py:0
-msgid "Cannot process payment: the Buckaroo provider is disabled."
+msgid "Cannot process payment: the Buckaroo provider is archived."
 msgstr ""
 
 #. module: payment_buckaroo_official
@@ -581,6 +602,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order__display_name
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order_line__display_name
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_website__display_name
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_website_checkout_step__display_name
 msgid "Display Name"
 msgstr ""
 
@@ -820,6 +842,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order__id
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order_line__id
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_website__id
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_website_checkout_step__id
 msgid "ID"
 msgstr ""
 
@@ -1440,6 +1463,11 @@ msgid "Security code"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.hosted_fields_inline_form
+msgid "Select your card type"
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_transaction__buckaroo_official_service_code
 msgid ""
 "Service code from Buckaroo (e.g. 'visa', 'mastercard'). Stored from the "
@@ -1698,6 +1726,11 @@ msgstr ""
 #. module: payment_buckaroo_official
 #: model:ir.model,name:payment_buckaroo_official.model_website
 msgid "Website"
+msgstr ""
+
+#. module: payment_buckaroo_official
+#: model:ir.model,name:payment_buckaroo_official.model_website_checkout_step
+msgid "Website Checkout Step"
 msgstr ""
 
 #. module: payment_buckaroo_official

@@ -4,7 +4,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Odoo Server 19.0\n"
+"Project-Id-Version: Odoo Server 20.0\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-05-21 08:52+0000\n"
 "PO-Revision-Date: 2026-04-03 09:58+0000\n"
@@ -15,6 +15,27 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
+
+#. module: payment_buckaroo_official
+#: model:ir.module.module,description:base.module_payment_buckaroo_official
+msgid ""
+"\n"
+"Buckaroo Payment Provider\n"
+"=========================\n"
+"\n"
+"Accept payments in Odoo through Buckaroo, with 30+ payment methods across Europe:\n"
+"iDEAL, Bancontact, credit cards, PayPal, Klarna, in3, Riverty, Billink, Apple Pay,\n"
+"Google Pay, gift cards and more. Includes express checkout, refunds from Odoo,\n"
+"authorize & capture, Pay Per Email and optional payment surcharges.\n"
+msgstr ""
+"\n"
+"Buckaroo-Zahlungsanbieter\n"
+"=========================\n"
+"\n"
+"Akzeptieren Sie Zahlungen in Odoo über Buckaroo, mit über 30 Zahlungsmethoden in ganz Europa:\n"
+"iDEAL, Bancontact, Kreditkarten, PayPal, Klarna, in3, Riverty, Billink, Apple Pay,\n"
+"Google Pay, Geschenkkarten und mehr. Mit Express-Checkout, Erstattungen aus Odoo,\n"
+"Autorisieren und Erfassen, Pay Per Email und optionalen Zahlungszuschlägen.\n"
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -30,7 +51,7 @@ msgstr "%s-Zuschlag"
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
-msgid "<option value=\"\">Please select your gender</option>"
+msgid "Please select your gender"
 msgstr "Bitte wählen Sie Ihr Geschlecht"
 
 #. module: payment_buckaroo_official
@@ -60,7 +81,7 @@ msgstr "Kontoinhaber"
 
 #. module: payment_buckaroo_official
 #. odoo-javascript
-#: code:addons/payment_buckaroo_official/static/src/js/payment_googlepay.js:0
+#: code:addons/payment_buckaroo_official/static/src/js/express_wallet_utils.js:0
 msgid "Address update failed. Please try again."
 msgstr "Adressaktualisierung fehlgeschlagen. Bitte versuchen Sie es erneut."
 
@@ -90,6 +111,11 @@ msgstr "Betrag"
 #: code:addons/payment_buckaroo_official/models/payment_method_giftcard.py:0
 msgid "Amount outside the Buckaroo payment method limits."
 msgstr "Betrag liegt außerhalb der Buckaroo-Zahlungsmethoden-Limits."
+
+#. module: payment_buckaroo_official
+#: model:ir.module.module,summary:base.module_payment_buckaroo_official
+msgid "An official Buckaroo payment provider for Odoo 20."
+msgstr "Ein offizieller Buckaroo-Zahlungsanbieter für Odoo 20."
 
 #. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_applepay
@@ -220,6 +246,7 @@ msgid "Minimum amount"
 msgstr "Mindestbetrag"
 
 #. module: payment_buckaroo_official
+#: model:ir.module.module,shortdesc:base.module_payment_buckaroo_official
 #: model:payment.provider,name:payment_buckaroo_official.payment_provider_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.payment_method_form_buckaroo_official
 msgid "Buckaroo Official"
@@ -323,6 +350,13 @@ msgid "Buckaroo: payment request failed: %s"
 msgstr "Buckaroo: Zahlungsanfrage fehlgeschlagen: %s"
 
 #. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/models/payment_provider.py:0
+msgid ""
+"Cannot process payment: the Buckaroo Store Key or Secret Key is missing."
+msgstr "Zahlung kann nicht verarbeitet werden: der Buckaroo-Shop-Schlüssel oder -Geheimschlüssel fehlt."
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_applepay_button_style
 msgid "Apple Pay Button Style"
 msgstr "Apple Pay-Schaltflächenstil"
@@ -335,10 +369,8 @@ msgstr "Google Pay-Schaltflächenstil"
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_provider.py:0
-msgid "Cannot process payment: the Buckaroo provider is disabled."
-msgstr ""
-"Zahlung kann nicht verarbeitet werden: der Buckaroo-Anbieter ist "
-"deaktiviert."
+msgid "Cannot process payment: the Buckaroo provider is archived."
+msgstr "Zahlung kann nicht verarbeitet werden: der Buckaroo-Anbieter ist archiviert."
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -450,7 +482,9 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/payment_applepay.js:0
 #: code:addons/payment_buckaroo_official/static/src/js/payment_googlepay.js:0
+#: code:addons/payment_buckaroo_official/static/src/js/payment_paypal.js:0
 msgid ""
 "Could not read the product details. Please reload the page and try again."
 msgstr ""
@@ -503,6 +537,7 @@ msgid "Dankort"
 msgstr "Dankort"
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_applepay_button_style__black
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_googlepay_button_style__black
 msgid "Dark"
 msgstr "Dunkel"
@@ -561,6 +596,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order__display_name
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order_line__display_name
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_website__display_name
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_website_checkout_step__display_name
 msgid "Display Name"
 msgstr "Anzeigename"
 
@@ -586,6 +622,8 @@ msgstr "EPS"
 
 #. module: payment_buckaroo_official
 #. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/express_wallet_utils.js:0
+#: code:addons/payment_buckaroo_official/static/src/js/payment_applepay.js:0
 #: code:addons/payment_buckaroo_official/static/src/js/payment_form_creditcard.js:0
 #: code:addons/payment_buckaroo_official/static/src/js/payment_form_giftcard.js:0
 #: code:addons/payment_buckaroo_official/static/src/js/payment_googlepay.js:0
@@ -766,6 +804,7 @@ msgstr "IBAN"
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order__id
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_sale_order_line__id
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_website__id
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_website_checkout_step__id
 msgid "ID"
 msgstr "ID"
 
@@ -827,7 +866,7 @@ msgstr "Ungültige Zahlungsmethode für diesen Anbieter."
 
 #. module: payment_buckaroo_official
 #. odoo-python
-#: code:addons/payment_buckaroo_official/controllers/express_googlepay.py:0
+#: code:addons/payment_buckaroo_official/controllers/express_wallet.py:0
 msgid "Invalid product_id or qty."
 msgstr "Ungültige product_id oder Menge."
 
@@ -870,6 +909,7 @@ msgid "Klarna Salutation"
 msgstr "Anrede"
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_applepay_button_style__white
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_googlepay_button_style__white
 msgid "Light"
 msgstr "Hell"
@@ -928,7 +968,7 @@ msgstr "Fräulein"
 
 #. module: payment_buckaroo_official
 #. odoo-python
-#: code:addons/payment_buckaroo_official/controllers/express_googlepay.py:0
+#: code:addons/payment_buckaroo_official/controllers/express_wallet.py:0
 msgid "Missing product_id or qty."
 msgstr "Fehlende product_id oder Menge."
 
@@ -1150,11 +1190,12 @@ msgstr "Przelewy24"
 
 #. module: payment_buckaroo_official
 #. odoo-python
-#: code:addons/payment_buckaroo_official/controllers/express_googlepay.py:0
+#: code:addons/payment_buckaroo_official/controllers/express_wallet.py:0
 msgid "Quantity must be positive."
 msgstr "Die Menge muss positiv sein."
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_applepay_integration_mode__redirect
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_creditcard_method__redirect
 #: model:ir.model.fields.selection,name:payment_buckaroo_official.selection__payment_method__buckaroo_official_giftcard_method__redirect
 msgid "Redirect"
@@ -1276,6 +1317,11 @@ msgstr "Buckaroo-Geheimschlüssel"
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.hosted_fields_inline_form
 msgid "Security code"
 msgstr "Sicherheitscode"
+
+#. module: payment_buckaroo_official
+#: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.hosted_fields_inline_form
+msgid "Select your card type"
+msgstr "Wählen Sie Ihren Kartentyp"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,help:payment_buckaroo_official.field_payment_transaction__buckaroo_official_service_code
@@ -1411,7 +1457,7 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #. odoo-python
-#: code:addons/payment_buckaroo_official/controllers/express_googlepay.py:0
+#: code:addons/payment_buckaroo_official/controllers/express_wallet.py:0
 msgid "The given product does not exist."
 msgstr "Das angegebene Produkt existiert nicht."
 
@@ -1513,6 +1559,11 @@ msgid "Website"
 msgstr "Website"
 
 #. module: payment_buckaroo_official
+#: model:ir.model,name:payment_buckaroo_official.model_website_checkout_step
+msgid "Website Checkout Step"
+msgstr "Website-Kassiervorgangsschritt"
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_wero
 msgid "Wero"
 msgstr "Wero"
@@ -1596,7 +1647,7 @@ msgstr "unter Verwendung der unten stehenden Bankdaten."
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.paypermail_inline_form
-msgid "<option value=\"\">Prefer not to say</option>"
+msgid "Prefer not to say"
 msgstr "Keine Angabe"
 
 #. module: payment_buckaroo_official
