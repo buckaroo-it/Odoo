@@ -205,9 +205,14 @@ msgid "Maximum amount"
 msgstr "Montant maximum"
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_applepay_merchant_guid
+msgid "Apple Pay Merchant GUID"
+msgstr "Apple Pay Merchant GUID"
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_merchant_guid
-msgid "Buckaroo Merchant GUID"
-msgstr "Buckaroo Merchant GUID"
+msgid "Google Pay Merchant GUID"
+msgstr "Google Pay Merchant GUID"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_min_amount
@@ -320,9 +325,14 @@ msgid "Buckaroo: payment request failed: %s"
 msgstr "Buckaroo : la requête de paiement a échoué : %s"
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_applepay_button_style
+msgid "Apple Pay Button Style"
+msgstr "Style du bouton Apple Pay"
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_button_style
-msgid "Button Style"
-msgstr "Style du bouton"
+msgid "Google Pay Button Style"
+msgstr "Style du bouton Google Pay"
 
 #. module: payment_buckaroo_official
 #. odoo-python
@@ -1252,8 +1262,8 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_secret_key
-msgid "Secret Key"
-msgstr "Clé secrète"
+msgid "Buckaroo Secret Key"
+msgstr "Clé secrète Buckaroo"
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.hosted_fields_inline_form
@@ -1286,19 +1296,49 @@ msgid "She/Her"
 msgstr "Elle/La"
 
 #. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_applepay_show_on_cart
+msgid "Show Apple Pay on Cart"
+msgstr "Afficher Apple Pay sur le panier"
+
+#. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_show_on_cart
-msgid "Show on Cart"
-msgstr "Afficher sur le panier"
+msgid "Show Google Pay on Cart"
+msgstr "Afficher Google Pay sur le panier"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_paypal_show_on_cart
+msgid "Show PayPal on Cart"
+msgstr "Afficher PayPal sur le panier"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_applepay_show_on_checkout
+msgid "Show Apple Pay on Checkout"
+msgstr "Afficher Apple Pay au paiement"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_show_on_checkout
-msgid "Show on Checkout"
-msgstr "Afficher au paiement"
+msgid "Show Google Pay on Checkout"
+msgstr "Afficher Google Pay au paiement"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_paypal_show_on_checkout
+msgid "Show PayPal on Checkout"
+msgstr "Afficher PayPal au paiement"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_applepay_show_on_product
+msgid "Show Apple Pay on Product"
+msgstr "Afficher Apple Pay sur le produit"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_googlepay_show_on_product
-msgid "Show on Product"
-msgstr "Afficher sur le produit"
+msgid "Show Google Pay on Product"
+msgstr "Afficher Google Pay sur le produit"
+
+#. module: payment_buckaroo_official
+#: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_method__buckaroo_official_paypal_show_on_product
+msgid "Show PayPal on Product"
+msgstr "Afficher PayPal sur le produit"
 
 #. module: payment_buckaroo_official
 #: model:ir.model.fields,field_description:payment_buckaroo_official.field_payment_provider__buckaroo_official_website_key

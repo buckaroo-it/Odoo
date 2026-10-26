@@ -15,7 +15,7 @@ class PaymentMethodGooglepay(models.Model):
     _inherit = "payment.method"
 
     buckaroo_official_googlepay_merchant_guid = fields.Char(
-        string="Buckaroo Merchant GUID",
+        string="Google Pay Merchant GUID",
         help="The Merchant GUID issued by Buckaroo for Google Pay. "
         "Find this in Buckaroo Plaza under your Google Pay configuration.",
         copy=False,
@@ -27,13 +27,13 @@ class PaymentMethodGooglepay(models.Model):
         copy=False,
     )
     buckaroo_official_googlepay_show_on_cart = fields.Boolean(
-        string="Show on Cart",
+        string="Show Google Pay on Cart",
         default=True,
         help="Display the Google Pay express button on the cart page.",
         copy=False,
     )
     buckaroo_official_googlepay_show_on_product = fields.Boolean(
-        string="Show on Product",
+        string="Show Google Pay on Product",
         default=False,
         help="Display the Google Pay express button on product detail pages. "
         "Tapping this button adds the chosen variant to the cart and "
@@ -41,7 +41,7 @@ class PaymentMethodGooglepay(models.Model):
         copy=False,
     )
     buckaroo_official_googlepay_show_on_checkout = fields.Boolean(
-        string="Show on Checkout",
+        string="Show Google Pay on Checkout",
         default=True,
         help="Display Google Pay as a regular payment method on the checkout "
         "page. When disabled, Google Pay is hidden from the inline payment "
@@ -50,7 +50,7 @@ class PaymentMethodGooglepay(models.Model):
     )
     buckaroo_official_googlepay_button_style = fields.Selection(
         [("black", "Dark"), ("white", "Light")],
-        string="Button Style",
+        string="Google Pay Button Style",
         default="black",
         help="Visual style of the Google Pay button. Dark works on most "
         "storefronts; pick Light for dark-themed pages.",
