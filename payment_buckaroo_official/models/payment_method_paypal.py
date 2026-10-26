@@ -31,13 +31,13 @@ class PaymentMethodPaypal(models.Model):
         copy=False,
     )
     buckaroo_official_paypal_show_on_cart = fields.Boolean(
-        string="Show on Cart",
+        string="Show PayPal on Cart",
         default=True,
         help="Display the PayPal Express button on the cart page.",
         copy=False,
     )
     buckaroo_official_paypal_show_on_product = fields.Boolean(
-        string="Show on Product",
+        string="Show PayPal on Product",
         default=False,
         help="Display the PayPal Express button on product detail pages. "
         "Tapping this button adds the chosen variant to the cart and "
@@ -45,7 +45,7 @@ class PaymentMethodPaypal(models.Model):
         copy=False,
     )
     buckaroo_official_paypal_show_on_checkout = fields.Boolean(
-        string="Show on Checkout",
+        string="Show PayPal on Checkout",
         default=True,
         help="Display PayPal as a regular payment method on the checkout "
         "page. When disabled, PayPal is hidden from the inline payment "
