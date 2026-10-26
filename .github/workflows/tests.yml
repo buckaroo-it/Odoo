@@ -14,7 +14,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        image: postgres:16
         env:
           POSTGRES_USER: odoo
           POSTGRES_PASSWORD: odoo
@@ -28,7 +28,7 @@ jobs:
           --health-retries 10
 
     container:
-      image: odoo:19.0
+      image: odoo:20.0
       options: --user root
 
     steps:

@@ -3,7 +3,6 @@
 import logging
 
 from odoo import SUPERUSER_ID, api
-from odoo.fields import Command
 
 _logger = logging.getLogger(__name__)
 
@@ -17,7 +16,9 @@ def migrate(cr, version):
     The method is archived rather than deleted because
     ``payment_transaction.payment_method_id`` has an ``ON DELETE RESTRICT``
     foreign key: merchants with historical goSettle transactions cannot have
-    the record removed.
+    the record removed. It stays linked to its provider: the method belongs
+    to one provider (``provider_id``), so unlinking it from
+    ``payment_method_ids`` would delete it.
 
     Dropping its ``ir.model.data`` row is what keeps the archived record
     alive. Without it, Odoo's end-of-load orphan cleanup
@@ -43,13 +44,5 @@ def migrate(cr, version):
     if not methods:
         return
 
-    providers = (
-        env["payment.provider"]
-        .with_context(active_test=False)
-        .search([("payment_method_ids", "in", methods.ids)])
-    )
-    providers.write(
-        {"payment_method_ids": [Command.unlink(method_id) for method_id in methods.ids]}
-    )
     methods.write({"active": False})
     _logger.info("Archived deprecated payment method %s.", REMOVED_METHOD_CODE)

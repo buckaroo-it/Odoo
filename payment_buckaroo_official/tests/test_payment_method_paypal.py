@@ -47,8 +47,7 @@ class TestPaypalCreatePayment(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypal = cls.env.ref("payment_buckaroo_official.payment_method_paypal")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypal.id)]
+        cls.paypal = cls._pm("buckaroo_paypal")
 
     def test_express_payment_sends_paypal_order_id_from_session(self):
         tx = self._create_buckaroo_tx(reference="TX-PP-001", payment_method=self.paypal)
@@ -60,7 +59,9 @@ class TestPaypalCreatePayment(BuckarooOfficialCommon):
             _patch_request({"buckaroo_paypal_order_id": "PP-ORDER-XYZ"}),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.paypal._buckaroo_create_payment(tx, client)
+            result = self.paypal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         self.assertEqual(result, mock_response)
@@ -80,7 +81,7 @@ class TestPaypalCreatePayment(BuckarooOfficialCommon):
 
         with patch(_PAYPAL_PS) as MockPS, _patch_request(session):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.paypal._buckaroo_create_payment(tx, client)
+            self.paypal._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         self.assertNotIn("buckaroo_paypal_order_id", session)
 
@@ -92,7 +93,9 @@ class TestPaypalCreatePayment(BuckarooOfficialCommon):
         with patch(_PAYPAL_PS) as MockPS, _patch_request({}):
             MockPS.return_value.create_payment.return_value = mock_builder
             with self.assertRaises(ValidationError):
-                self.paypal._buckaroo_create_payment(tx, client)
+                self.paypal._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), client
+                )
 
     def test_non_paypal_method_delegates_to_base(self):
         tx = self._create_buckaroo_tx(reference="TX-IDEAL-PP-OFF")
@@ -103,7 +106,7 @@ class TestPaypalCreatePayment(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService",
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.ideal._buckaroo_create_payment(tx, client)
+            self.ideal._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         mock_builder.pay.assert_called_once()
         param_keys = [call.args[0] for call in mock_builder.add_parameter.call_args_list]
@@ -116,7 +119,7 @@ class TestPaypalPushAddress(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypal = cls.env.ref("payment_buckaroo_official.payment_method_paypal")
+        cls.paypal = cls._pm("buckaroo_paypal")
         cls.nl = cls.env.ref("base.nl")
 
     def _stub_partner(self, name="PayPal Customer"):
@@ -214,7 +217,7 @@ class TestPaypalPushAddress(BuckarooOfficialCommon):
     def test_non_express_paypal_tx_is_not_mutated(self):
         billing = self._stub_partner()
         tx = self._express_tx(billing)
-        tx.buckaroo_official_is_paypal_express = False
+        self._update_transaction(tx, buckaroo_official_is_paypal_express=False)
 
         self.paypal._buckaroo_apply_push_metadata(tx, self._full_push())
 
@@ -234,8 +237,7 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypal = cls.env.ref("payment_buckaroo_official.payment_method_paypal")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypal.id)]
+        cls.paypal = cls._pm("buckaroo_paypal")
         cls.nl = cls.env.ref("base.nl")
 
     def _express_tx(self, reference="TX-PP-NR"):
@@ -273,12 +275,15 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._express_tx()
         response = self._response_with_address(190)
 
-        result = self.paypal._buckaroo_handle_no_redirect_response(tx, response)
+        result = self.paypal._buckaroo_handle_no_redirect_response(
+            tx.with_context(payment_safe_write=True), response
+        )
 
-        # Success routes to /payment/status so the poll post-processes the tx
-        # in a fresh request and the order confirms now, not on the cron.
+        # Success queues the response and routes to /payment/status, which
+        # processes it in a fresh request so the order confirms now.
         self.assertTrue(result["api_url"].endswith("/payment/status"))
         self.assertEqual(tx.provider_reference, response.key)
+        self._run_processing()
         self.assertEqual(tx.state, "done")
         partner = tx.partner_id
         partner.invalidate_recordset()
@@ -292,7 +297,9 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._express_tx("TX-PP-NR-PENDING")
         response = make_mock_sdk_response(791)
 
-        result = self.paypal._buckaroo_handle_no_redirect_response(tx, response)
+        result = self.paypal._buckaroo_handle_no_redirect_response(
+            tx.with_context(payment_safe_write=True), response
+        )
 
         self.assertTrue(result["api_url"].endswith("/shop/payment/validate"))
         self.assertEqual(tx.provider_reference, response.key)
@@ -302,7 +309,9 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._express_tx("TX-PP-NR-FAIL")
         response = make_mock_sdk_response(490)
 
-        result = self.paypal._buckaroo_handle_no_redirect_response(tx, response)
+        result = self.paypal._buckaroo_handle_no_redirect_response(
+            tx.with_context(payment_safe_write=True), response
+        )
 
         self.assertIsNone(result)
         self.assertNotEqual(tx.state, "done")
@@ -330,10 +339,11 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._create_buckaroo_tx(reference="TX-IDEAL-NR")
         with self._spy_on_base() as base:
             result = self.ideal._buckaroo_handle_no_redirect_response(
-                tx, make_mock_sdk_response(190)
+                tx.with_context(payment_safe_write=True), make_mock_sdk_response(190)
             )
         self.assertTrue(base.called)
         self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self._run_processing()
         self.assertEqual(tx.state, "done")
 
     def test_non_paypal_method_delegates_to_base_returns_none_on_failure(self):
@@ -341,7 +351,7 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._create_buckaroo_tx(reference="TX-IDEAL-NR-FAIL")
         with self._spy_on_base() as base:
             result = self.ideal._buckaroo_handle_no_redirect_response(
-                tx, make_mock_sdk_response(490)
+                tx.with_context(payment_safe_write=True), make_mock_sdk_response(490)
             )
         self.assertTrue(base.called)
         self.assertIsNone(result)
@@ -352,7 +362,7 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._express_tx("TX-PP-NR-OWN")
         with self._spy_on_base() as base:
             result = self.paypal._buckaroo_handle_no_redirect_response(
-                tx, self._response_with_address(190)
+                tx.with_context(payment_safe_write=True), self._response_with_address(190)
             )
         self.assertFalse(base.called)
         self.assertTrue(result["api_url"].endswith("/payment/status"))
@@ -361,52 +371,49 @@ class TestPaypalNoRedirectSettlement(BuckarooOfficialCommon):
 @tagged("post_install", "-at_install")
 class TestPaypalMerchantIdAndConfig(BuckarooOfficialCommon):
     """Mode-aware merchant id and configuration gating: the SDK environment
-    (test vs live) is picked client-side from the provider state, so the
-    merchant id must track the same state or the order can't be captured."""
+    (test vs live) is picked client-side from the provider mode, so the
+    merchant id must track the same mode or the order can't be captured."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypal = cls.env.ref("payment_buckaroo_official.payment_method_paypal")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypal.id)]
+        cls.paypal = cls._pm("buckaroo_paypal")
         cls.paypal.buckaroo_official_paypal_merchant_id = "LIVE-MID"
         cls.paypal.buckaroo_official_paypal_sandbox_merchant_id = "SANDBOX-MID"
 
     def test_merchant_id_is_sandbox_in_test_mode(self):
-        self.buckaroo.state = "test"
+        self.buckaroo.is_live = False
         self.assertEqual(self.paypal._buckaroo_paypal_merchant_id_for(self.buckaroo), "SANDBOX-MID")
 
-    def test_merchant_id_is_live_in_enabled_mode(self):
-        self.buckaroo.state = "enabled"
+    def test_merchant_id_is_live_in_live_mode(self):
+        self.buckaroo.is_live = True
         self.assertEqual(self.paypal._buckaroo_paypal_merchant_id_for(self.buckaroo), "LIVE-MID")
 
     def test_configured_requires_matching_mode_id(self):
-        self.buckaroo.state = "test"
+        self.buckaroo.is_live = False
         self.assertTrue(self.paypal._buckaroo_paypal_is_configured())
         self.paypal.buckaroo_official_paypal_sandbox_merchant_id = False
         self.assertFalse(self.paypal._buckaroo_paypal_is_configured())
 
     def test_configured_false_when_live_id_missing_in_production(self):
-        self.buckaroo.state = "enabled"
+        self.buckaroo.is_live = True
         self.paypal.buckaroo_official_paypal_merchant_id = False
         self.assertFalse(self.paypal._buckaroo_paypal_is_configured())
 
 
 @tagged("post_install", "-at_install")
 class TestPaypalCheckoutListCompatFilter(BuckarooOfficialCommon):
-    """`_get_compatible_payment_methods` gating for PayPal as a regular
+    """`_find_available_payment_methods` gating for PayPal as a regular
     checkout-list entry, mirroring the Google Pay coverage in
     ``test_payment_method_googlepay.py``."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypal = cls.env.ref("payment_buckaroo_official.payment_method_paypal")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypal.id)]
+        cls.paypal = cls._pm("buckaroo_paypal")
 
     def _checkout_compatible_codes(self):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            provider_ids=self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner_id=self.env.ref("base.partner_admin").id,
             currency_id=self.env.ref("base.EUR").id,
             is_express_checkout=False,
@@ -414,8 +421,7 @@ class TestPaypalCheckoutListCompatFilter(BuckarooOfficialCommon):
         return set(methods.mapped("code"))
 
     def _express_compatible_codes(self):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            provider_ids=self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner_id=self.env.ref("base.partner_admin").id,
             currency_id=self.env.ref("base.EUR").id,
             is_express_checkout=True,

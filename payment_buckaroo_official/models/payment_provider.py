@@ -74,7 +74,7 @@ class PaymentProvider(models.Model):
         copy=False,
     )
     buckaroo_official_secret_key = fields.Char(
-        string="Secret Key",
+        string="Buckaroo Secret Key",
         required_if_provider=const.PROVIDER_CODE,
         copy=False,
         groups="base.group_system",
@@ -108,17 +108,45 @@ class PaymentProvider(models.Model):
             return super()._get_default_payment_method_codes()
         return const.DEFAULT_PAYMENT_METHOD_CODES
 
+    def _find_available_payment_methods(
+        self,
+        partner_id,
+        *,
+        currency_id=None,
+        force_tokenization=False,
+        is_express_checkout=False,
+        report=None,
+        **kwargs,
+    ):
+        payment_methods = super()._find_available_payment_methods(
+            partner_id,
+            currency_id=currency_id,
+            force_tokenization=force_tokenization,
+            is_express_checkout=is_express_checkout,
+            report=report,
+            **kwargs,
+        )
+        buckaroo_pms = payment_methods.filtered(
+            lambda pm: pm.provider_id.code == const.PROVIDER_CODE
+        )
+        if not buckaroo_pms:
+            return payment_methods
+        return (payment_methods - buckaroo_pms) | buckaroo_pms._buckaroo_official_filter_available(
+            self, is_express_checkout=is_express_checkout, report=report, **kwargs
+        )
+
     def _buckaroo_official_get_client(self):
         """Instantiate and return a ``BuckarooClient`` for this provider."""
         self.ensure_one()
         from buckaroo._buckaroo_client import BuckarooClient
 
-        if self.state == "test":
-            mode = "test"
-        elif self.state == "enabled":
-            mode = "live"
-        else:
-            raise UserError(_("Cannot process payment: the Buckaroo provider is disabled."))
+        if not self.active:
+            raise UserError(_("Cannot process payment: the Buckaroo provider is archived."))
+        if not self.buckaroo_official_website_key or not self.buckaroo_official_secret_key:
+            raise UserError(
+                _("Cannot process payment: the Buckaroo Store Key or Secret Key is missing.")
+            )
+        mode = "live" if self.is_live else "test"
         return BuckarooClient(
             self.buckaroo_official_website_key,
             self.buckaroo_official_secret_key,
@@ -137,7 +165,7 @@ class PaymentProvider(models.Model):
         if not is_valid:
             raise UserError(_("Connection failed: the Store Key or Secret Key is incorrect."))
 
-        mode = self.state
+        mode = "live" if self.is_live else "test"
         _logger.info("Buckaroo test connection successful (mode=%s).", mode)
         return {
             "type": "ir.actions.client",

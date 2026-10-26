@@ -2,7 +2,7 @@
 
 """Guards the pip packaging declaration for the Buckaroo SDK dependency.
 
-A clean Odoo 19 install has no access to the repo-specific PYTHONPATH mount
+A clean Odoo 20 install has no access to the repo-specific PYTHONPATH mount
 used by local Docker development (see the root CLAUDE.md). The addon must
 ship a ``requirements.txt`` pinning an installable, importable Buckaroo SDK
 release so the manifest's ``external_dependencies`` check can actually be
@@ -39,4 +39,4 @@ class TestPackagingRequirements(BaseCase):
         manifest_path = ADDON_ROOT / "__manifest__.py"
         manifest = ast.literal_eval(manifest_path.read_text())
         python_deps = manifest.get("external_dependencies", {}).get("python", [])
-        self.assertIn("buckaroo", python_deps)
+        self.assertIn("buckaroo-sdk", python_deps)

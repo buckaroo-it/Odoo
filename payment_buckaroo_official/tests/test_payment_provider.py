@@ -69,13 +69,13 @@ class TestPaymentProvider(BuckarooOfficialCommon):
         self.assertEqual(result["tag"], "display_notification")
         self.assertEqual(result["params"]["type"], "success")
 
-    def test_get_client_on_disabled_provider_raises(self):
-        """Requesting an SDK client on a disabled provider raises UserError with a
-        message mentioning the disabled state."""
-        self.buckaroo.state = "disabled"
+    def test_get_client_on_archived_provider_raises(self):
+        """Requesting an SDK client on an archived provider raises UserError with a
+        message mentioning the archived state."""
+        self.buckaroo.active = False
         with self.assertRaises(UserError) as ctx:
             self.buckaroo._buckaroo_official_get_client()
-        self.assertIn("disabled", str(ctx.exception).lower())
+        self.assertIn("archived", str(ctx.exception).lower())
 
     def test_default_pending_message(self):
         """Buckaroo ships the new default pending message, not the base one."""
@@ -83,18 +83,26 @@ class TestPaymentProvider(BuckarooOfficialCommon):
         expected = "Your order has been received and is awaiting payment confirmation."
         self.assertIn(expected, provider.pending_msg)
         self.assertNotIn("waiting for approval", provider.pending_msg)
-        self.assertEqual(provider._get_status_message("pending"), provider.pending_msg)
+        tx = self.env["payment.transaction"].create(
+            dict(
+                self.buckaroo_tx_values,
+                provider_id=provider.id,
+                payment_method_id=provider._get_pm_from_code("buckaroo_ideal").id,
+            )
+        )
+        self._update_transaction(tx, state="pending")
+        self.assertEqual(tx._get_status_message(), provider.pending_msg)
 
     def test_software_header_format(self):
         """The Software header is the JSON object the Buckaroo gateway requires."""
         plugin_version = get_manifest("payment_buckaroo_official")["version"]
-        with patch.object(odoo.release, "version", "19.0-20260630"):
+        with patch.object(odoo.release, "version", "20.0-20260630"):
             header = json.loads(_buckaroo_official_software_header())
         self.assertEqual(
             header,
             {
                 "PlatformName": "Odoo",
-                "PlatformVersion": "19.0-20260630",
+                "PlatformVersion": "20.0-20260630",
                 "ModuleSupplier": "Buckaroo",
                 "ModuleName": "Odoo",
                 "ModuleVersion": plugin_version,
@@ -115,9 +123,9 @@ class TestPaymentProvider(BuckarooOfficialCommon):
 
     def test_client_keeps_sdk_mode_presets(self):
         """Building the client from a config keeps the SDK's per-mode preset values."""
-        for state, mode in (("test", "test"), ("enabled", "live")):
+        for is_live, mode in ((False, "test"), (True, "live")):
             with self.subTest(mode=mode):
-                self.buckaroo.state = state
+                self.buckaroo.is_live = is_live
                 config = self.buckaroo._buckaroo_official_get_client().config
                 preset = create_config_from_mode(mode)
                 for name in (

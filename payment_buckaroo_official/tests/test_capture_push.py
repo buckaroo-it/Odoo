@@ -12,7 +12,6 @@ initial 190 push still sets the tx to done with no child.
 
 from unittest.mock import patch
 
-from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon, make_mock_request, parsed_from_form
@@ -32,33 +31,12 @@ def _capture_push(reference, txn_key, amount="100.00"):
     )
 
 
-def _route_push(env, parsed):
-    """Drive the same split + process path the webhook controller runs."""
-    tx_sudo = (
-        env["payment.transaction"]
-        .sudo()
-        ._search_by_reference(
-            "buckaroo_official",
-            parsed,
-        )
-    )
-    if not tx_sudo:
-        return None
-    remainder_tx = tx_sudo._buckaroo_split_remainder_push(parsed)
-    target = remainder_tx or tx_sudo
-    target._process("buckaroo_official", parsed)
-    if remainder_tx and remainder_tx.state == "done":
-        remainder_tx._post_process()
-    return remainder_tx or tx_sudo
-
-
 @tagged("post_install", "-at_install")
 class TestKlarnaCapturePush(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.partner_nl = cls.env["res.partner"].create(
             {"name": "Jan", "country_id": cls.env.ref("base.nl").id}
         )
@@ -75,16 +53,16 @@ class TestKlarnaCapturePush(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx.provider_reference = provider_reference
-        tx.buckaroo_official_payment_action = "authorize"
-        tx._set_authorized()
+        self._update_transaction(tx, provider_reference=provider_reference)
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
+        tx.with_context(payment_safe_write=True)._set_authorized()
         self.assertEqual(tx.state, "authorized")
         return tx
 
     def test_collecting_push_after_authorize_creates_capture_child(self):
         tx = self._create_authorized_tx(reference="KL-CAP-001")
         parsed = _capture_push("KL-CAP-001", "KL_CAPTURE_KEY")
-        _route_push(self.env, parsed)
+        self._route_push(parsed)
 
         capture_child = tx.child_transaction_ids
         self.assertEqual(len(capture_child), 1)
@@ -110,11 +88,11 @@ class TestKlarnaCapturePush(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx.provider_reference = "KL_RES_KEY"
-        tx.buckaroo_official_payment_action = "authorize"
+        self._update_transaction(tx, provider_reference="KL_RES_KEY")
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
 
         parsed = _capture_push("KL-RESERVE-001", "KL_RES_KEY")
-        _route_push(self.env, parsed)
+        self._route_push(parsed)
 
         self.assertEqual(tx.state, "authorized")
         self.assertFalse(tx.child_transaction_ids)
@@ -124,15 +102,15 @@ class TestKlarnaCapturePush(BuckarooOfficialCommon):
         auth = self._create_authorized_tx(reference="KL-RFND-AUTH")
         # Promote to done so a refund can be issued.
         cap_parsed = _capture_push("KL-RFND-AUTH", "KL_CAP_KEY")
-        _route_push(self.env, cap_parsed)
+        self._route_push(cap_parsed)
         self.assertEqual(auth.state, "done")
         capture_child = auth.child_transaction_ids
         self.assertEqual(capture_child.state, "done")
 
         # Refund tx created externally (no _send_refund_request needed).
         refund_tx = auth._create_child_transaction(50.0, is_refund=True)
-        refund_tx.provider_reference = "KL_REFUND_PENDING"
-        refund_tx._set_pending()
+        self._update_transaction(refund_tx, provider_reference="KL_REFUND_PENDING")
+        refund_tx.with_context(payment_safe_write=True)._set_pending()
 
         refund_push = parsed_from_form(
             {
@@ -144,7 +122,7 @@ class TestKlarnaCapturePush(BuckarooOfficialCommon):
                 "brq_mutationtype": "Collecting",
             }
         )
-        _route_push(self.env, refund_push)
+        self._route_push(refund_push)
 
         self.assertEqual(refund_tx.state, "done")
         # Auth + capture chain untouched.
@@ -159,8 +137,8 @@ class TestKlarnaCapturePush(BuckarooOfficialCommon):
     def test_duplicate_collecting_push_idempotent(self):
         tx = self._create_authorized_tx(reference="KL-DUP-001")
         parsed = _capture_push("KL-DUP-001", "KL_DUP_CAP_KEY")
-        _route_push(self.env, parsed)
-        _route_push(self.env, parsed)  # replay
+        self._route_push(parsed)
+        self._route_push(parsed)  # replay
 
         captures = tx.child_transaction_ids.filtered(lambda t: t.operation != "refund")
         self.assertEqual(len(captures), 1)
@@ -168,9 +146,9 @@ class TestKlarnaCapturePush(BuckarooOfficialCommon):
 
     def test_collecting_push_post_processes_capture_child(self):
         """``_post_process`` must fire on the capture child so the account
-        payment is created the moment the push lands (cron-free). Driven
-        through the real controller so the assertion pins ``main.py``'s
-        post-process call, not the test helper's own ``_post_process``."""
+        payment is created as soon as the push is processed. Driven through
+        the real controller, which records the push on the spawned child, so
+        the processing cron post-processes that child."""
         from ..controllers.main import BuckarooOfficialController  # noqa: PLC0415
         from odoo.addons.account_payment.models.payment_transaction import (  # noqa: PLC0415
             PaymentTransaction,
@@ -180,20 +158,19 @@ class TestKlarnaCapturePush(BuckarooOfficialCommon):
         req = make_mock_request(values=_capture_push("KL-PP-001", "KL_PP_CAP_KEY").raw)
         req.env = self.env
 
+        self._disable_post_process_patcher()
         posted = []
         with (
             patch("odoo.addons.payment_buckaroo_official.controllers.main.verify_signature"),
             patch.object(PaymentTransaction, "_post_process", lambda self: posted.append(self)),
         ):
             BuckarooOfficialController._handle_push(req)
+            self._run_processing()
 
         capture_child = tx.child_transaction_ids.filtered(lambda t: t.operation != "refund")
         self.assertEqual(len(capture_child), 1)
-        # The framework also pings _post_process on an empty set during
-        # _process; drop those. The only real record post-processed is the
-        # spawned child via main.py:65 — remove that line and ``captured`` empties.
-        captured = [record for record in posted if record]
-        self.assertEqual(captured, [capture_child])
+        post_processed = self.env["payment.transaction"].union(*posted)
+        self.assertIn(capture_child, post_processed)
 
 
 @tagged("post_install", "-at_install")
@@ -201,8 +178,7 @@ class TestRivertyCapturePush(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.riverty.buckaroo_official_riverty_authorize = "authorize"
         cls.partner_nl = cls.env["res.partner"].create(
             {"name": "Jan", "country_id": cls.env.ref("base.nl").id}
@@ -220,12 +196,12 @@ class TestRivertyCapturePush(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx.provider_reference = "RV_AUTH_KEY"
-        tx.buckaroo_official_payment_action = "authorize"
-        tx._set_authorized()
+        self._update_transaction(tx, provider_reference="RV_AUTH_KEY")
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
+        tx.with_context(payment_safe_write=True)._set_authorized()
 
         parsed = _capture_push("RV-CAP-001", "RV_CAPTURE_KEY")
-        _route_push(self.env, parsed)
+        self._route_push(parsed)
 
         capture_child = tx.child_transaction_ids
         self.assertEqual(len(capture_child), 1)
@@ -239,8 +215,7 @@ class TestCreditCardCapturePush(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
         cls.creditcard.buckaroo_official_creditcard_authorize = "authorize"
 
     def test_collecting_push_after_authorize_creates_capture_child(self):
@@ -255,12 +230,12 @@ class TestCreditCardCapturePush(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx.provider_reference = "CC_AUTH_KEY"
-        tx.buckaroo_official_payment_action = "authorize"
-        tx._set_authorized()
+        self._update_transaction(tx, provider_reference="CC_AUTH_KEY")
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
+        tx.with_context(payment_safe_write=True)._set_authorized()
 
         parsed = _capture_push("CC-CAP-001", "CC_CAPTURE_KEY")
-        _route_push(self.env, parsed)
+        self._route_push(parsed)
 
         capture_child = tx.child_transaction_ids
         self.assertEqual(len(capture_child), 1)
@@ -276,10 +251,10 @@ class TestDirectPayCapturePush(BuckarooOfficialCommon):
 
     def test_ideal_initial_push_goes_to_done_without_child(self):
         tx = self._create_buckaroo_tx(reference="IDEAL-DP-001", payment_method=self.ideal)
-        tx.provider_reference = "IDEAL_AUTH_KEY"
+        self._update_transaction(tx, provider_reference="IDEAL_AUTH_KEY")
 
         parsed = _capture_push("IDEAL-DP-001", "IDEAL_DONE_KEY", amount="50.00")
-        _route_push(self.env, parsed)
+        self._route_push(parsed)
 
         self.assertEqual(tx.state, "done")
         self.assertFalse(tx.child_transaction_ids)

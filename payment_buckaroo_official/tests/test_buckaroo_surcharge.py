@@ -17,8 +17,7 @@ class _SurchargeBase(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.bancontact = cls.env.ref("payment_buckaroo_official.payment_method_bancontact")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.bancontact.id)]
+        cls.bancontact = cls._pm("buckaroo_bancontact")
         for method in (cls.ideal, cls.bancontact):
             method.write(
                 {
@@ -305,6 +304,18 @@ class TestSurchargeController(_SurchargeBase):
     def setUpClass(cls):
         super().setUpClass()
         cls.ideal.buckaroo_official_fee_amount = "1.50"
+        # The checkout re-checks taxes and prices before paying. Keep the order
+        # lines in line with the product (untaxed, list price in the pricelist
+        # currency) so that check passes and only the surcharge moves the total.
+        cls.product.taxes_id = [Command.clear()]
+        cls.pricelist = cls.env["product.pricelist"].create(
+            {"name": "Surcharge", "currency_id": cls.env.company.currency_id.id}
+        )
+
+    def _make_order(self, qty=1, price=100.0):
+        order = super()._make_order(qty=qty, price=price)
+        order.pricelist_id = self.pricelist
+        return order
 
     def _line_snapshot(self, order):
         return [(l.product_id.id, l.product_uom_qty, l.price_unit) for l in order.order_line]
@@ -326,7 +337,8 @@ class TestSurchargeController(_SurchargeBase):
         return kwargs
 
     def _invoke_controller(self, order, payment_method, **extra):
-        # Fake super() replays parent: token check + post-lock hook.
+        # Fake super() replays parent: token check + checkout validation, whose
+        # ``/shop/payment/transaction`` step syncs the surcharge.
         from odoo.tools import consteq
 
         from odoo.addons.payment_buckaroo_official.controllers.fee import (
@@ -337,7 +349,7 @@ class TestSurchargeController(_SurchargeBase):
 
         captured = {}
 
-        def fake_super_shop(self_inner, order_id, access_token, **kwargs):
+        def fake_super_shop(self_inner, order_id, access_token, amount=None, **kwargs):
             captured["order_id"] = order_id
             captured["access_token"] = access_token
             env = _fee_module.request.env
@@ -350,21 +362,24 @@ class TestSurchargeController(_SurchargeBase):
                 and consteq(order_sudo.access_token, access_token)
             )
             if token_ok:
-                order_sudo._check_cart_is_ready_to_be_paid()
-            if not kwargs.get("amount"):
-                kwargs["amount"] = order_sudo.amount_total
+                captured["redirect"] = env["website.checkout.step"].validate_checkout_progress(
+                    "/shop/payment/transaction", order_sudo
+                )
+            kwargs["amount"] = amount or order_sudo.amount_total
             captured["kwargs"] = kwargs
             return {"ok": True}
 
         kwargs = self._build_kwargs(order, payment_method)
         kwargs.update(extra)
 
+        website = order.website_id or self.env["website"].search([], limit=1)
+        order.website_id = website
         controller = BuckarooFeePaymentPortal()
         original = PaymentPortal.shop_payment_transaction
         PaymentPortal.shop_payment_transaction = fake_super_shop
         try:
             fake_request = MagicMock()
-            fake_request.env = self.env
+            fake_request.env = self.env(context=dict(self.env.context, website_id=website.id))
 
             def _update_context(**ctx):
                 fake_request.env = fake_request.env(
@@ -386,6 +401,7 @@ class TestSurchargeController(_SurchargeBase):
                 )
         finally:
             PaymentPortal.shop_payment_transaction = original
+        self.assertFalse(captured.get("redirect"), "checkout validation must pass")
         return captured
 
     def test_applies_surcharge_for_buckaroo_method(self):
@@ -395,6 +411,20 @@ class TestSurchargeController(_SurchargeBase):
         self.assertEqual(len(self._surcharge_lines(order)), 1)
         self.assertEqual(captured["kwargs"]["amount"], base_total + 1.50)
         self.assertEqual(order.amount_total, base_total + 1.50)
+
+    def test_checkout_price_check_keeps_picked_surcharge(self):
+        """The surcharge line added when the shopper picks the method on
+        ``/shop/payment`` must survive the checkout's tax/price re-check on
+        ``/shop/payment/transaction``; otherwise the cart is flagged as changed
+        and the shopper is bounced back to the payment page."""
+        order = self._make_order()
+        order._apply_buckaroo_surcharge_line(self.ideal)
+        base_total = order.amount_total - 1.50
+        captured = self._invoke_controller(order, self.ideal)
+        lines = self._surcharge_lines(order)
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines.price_unit, 1.50)
+        self.assertEqual(captured["kwargs"]["amount"], base_total + 1.50)
 
     def test_removes_surcharge_for_non_buckaroo_method(self):
         order = self._make_order()

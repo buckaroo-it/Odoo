@@ -101,7 +101,7 @@ class BuckarooWalletShippingController(Delivery):
         product = request.env["product.product"].sudo().browse(pid).exists()
         if not product:
             return empty
-        website = request.website
+        website = request.env.website
         # Same fpos/pricelist source as the real express order, so the sheet
         # subtotal equals what we later charge.
         partner = request.env.user.partner_id

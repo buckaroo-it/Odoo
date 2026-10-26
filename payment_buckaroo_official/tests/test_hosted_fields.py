@@ -14,7 +14,6 @@ intentionally not duplicated here.
 
 from unittest.mock import MagicMock, patch
 
-from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon
@@ -27,8 +26,7 @@ class TestPaymentMethodHostedFieldsSettings(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
         # Reset to defaults so tests don't depend on DB state.
         cls.creditcard.write(
             {
@@ -83,8 +81,7 @@ class TestTransactionHostedFields(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
         # Reset to defaults so tests don't depend on state left by sibling classes.
         cls.creditcard.write(
             {
@@ -123,7 +120,7 @@ class TestTransactionHostedFields(BuckarooOfficialCommon):
             mock_builder.pay.return_value = mock_response
             MockPS.return_value.create_payment.return_value = mock_builder
 
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         mock_builder.pay.assert_called_once()
         self.assertEqual(result["api_url"], "https://checkout.buckaroo.nl/pay")
@@ -155,11 +152,9 @@ class TestTransactionHostedFields(BuckarooOfficialCommon):
             patch(
                 "odoo.addons.payment_buckaroo_official.models.payment_method_creditcard.PaymentService"
             ) as MockPS,
-            patch.object(
-                odoo.http,
-                "request",
-                mock_request,
-            ),
+            patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch.object(type(tx), "_buckaroo_official_get_client", return_value=MagicMock()),
             patch.object(
                 type(tx.payment_method_id),
@@ -171,7 +166,7 @@ class TestTransactionHostedFields(BuckarooOfficialCommon):
             mock_builder.payWithToken.return_value = mock_response
             MockPS.return_value.create_payment.return_value = mock_builder
 
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         mock_builder.payWithToken.assert_called_once()
         mock_builder.add_parameter.assert_called_once_with("SessionId", "hf-session-token")
@@ -185,8 +180,7 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
 
     def _make_controller(self):
         """Instantiate the CreditCardController."""
@@ -247,11 +241,9 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
                 "odoo.addons.payment_buckaroo_official.controllers.creditcard.HostedFieldsService",
                 return_value=mock_oauth,
             ) as mock_cls,
-            patch.object(
-                odoo.http,
-                "request",
-                mock_request,
-            ),
+            patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.creditcard.request",
                 new=mock_request,
@@ -279,6 +271,8 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
 
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.creditcard.request",
                 new=mock_request,
@@ -312,6 +306,8 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
                 return_value=mock_oauth,
             ),
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.creditcard.request",
                 new=mock_request,
@@ -334,6 +330,8 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
 
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.creditcard.request",
                 new=mock_request,
@@ -355,6 +353,8 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
 
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.creditcard.request",
                 new=mock_request,
@@ -382,6 +382,8 @@ class TestHostedFieldsTokenEndpoint(BuckarooOfficialCommon):
 
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.creditcard.request",
                 new=mock_request,
@@ -403,7 +405,7 @@ class TestSdkServiceNameField(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
+        cls.creditcard = cls._pm("buckaroo_creditcard")
 
     def test_sdk_service_name_field_exists(self):
         self.assertIn(
@@ -426,7 +428,7 @@ class TestCreditCardBrandMethods(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
+        cls.creditcard = cls._pm("buckaroo_creditcard")
 
     def test_11_brand_child_methods_exist(self):
         children = self.env["payment.method"].search(

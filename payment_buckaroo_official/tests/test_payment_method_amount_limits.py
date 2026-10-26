@@ -36,14 +36,14 @@ class TestBuckarooOfficialPaymentMethodAmountLimits(BuckarooOfficialCommon):
     def setUpClass(cls):
         super().setUpClass()
 
-        # Link every method in the fixture to the test provider and strip
-        # country/currency restrictions so only the amount-limit logic can
-        # exclude them during the tests.
+        # Enable every method in the fixture and strip its country/currency
+        # restrictions so only the amount-limit logic can exclude them during
+        # the tests.
         for code in METHODS_FIXTURE:
-            pm = cls.env.ref(f"payment_buckaroo_official.payment_method_{code}")
-            cls.buckaroo.payment_method_ids = [Command.link(pm.id)]
+            pm = cls._pm(f"buckaroo_{code}")
             pm.write(
                 {
+                    "active": True,
                     "supported_country_ids": [Command.clear()],
                     "supported_currency_ids": [Command.clear()],
                 }
@@ -52,15 +52,14 @@ class TestBuckarooOfficialPaymentMethodAmountLimits(BuckarooOfficialCommon):
     def test_amount_limit_excludes_below_min(self):
         for code in METHODS_FIXTURE:
             with self.subTest(code=code):
-                pm = self.env.ref(f"payment_buckaroo_official.payment_method_{code}")
+                pm = self._pm(f"buckaroo_{code}")
                 pm.write(
                     {
                         "buckaroo_official_min_amount": "100.00",
                         "buckaroo_official_max_amount": "",
                     }
                 )
-                methods = self.env["payment.method"]._get_compatible_payment_methods(
-                    self.buckaroo.ids,
+                methods = self.buckaroo._find_available_payment_methods(
                     self.partner.id,
                     currency_id=self.currency_euro.id,
                     amount=50.00,
@@ -70,15 +69,14 @@ class TestBuckarooOfficialPaymentMethodAmountLimits(BuckarooOfficialCommon):
     def test_amount_limit_excludes_above_max(self):
         for code in METHODS_FIXTURE:
             with self.subTest(code=code):
-                pm = self.env.ref(f"payment_buckaroo_official.payment_method_{code}")
+                pm = self._pm(f"buckaroo_{code}")
                 pm.write(
                     {
                         "buckaroo_official_min_amount": "",
                         "buckaroo_official_max_amount": "25.00",
                     }
                 )
-                methods = self.env["payment.method"]._get_compatible_payment_methods(
-                    self.buckaroo.ids,
+                methods = self.buckaroo._find_available_payment_methods(
                     self.partner.id,
                     currency_id=self.currency_euro.id,
                     amount=50.00,
@@ -88,15 +86,14 @@ class TestBuckarooOfficialPaymentMethodAmountLimits(BuckarooOfficialCommon):
     def test_amount_limit_includes_within_range(self):
         for code in METHODS_FIXTURE:
             with self.subTest(code=code):
-                pm = self.env.ref(f"payment_buckaroo_official.payment_method_{code}")
+                pm = self._pm(f"buckaroo_{code}")
                 pm.write(
                     {
                         "buckaroo_official_min_amount": "10.00",
                         "buckaroo_official_max_amount": "100.00",
                     }
                 )
-                methods = self.env["payment.method"]._get_compatible_payment_methods(
-                    self.buckaroo.ids,
+                methods = self.buckaroo._find_available_payment_methods(
                     self.partner.id,
                     currency_id=self.currency_euro.id,
                     amount=50.00,

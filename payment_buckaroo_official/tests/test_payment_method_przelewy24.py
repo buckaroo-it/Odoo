@@ -10,7 +10,6 @@ override stays scoped to ``buckaroo_przelewy24``. SDK transport is mocked.
 
 from unittest.mock import MagicMock, patch
 
-from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon, make_mock_sdk_builder
@@ -23,12 +22,8 @@ class TestPrzelewy24PaymentCreation(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.przelewy24 = cls.env.ref("payment_buckaroo_official.payment_method_przelewy24")
-        cls.ideal = cls.env.ref("payment_buckaroo_official.payment_method_ideal")
-        cls.buckaroo.payment_method_ids = [
-            Command.link(cls.przelewy24.id),
-            Command.link(cls.ideal.id),
-        ]
+        cls.przelewy24 = cls._pm("buckaroo_przelewy24")
+        cls.ideal = cls._pm("buckaroo_ideal")
         cls.partner_pl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -61,7 +56,9 @@ class TestPrzelewy24PaymentCreation(BuckarooOfficialCommon):
         ):
             MockOwn.return_value.create_payment.return_value = mock_builder
             MockGeneric.return_value.create_payment.return_value = mock_builder
-            result = method._buckaroo_create_payment(tx, MagicMock())
+            result = method._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), MagicMock()
+            )
 
         return mock_builder, mock_response, result, MockOwn, MockGeneric
 

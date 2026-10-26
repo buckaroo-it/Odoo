@@ -181,14 +181,11 @@ class PaymentMethodRiverty(models.Model):
         for an error. Settle the tx from the sync response, honouring the frozen
         pay/authorize action.
 
-        A synchronously-settled tx is routed to ``/payment/status`` (like the
-        giftcard inline-success hook), whose poll runs ``_post_process()`` in a
-        fresh request so the order confirms now. ``/shop/payment/validate`` does
-        NOT post-process, and ``sale.order.amount_paid`` is a non-stored compute
-        keyed only on ``transaction_ids`` - so settling and confirming in the
-        same request reads a stale amount and the order would sit unconfirmed
-        until the 10-min cron. Pending stays on ``/shop/payment/validate``: it's
-        an open-ended offline wait, so a poll spinner makes no sense."""
+        A synchronously-settled tx is queued and routed to ``/payment/status``
+        (like the giftcard inline-success hook), which processes it in a fresh
+        request so the order confirms now. Pending stays on
+        ``/shop/payment/validate``: it's an open-ended offline wait, so a status
+        spinner makes no sense."""
         if self.code != "buckaroo_riverty":
             return super()._buckaroo_handle_no_redirect_response(transaction, response)
         status_code = (
@@ -196,12 +193,7 @@ class PaymentMethodRiverty(models.Model):
         )
         base_url = transaction.provider_id.get_base_url().rstrip("/")
         if status_code == const.BuckarooStatusCode.SUCCESS:
-            transaction.provider_reference = response.key
-            if transaction.buckaroo_official_payment_action == "authorize":
-                transaction._set_authorized()
-            else:
-                transaction._set_done()
-            return {"api_url": f"{base_url}/payment/status"}
+            return transaction._buckaroo_official_settle_inline(response)
         if response.is_pending():
             transaction.provider_reference = response.key
             transaction._set_pending()

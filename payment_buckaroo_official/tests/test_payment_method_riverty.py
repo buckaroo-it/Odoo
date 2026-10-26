@@ -39,8 +39,7 @@ class TestRivertyPaymentCreation(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -84,7 +83,7 @@ class TestRivertyPaymentCreation(BuckarooOfficialCommon):
                 PaymentMethod, "_buckaroo_extract_redirect_url", return_value="https://rv/pay/X"
             ),
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(result["api_url"], "https://rv/pay/X")
         self.assertEqual(tx.provider_reference, "STORED_KEY")
@@ -103,7 +102,7 @@ class TestRivertyPaymentCreation(BuckarooOfficialCommon):
             patch.object(PaymentMethod, "_buckaroo_extract_redirect_url", return_value=None),
         ):
             with self.assertRaises(ValidationError):
-                tx._get_specific_processing_values({})
+                tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
 
 @tagged("post_install", "-at_install")
@@ -111,8 +110,7 @@ class TestRivertyWebhookCallbacks(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -165,14 +163,14 @@ class TestRivertyWebhookCallbacks(BuckarooOfficialCommon):
                     tx = self._create_tx(ref)
                     builder = self._form_callback if fmt == "form" else self._json_callback
                     parsed = builder(ref, code)
-                    self.env["payment.transaction"].sudo()._process("buckaroo_official", parsed)
+                    self._process_push(parsed)
                     self.assertEqual(tx.state, expected_state)
 
     def test_done_status_maps_to_done(self):
         self._assert_status_maps_to_state(CALLBACK_DONE_CODES, "done")
         tx = self._create_tx("RIVERTY-WH-REF-190")
         parsed = self._form_callback("RIVERTY-WH-REF-190", 190)
-        self.env["payment.transaction"].sudo()._process("buckaroo_official", parsed)
+        self._process_push(parsed)
         self.assertEqual(tx.provider_reference, "RIVERTY_TXN_001")
 
     def test_pending_status_maps_to_pending(self):
@@ -190,8 +188,7 @@ class TestRivertyRefundFlow(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -211,7 +208,7 @@ class TestRivertyRefundFlow(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx._apply_updates(
+        tx.with_context(payment_safe_write=True)._apply_updates(
             parsed_from_form(
                 {
                     "brq_invoicenumber": reference,
@@ -220,7 +217,7 @@ class TestRivertyRefundFlow(BuckarooOfficialCommon):
                     "brq_statuscode": "190",
                     "brq_transactions": "RIVERTY_DONE_KEY",
                 }
-            )
+            ).to_payload(),
         )
         self.assertEqual(tx.state, "done")
         return tx
@@ -238,6 +235,7 @@ class TestRivertyRefundFlow(BuckarooOfficialCommon):
         tx = self._create_done_tx(reference="RV-REFUND-CREATE")
         with self._patch_refund(self._mock_refund_response()):
             refund_tx = tx._refund()
+            self._run_processing()
 
         self.assertEqual(refund_tx.operation, "refund")
         self.assertEqual(refund_tx.source_transaction_id, tx)
@@ -254,6 +252,7 @@ class TestRivertyRefundFlow(BuckarooOfficialCommon):
                     )
                 ):
                     refund_tx = tx._refund()
+                    self._run_processing()
                 self.assertEqual(refund_tx.state, expected_state)
 
     def test_partial_refund_marks_refund_tx_as_error(self):
@@ -269,6 +268,7 @@ class TestRivertyRefundFlow(BuckarooOfficialCommon):
         """
         tx = self._create_done_tx(reference="RV-PARTIAL", amount=100.0)
         refund_tx = tx._refund(amount_to_refund=25.0)
+        self._run_processing()
         self.assertEqual(refund_tx.state, "error")
         self.assertIn("partial refunds", refund_tx.state_message.lower())
 
@@ -278,8 +278,7 @@ class TestRivertyAmountLimitEnforcement(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.riverty.buckaroo_official_max_amount = "1500.00"
         cls.partner_nl = cls.env["res.partner"].create(
             {
@@ -289,8 +288,7 @@ class TestRivertyAmountLimitEnforcement(BuckarooOfficialCommon):
         )
 
     def _riverty_visible(self, amount):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             self.partner_nl.id,
             currency_id=self.currency_euro.id,
             amount=amount,
@@ -312,8 +310,7 @@ class TestRivertyCurrencyAndCountryRestriction(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "NL",
@@ -328,8 +325,7 @@ class TestRivertyCurrencyAndCountryRestriction(BuckarooOfficialCommon):
         )
 
     def _visible(self, partner, currency=None):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner.id,
             currency_id=(currency or self.currency_euro).id,
             amount=100.0,
@@ -351,8 +347,7 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
 
     def _invoke(self, order_id=1, **kwargs):
         """Fire the Riverty controller handler.
@@ -374,6 +369,8 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
         mock_request.session = {}
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.riverty.request",
                 new=mock_request,
@@ -452,7 +449,9 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
             RivertyPaymentPortal,
         )
 
-        company_partner = self.env["res.partner"].create({"name": "Acme BV", "is_company": True})
+        company_partner = self.env["res.partner"].create(
+            {"name": "Acme BV", "vat": "NL000099998B57"}
+        )
         order = self.env["sale.order"].create({"partner_id": company_partner.id})
         controller = RivertyPaymentPortal()
         mock_request = MagicMock()
@@ -460,6 +459,8 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
         mock_request.session = {}
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.riverty.request",
                 new=mock_request,
@@ -502,6 +503,8 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
 
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.riverty.request",
                 new=mock_request,
@@ -540,6 +543,8 @@ class TestRivertyShopPaymentControllerValidations(BuckarooOfficialCommon):
         mock_request.session = {}
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.riverty.request",
                 new=mock_request,
@@ -562,8 +567,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -619,7 +623,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
                 "price_unit": amount,
             }
         )
-        tx.sale_order_ids = [Command.link(order.id)]
+        self._update_transaction(tx, sale_order_ids=[Command.link(order.id)])
         return tx
 
     def test_non_riverty_skips_add_parameter(self):
@@ -631,7 +635,9 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         mock_builder.add_parameter.assert_not_called()
@@ -666,7 +672,9 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         ps, dob, sal = self._patch_dispatch_context()
         with ps as MockPS, dob, sal:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.riverty._buckaroo_create_payment(tx, client)
+            result = self.riverty._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         params_by_name = {
             call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
@@ -697,7 +705,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         ps, dob, sal = self._patch_dispatch_context()
         with ps as MockPS, dob, sal:
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.riverty._buckaroo_create_payment(tx, client)
+            self.riverty._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         mock_builder.authorize.assert_called_once()
         mock_builder.pay.assert_not_called()
@@ -726,7 +734,9 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
             with self.assertRaises(ValidationError) as ctx:
-                self.riverty._buckaroo_create_payment(tx, client)
+                self.riverty._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), client
+                )
         self.assertIn("articles", str(ctx.exception))
         # Builder must not have been built when we fail-fast on articles.
         mock_builder.pay.assert_not_called()
@@ -750,7 +760,9 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
             with self.assertRaises(ValidationError) as ctx:
-                self.riverty._buckaroo_create_payment(tx, client)
+                self.riverty._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), client
+                )
         self.assertIn("date of birth", str(ctx.exception))
         mock_builder.pay.assert_not_called()
 
@@ -768,7 +780,9 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         with ps as MockPS, dob, sal:
             MockPS.return_value.create_payment.return_value = mock_builder
             with self.assertRaises(ValidationError) as ctx:
-                self.riverty._buckaroo_create_payment(tx, client)
+                self.riverty._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), client
+                )
         self.assertIn("salutation", str(ctx.exception).lower())
         mock_builder.pay.assert_not_called()
 
@@ -783,7 +797,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         ps, dob, sal = self._patch_dispatch_context(salutation="")
         with ps as MockPS, dob, sal:
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.riverty._buckaroo_create_payment(tx, client)
+            self.riverty._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
         mock_builder.pay.assert_called_once()
 
     def test_create_payment_uses_resolved_birthdate(self):
@@ -795,7 +809,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         ps, dob, sal = self._patch_dispatch_context(birthdate="15-05-1990")
         with ps as MockPS, dob, sal:
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.riverty._buckaroo_create_payment(tx, client)
+            self.riverty._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         params_by_name = {
             call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
@@ -805,7 +819,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
 
     def test_create_payment_b2b_registry_overrides_empty_partner_value(self):
         """A checkout-supplied identification number overrides an empty
-        partner ``company_registry`` and lands in ``IdentificationNumber``
+        partner Chamber of Commerce number and lands in ``IdentificationNumber``
         for both billing and shipping customer groups — this is the bug
         being fixed."""
         tx = self._make_tx_with_product(reference="TX-RV-B2BREG")
@@ -835,7 +849,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.riverty._buckaroo_create_payment(tx, client)
+            self.riverty._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         params_by_name = {
             call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
@@ -882,7 +896,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.riverty._buckaroo_create_payment(tx, client)
+            self.riverty._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         params_by_name = {
             call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
@@ -901,7 +915,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
         ps, dob, sal = self._patch_dispatch_context()
         with ps as MockPS, dob, sal:
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.riverty._buckaroo_create_payment(tx, client)
+            self.riverty._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         params_by_name = {
             call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
@@ -930,7 +944,7 @@ class TestRivertyCreatePaymentDispatch(BuckarooOfficialCommon):
             ) as mock_resolve,
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.riverty._buckaroo_create_payment(tx, client)
+            self.riverty._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         mock_resolve.assert_called_once_with(tx, "buckaroo_riverty_identification_number")
 
@@ -942,8 +956,7 @@ class TestRivertyPaymentAction(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
 
     def setUp(self):
         # Sibling test classes (CaptureAndVoid, AuthorizeWebhook) flip
@@ -975,8 +988,7 @@ class TestRivertyAuthorizeWebhookSetsAuthorizedState(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -1020,7 +1032,7 @@ class TestRivertyAuthorizeWebhookSetsAuthorizedState(BuckarooOfficialCommon):
                 PaymentMethod, "_buckaroo_extract_redirect_url", return_value=redirect_url
             ),
         ):
-            tx._get_specific_processing_values({})
+            tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(tx.buckaroo_official_payment_action, "authorize")
         self.assertEqual(tx.provider_reference, "AUTH_KEY_E2E")
@@ -1034,7 +1046,7 @@ class TestRivertyAuthorizeWebhookSetsAuthorizedState(BuckarooOfficialCommon):
                 "brq_transactions": "AUTH_KEY_E2E",
             }
         )
-        self.env["payment.transaction"].sudo()._process("buckaroo_official", callback)
+        self._process_push(callback)
         self.assertEqual(tx.state, "authorized")
 
 
@@ -1045,8 +1057,7 @@ class TestRivertyCaptureAndVoid(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -1072,8 +1083,8 @@ class TestRivertyCaptureAndVoid(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx.provider_reference = provider_reference
-        tx.buckaroo_official_payment_action = "authorize"
+        self._update_transaction(tx, provider_reference=provider_reference)
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
         return tx
 
     def test_capture_calls_sdk_capture(self):
@@ -1113,8 +1124,7 @@ class TestRivertyImageUrl(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -1428,36 +1438,43 @@ class TestRivertyNoRedirectSettlement(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.riverty = cls.env.ref("payment_buckaroo_official.payment_method_riverty")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.riverty.id)]
+        cls.riverty = cls._pm("buckaroo_riverty")
 
     def test_success_pay_sets_done_and_routes_to_payment_status(self):
         tx = self._create_buckaroo_tx(reference="TX-RIV-NR", payment_method=self.riverty)
         response = make_mock_sdk_response(190)
 
-        result = self.riverty._buckaroo_handle_no_redirect_response(tx, response)
+        result = self.riverty._buckaroo_handle_no_redirect_response(
+            tx.with_context(payment_safe_write=True), response
+        )
 
-        # Success routes to /payment/status so the poll post-processes the tx
-        # in a fresh request and the order confirms now, not on the cron.
+        # Success queues the response and routes to /payment/status, which
+        # processes it in a fresh request so the order confirms now.
         self.assertTrue(result["api_url"].endswith("/payment/status"))
         self.assertEqual(tx.provider_reference, response.key)
+        self._run_processing()
         self.assertEqual(tx.state, "done")
 
     def test_success_authorize_sets_authorized_and_routes_to_payment_status(self):
         tx = self._create_buckaroo_tx(reference="TX-RIV-NR-AUTH", payment_method=self.riverty)
-        tx.buckaroo_official_payment_action = "authorize"
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
         response = make_mock_sdk_response(190)
 
-        result = self.riverty._buckaroo_handle_no_redirect_response(tx, response)
+        result = self.riverty._buckaroo_handle_no_redirect_response(
+            tx.with_context(payment_safe_write=True), response
+        )
 
         self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self._run_processing()
         self.assertEqual(tx.state, "authorized")
 
     def test_pending_sets_pending_and_routes_to_validate(self):
         tx = self._create_buckaroo_tx(reference="TX-RIV-NR-PENDING", payment_method=self.riverty)
         response = make_mock_sdk_response(791)
 
-        result = self.riverty._buckaroo_handle_no_redirect_response(tx, response)
+        result = self.riverty._buckaroo_handle_no_redirect_response(
+            tx.with_context(payment_safe_write=True), response
+        )
 
         self.assertTrue(result["api_url"].endswith("/shop/payment/validate"))
         self.assertEqual(tx.provider_reference, response.key)
@@ -1467,7 +1484,9 @@ class TestRivertyNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._create_buckaroo_tx(reference="TX-RIV-NR-FAIL", payment_method=self.riverty)
         response = make_mock_sdk_response(490)
 
-        result = self.riverty._buckaroo_handle_no_redirect_response(tx, response)
+        result = self.riverty._buckaroo_handle_no_redirect_response(
+            tx.with_context(payment_safe_write=True), response
+        )
 
         self.assertIsNone(result)
         self.assertNotEqual(tx.state, "done")
@@ -1493,10 +1512,11 @@ class TestRivertyNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._create_buckaroo_tx(reference="TX-RIV-NR-IDEAL")
         with self._spy_on_base() as base:
             result = self.ideal._buckaroo_handle_no_redirect_response(
-                tx, make_mock_sdk_response(190)
+                tx.with_context(payment_safe_write=True), make_mock_sdk_response(190)
             )
         self.assertTrue(base.called)
         self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self._run_processing()
         self.assertEqual(tx.state, "done")
 
     def test_non_riverty_method_delegates_to_base_returns_none_on_failure(self):
@@ -1504,7 +1524,7 @@ class TestRivertyNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._create_buckaroo_tx(reference="TX-RIV-NR-IDEAL-FAIL")
         with self._spy_on_base() as base:
             result = self.ideal._buckaroo_handle_no_redirect_response(
-                tx, make_mock_sdk_response(490)
+                tx.with_context(payment_safe_write=True), make_mock_sdk_response(490)
             )
         self.assertTrue(base.called)
         self.assertIsNone(result)
@@ -1515,7 +1535,7 @@ class TestRivertyNoRedirectSettlement(BuckarooOfficialCommon):
         tx = self._create_buckaroo_tx(reference="TX-RIV-NR-OWN", payment_method=self.riverty)
         with self._spy_on_base() as base:
             result = self.riverty._buckaroo_handle_no_redirect_response(
-                tx, make_mock_sdk_response(190)
+                tx.with_context(payment_safe_write=True), make_mock_sdk_response(190)
             )
         self.assertFalse(base.called)
         self.assertTrue(result["api_url"].endswith("/payment/status"))

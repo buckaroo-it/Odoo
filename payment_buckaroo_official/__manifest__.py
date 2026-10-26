@@ -2,10 +2,10 @@
 
 {
     "name": "Buckaroo Official",
-    "version": "19.0.1.0.3",
+    "version": "20.0.1.0.0",
     "category": "Accounting/Payment Providers",
     "sequence": 350,
-    "summary": "An official Buckaroo payment provider for Odoo 19.",
+    "summary": "An official Buckaroo payment provider for Odoo 20.",
     "description": """
 Buckaroo Payment Provider
 =========================
@@ -17,7 +17,7 @@ authorize & capture, Pay Per Email and optional payment surcharges.
 """,
     "depends": ["payment", "website_sale", "account_payment"],
     "external_dependencies": {
-        "python": ["buckaroo"],
+        "python": ["buckaroo-sdk"],
     },
     "data": [
         "views/payment_provider_views.xml",
@@ -37,8 +37,8 @@ authorize & capture, Pay Per Email and optional payment surcharges.
         "views/payment_paypermail_templates.xml",
         "views/payment_riverty_templates.xml",
         "views/payment_bank_transfer_templates.xml",
-        "data/payment_method_data.xml",
         "data/payment_provider_data.xml",
+        "data/payment_method_data.xml",
         "data/product_buckaroo_surcharge.xml",
     ],
     "assets": {

@@ -68,7 +68,7 @@ class BuckarooWalletExpressCheckout(WebsiteSale):
         if (
             order_sudo
             and order_sudo.state == "draft"
-            and order_sudo.website_id == request.website
+            and order_sudo.website_id == request.env.website
             and order_sudo.partner_id == request.env.user.partner_id
         ):
             return order_sudo

@@ -17,13 +17,13 @@ export function displayWalletError(interaction, message) {
 
 // Variant changes are not tracked via events; read fresh DOM at click time.
 export function snapshotProductDom() {
-    const main = document.querySelector('.js_main_product')
-        || document.querySelector('#product_detail');
+    const main = document.querySelector('#product_detail');
     if (!main) return null;
-    const productInput = main.querySelector('input.product_id, input[name="product_id"]');
+    // The add-to-cart button carries the selected variant id.
+    const addToCart = main.querySelector('button[name="add_to_cart"]');
     const qtyInput = main.querySelector('input[name="add_qty"]');
     const priceEl = main.querySelector('.product_price .oe_currency_value');
-    const productId = parseInt(productInput?.value || '0');
+    const productId = parseInt(addToCart?.dataset.productId || '0');
     const qty = parseInt(qtyInput?.value || '1') || 1;
     const rawPrice = (priceEl?.textContent || '').trim().replace(/\s+/g, '').replace(/,/g, '.');
     const unitPrice = parseFloat(rawPrice);

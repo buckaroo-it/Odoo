@@ -108,7 +108,9 @@ class TestBuckarooCreatePayment(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         MockPS.assert_called_once_with(client)
         mock_builder.pay.assert_called_once()
@@ -123,7 +125,7 @@ class TestBuckarooCreatePayment(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.ideal._buckaroo_create_payment(tx, client)
+            self.ideal._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         service_arg = MockPS.return_value.create_payment.call_args[0][0]
         self.assertEqual(service_arg, "ideal")
@@ -135,7 +137,7 @@ class TestBuckarooRefund(BuckarooOfficialCommon):
 
     def test_refund_params_include_original_key(self):
         source_tx = self._create_buckaroo_tx(reference="ORIG-001", amount=50.0)
-        source_tx.provider_reference = "ORIG_TXN_KEY"
+        self._update_transaction(source_tx, provider_reference="ORIG_TXN_KEY")
         refund_tx = self._create_buckaroo_tx(reference="REF-001", amount=-50.0)
         params = self.ideal._buckaroo_get_refund_params(source_tx, refund_tx)
         self.assertEqual(params["original_transaction_key"], "ORIG_TXN_KEY")
@@ -146,7 +148,7 @@ class TestBuckarooRefund(BuckarooOfficialCommon):
         self.buckaroo.buckaroo_official_refund_description = "Refund {order_number}"
         self.buckaroo.buckaroo_official_transaction_description = "Pay {order_number}"
         source_tx = self._create_buckaroo_tx(reference="ORIG-R1", amount=30.0)
-        source_tx.provider_reference = "ORIG_R1_KEY"
+        self._update_transaction(source_tx, provider_reference="ORIG_R1_KEY")
         refund_tx = self._create_buckaroo_tx(reference="REF-R1", amount=-30.0)
         params = self.ideal._buckaroo_get_refund_params(source_tx, refund_tx)
         self.assertEqual(params["description"], "Refund REF-R1")
@@ -156,14 +158,14 @@ class TestBuckarooRefund(BuckarooOfficialCommon):
         self.buckaroo.buckaroo_official_refund_description = False
         self.buckaroo.buckaroo_official_transaction_description = "Order {order_number}"
         source_tx = self._create_buckaroo_tx(reference="ORIG-R2", amount=40.0)
-        source_tx.provider_reference = "ORIG_R2_KEY"
+        self._update_transaction(source_tx, provider_reference="ORIG_R2_KEY")
         refund_tx = self._create_buckaroo_tx(reference="REF-R2", amount=-40.0)
         params = self.ideal._buckaroo_get_refund_params(source_tx, refund_tx)
         self.assertEqual(params["description"], "Order REF-R2")
 
     def test_create_refund_calls_sdk_refund(self):
         source_tx = self._create_buckaroo_tx(reference="ORIG-002", amount=50.0)
-        source_tx.provider_reference = "ORIG_KEY_2"
+        self._update_transaction(source_tx, provider_reference="ORIG_KEY_2")
         refund_tx = self._create_buckaroo_tx(reference="REF-002", amount=-25.0)
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
@@ -185,8 +187,8 @@ class TestBuckarooRefund(BuckarooOfficialCommon):
         the auth key with 490 "Invalid parameter: originaltransaction".
         """
         auth_tx = self._create_buckaroo_tx(reference="AUTH-001", amount=63.0)
-        auth_tx.provider_reference = "AUTH_KEY"
-        auth_tx.buckaroo_official_payment_action = "authorize"
+        self._update_transaction(auth_tx, provider_reference="AUTH_KEY")
+        self._update_transaction(auth_tx, buckaroo_official_payment_action="authorize")
         # Simulate Odoo's _capture(): child carries parent's operation,
         # transitions through authorized → done as Buckaroo confirms.
         capture_tx = self.env["payment.transaction"].create(
@@ -202,8 +204,8 @@ class TestBuckarooRefund(BuckarooOfficialCommon):
                 "provider_reference": "CAPTURE_KEY",
             }
         )
-        capture_tx._set_done()
-        auth_tx._set_done()
+        capture_tx.with_context(payment_safe_write=True)._set_done()
+        auth_tx.with_context(payment_safe_write=True)._set_done()
 
         refund_tx = self._create_buckaroo_tx(reference="R-AUTH-001", amount=-63.0)
         params = self.ideal._buckaroo_get_refund_params(auth_tx, refund_tx)
@@ -214,7 +216,7 @@ class TestBuckarooRefund(BuckarooOfficialCommon):
         source tx's provider_reference — guards the W6 direct-pay path.
         """
         source_tx = self._create_buckaroo_tx(reference="DP-001", amount=50.0)
-        source_tx.provider_reference = "DIRECT_PAY_KEY"
+        self._update_transaction(source_tx, provider_reference="DIRECT_PAY_KEY")
         refund_tx = self._create_buckaroo_tx(reference="R-DP-001", amount=-50.0)
         params = self.ideal._buckaroo_get_refund_params(source_tx, refund_tx)
         self.assertEqual(params["original_transaction_key"], "DIRECT_PAY_KEY")
@@ -224,7 +226,7 @@ class TestBuckarooRefund(BuckarooOfficialCommon):
         child — its operation is ``refund``, not the parent's.
         """
         source_tx = self._create_buckaroo_tx(reference="MIX-001", amount=50.0)
-        source_tx.provider_reference = "SRC_KEY"
+        self._update_transaction(source_tx, provider_reference="SRC_KEY")
         prior_refund = self.env["payment.transaction"].create(
             {
                 "provider_id": self.buckaroo.id,
@@ -238,7 +240,7 @@ class TestBuckarooRefund(BuckarooOfficialCommon):
                 "provider_reference": "PRIOR_REFUND_KEY",
             }
         )
-        prior_refund._set_done()
+        prior_refund.with_context(payment_safe_write=True)._set_done()
 
         new_refund = self._create_buckaroo_tx(reference="R-MIX-002", amount=-25.0)
         params = self.ideal._buckaroo_get_refund_params(source_tx, new_refund)
@@ -251,7 +253,7 @@ class TestBuckarooPostAuthorize(BuckarooOfficialCommon):
 
     def test_capture_calls_sdk_capture(self):
         tx = self._create_buckaroo_tx()
-        tx.provider_reference = "AUTH_KEY"
+        self._update_transaction(tx, provider_reference="AUTH_KEY")
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
 
@@ -266,7 +268,7 @@ class TestBuckarooPostAuthorize(BuckarooOfficialCommon):
 
     def test_void_calls_sdk_cancel_authorize(self):
         tx = self._create_buckaroo_tx()
-        tx.provider_reference = "AUTH_KEY"
+        self._update_transaction(tx, provider_reference="AUTH_KEY")
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
 
@@ -281,16 +283,16 @@ class TestBuckarooPostAuthorize(BuckarooOfficialCommon):
 
     def test_post_authorize_params_include_original_key(self):
         tx = self._create_buckaroo_tx()
-        tx.provider_reference = "AUTH_KEY_123"
+        self._update_transaction(tx, provider_reference="AUTH_KEY_123")
         params, original_key = self.ideal._buckaroo_get_post_authorize_params(tx)
         self.assertEqual(original_key, "AUTH_KEY_123")
         self.assertNotIn("original_transaction_key", params)
 
     def test_post_authorize_uses_source_tx_when_available(self):
         source_tx = self._create_buckaroo_tx(reference="SRC-001")
-        source_tx.provider_reference = "SRC_KEY"
+        self._update_transaction(source_tx, provider_reference="SRC_KEY")
         child_tx = self._create_buckaroo_tx(reference="CHILD-001")
-        child_tx.source_transaction_id = source_tx
+        self._update_transaction(child_tx, source_transaction_id=source_tx)
         params, original_key = self.ideal._buckaroo_get_post_authorize_params(child_tx)
         self.assertEqual(original_key, "SRC_KEY")
         self.assertNotIn("original_transaction_key", params)
@@ -351,7 +353,7 @@ class TestProcessingValuesSurfacesSdkError(BuckarooOfficialCommon):
             from odoo.exceptions import ValidationError  # noqa: PLC0415
 
             with self.assertRaises(ValidationError) as ctx:
-                tx._get_specific_processing_values({})
+                tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
         self.assertIn(riverty_msg, str(ctx.exception))
 
     def test_processing_values_raises_generic_when_sdk_has_no_error(self):
@@ -374,6 +376,6 @@ class TestProcessingValuesSurfacesSdkError(BuckarooOfficialCommon):
             from odoo.exceptions import ValidationError  # noqa: PLC0415
 
             with self.assertRaises(ValidationError) as ctx:
-                tx._get_specific_processing_values({})
+                tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
         # Generic fallback message lands when SDK has nothing useful.
         self.assertIn("payment could not be initiated", str(ctx.exception))

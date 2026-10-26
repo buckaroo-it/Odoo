@@ -57,9 +57,9 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
         cls.invoice.action_post()
 
         cls.tx = cls._make_buckaroo_tx("ACCMOVE-TX-1")
-        cls.tx.invoice_ids = [Command.link(cls.invoice.id)]
-        cls.tx._set_done()
-        cls.tx._post_process()
+        cls.tx.with_context(payment_safe_write=True).invoice_ids = [Command.link(cls.invoice.id)]
+        cls.tx.with_context(payment_safe_write=True)._set_done()
+        cls.tx.with_context(payment_safe_write=True)._post_process()
 
         cls.credit_note = cls.invoice._reverse_moves(cancel=True)
 
@@ -126,14 +126,13 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        extra_tx.invoice_ids = [Command.link(self.invoice.id)]
-        extra_tx._set_done()
-        extra_tx._post_process()
+        self._update_transaction(extra_tx, invoice_ids=[Command.link(self.invoice.id)])
+        extra_tx.with_context(payment_safe_write=True)._set_done()
+        extra_tx.with_context(payment_safe_write=True)._post_process()
         return extra_tx
 
     def _make_giftcard_tx_for_invoice(self, reference="ACCMOVE-GC-1", amount=50.0):
-        giftcard = self.env.ref("payment_buckaroo_official.payment_method_brand_vvvgiftcard")
-        self.buckaroo.payment_method_ids = [Command.link(giftcard.id)]
+        giftcard = self._pm("buckaroo_vvvgiftcard")
         return self._add_second_buckaroo_tx(
             reference=reference, amount=amount, payment_method=giftcard
         )
@@ -177,7 +176,7 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
 
     def test_existing_refund_tx_does_not_count_as_multi(self):
         refund_tx = self.tx._create_child_transaction(self.tx.amount, is_refund=True)
-        refund_tx._set_done()
+        refund_tx.with_context(payment_safe_write=True)._set_done()
         txs = self.credit_note._find_valid_buckaroo_official_transactions()
         self.assertEqual(txs, self.tx)
         self.assertNotIn(refund_tx, txs)
@@ -202,9 +201,9 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
         )
         sale_order.action_confirm()
         sale_tx = self._make_buckaroo_tx("SO-TX-1")
-        sale_tx.sale_order_ids = [Command.link(sale_order.id)]
-        sale_tx._set_done()
-        sale_tx._post_process()
+        self._update_transaction(sale_tx, sale_order_ids=[Command.link(sale_order.id)])
+        sale_tx.with_context(payment_safe_write=True)._set_done()
+        sale_tx.with_context(payment_safe_write=True)._post_process()
 
         invoice = sale_order._create_invoices()
         invoice.action_post()
@@ -229,7 +228,7 @@ class TestAccountMoveBuckarooRefund(BuckarooOfficialCommon):
 
     def _fully_refund_source_payment(self):
         refund_tx = self.tx._create_child_transaction(self.tx.amount, is_refund=True)
-        refund_tx._set_done()
+        refund_tx.with_context(payment_safe_write=True)._set_done()
         self.env["account.payment"].create(
             {
                 "amount": self.tx.amount,

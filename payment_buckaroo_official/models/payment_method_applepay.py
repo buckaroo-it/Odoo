@@ -14,19 +14,19 @@ class PaymentMethodApplepay(models.Model):
     _inherit = "payment.method"
 
     buckaroo_official_applepay_merchant_guid = fields.Char(
-        string="Buckaroo Merchant GUID",
+        string="Apple Pay Merchant GUID",
         help="The Merchant GUID issued by Buckaroo for Apple Pay. "
         "Find this in Buckaroo Plaza under your Apple Pay configuration.",
         copy=False,
     )
     buckaroo_official_applepay_show_on_cart = fields.Boolean(
-        string="Show on Cart",
+        string="Show Apple Pay on Cart",
         default=True,
         help="Display the Apple Pay express button on the cart page.",
         copy=False,
     )
     buckaroo_official_applepay_show_on_product = fields.Boolean(
-        string="Show on Product",
+        string="Show Apple Pay on Product",
         default=False,
         help="Display the Apple Pay express button on product detail pages. "
         "Tapping this button adds the chosen variant to the cart and "
@@ -34,7 +34,7 @@ class PaymentMethodApplepay(models.Model):
         copy=False,
     )
     buckaroo_official_applepay_show_on_checkout = fields.Boolean(
-        string="Show on Checkout",
+        string="Show Apple Pay on Checkout",
         default=True,
         help="Display Apple Pay as a regular payment method on the checkout "
         "page. When disabled, Apple Pay is hidden from the inline payment "
@@ -43,7 +43,7 @@ class PaymentMethodApplepay(models.Model):
     )
     buckaroo_official_applepay_button_style = fields.Selection(
         [("black", "Dark"), ("white", "Light")],
-        string="Button Style",
+        string="Apple Pay Button Style",
         default="black",
         help="Visual style of the Apple Pay button. Dark works on most "
         "storefronts; pick Light for dark-themed pages.",
@@ -61,24 +61,11 @@ class PaymentMethodApplepay(models.Model):
         copy=False,
     )
 
-    def _get_compatible_payment_methods(
-        self,
-        provider_ids,
-        partner_id,
-        currency_id=None,
-        force_tokenization=False,
-        is_express_checkout=False,
-        report=None,
-        **kwargs,
+    def _buckaroo_official_filter_available(
+        self, providers, is_express_checkout=False, report=None, **kwargs
     ):
-        payment_methods = super()._get_compatible_payment_methods(
-            provider_ids,
-            partner_id,
-            currency_id=currency_id,
-            force_tokenization=force_tokenization,
-            is_express_checkout=is_express_checkout,
-            report=report,
-            **kwargs,
+        payment_methods = super()._buckaroo_official_filter_available(
+            providers, is_express_checkout=is_express_checkout, report=report, **kwargs
         )
         return payment_methods.filtered(
             lambda pm: (

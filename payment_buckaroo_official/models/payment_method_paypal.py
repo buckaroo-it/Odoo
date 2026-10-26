@@ -31,13 +31,13 @@ class PaymentMethodPaypal(models.Model):
         copy=False,
     )
     buckaroo_official_paypal_show_on_cart = fields.Boolean(
-        string="Show on Cart",
+        string="Show PayPal on Cart",
         default=True,
         help="Display the PayPal Express button on the cart page.",
         copy=False,
     )
     buckaroo_official_paypal_show_on_product = fields.Boolean(
-        string="Show on Product",
+        string="Show PayPal on Product",
         default=False,
         help="Display the PayPal Express button on product detail pages. "
         "Tapping this button adds the chosen variant to the cart and "
@@ -45,7 +45,7 @@ class PaymentMethodPaypal(models.Model):
         copy=False,
     )
     buckaroo_official_paypal_show_on_checkout = fields.Boolean(
-        string="Show on Checkout",
+        string="Show PayPal on Checkout",
         default=True,
         help="Display PayPal as a regular payment method on the checkout "
         "page. When disabled, PayPal is hidden from the inline payment "
@@ -53,24 +53,11 @@ class PaymentMethodPaypal(models.Model):
         copy=False,
     )
 
-    def _get_compatible_payment_methods(
-        self,
-        provider_ids,
-        partner_id,
-        currency_id=None,
-        force_tokenization=False,
-        is_express_checkout=False,
-        report=None,
-        **kwargs,
+    def _buckaroo_official_filter_available(
+        self, providers, is_express_checkout=False, report=None, **kwargs
     ):
-        payment_methods = super()._get_compatible_payment_methods(
-            provider_ids,
-            partner_id,
-            currency_id=currency_id,
-            force_tokenization=force_tokenization,
-            is_express_checkout=is_express_checkout,
-            report=report,
-            **kwargs,
+        payment_methods = super()._buckaroo_official_filter_available(
+            providers, is_express_checkout=is_express_checkout, report=report, **kwargs
         )
         return payment_methods.filtered(
             lambda pm: (
@@ -94,18 +81,16 @@ class PaymentMethodPaypal(models.Model):
         return bool(provider) and bool(self._buckaroo_paypal_merchant_id_for(provider))
 
     def _buckaroo_paypal_active_provider(self):
-        """The linked, enabled-or-test Buckaroo provider (one mode at a time)."""
+        """The linked, active Buckaroo provider."""
         self.ensure_one()
-        return self.provider_ids.filtered(
-            lambda p: p.code == const.PROVIDER_CODE and p.state in ("enabled", "test")
-        )[:1]
+        return self.provider_id.filtered(lambda p: p.code == const.PROVIDER_CODE and p.active)
 
     def _buckaroo_paypal_merchant_id_for(self, provider):
         """Sandbox merchant id in test mode, live merchant id otherwise. The SDK
         environment (test vs live) is selected client-side from the same provider
         state, so the merchant must match it or the order can't be captured."""
         self.ensure_one()
-        if provider and provider.state == "test":
+        if provider and not provider.is_live:
             return self.buckaroo_official_paypal_sandbox_merchant_id or ""
         return self.buckaroo_official_paypal_merchant_id or ""
 
@@ -134,15 +119,11 @@ class PaymentMethodPaypal(models.Model):
         generic flow would mistake it for an error. Settle the tx from the sync
         response, which also carries the buyer's address.
 
-        A synchronously-settled tx routes to ``/payment/status`` (like the
-        giftcard / Riverty inline-success hooks): its poll runs
-        ``_post_process()`` in a fresh request so the order confirms now.
-        ``/shop/payment/validate`` does NOT post-process, and
-        ``sale.order.amount_paid`` is a non-stored compute keyed only on
-        ``transaction_ids`` - so settling and confirming in the same request
-        reads a stale amount and the order would sit unconfirmed until the
-        10-min cron. Pending stays on ``/shop/payment/validate``: it's an
-        open-ended offline wait, so a poll spinner makes no sense."""
+        A synchronously-settled tx is queued and routed to ``/payment/status``
+        (like the giftcard / Riverty inline-success hooks), which processes it
+        in a fresh request so the order confirms now. Pending stays on
+        ``/shop/payment/validate``: it's an open-ended offline wait, so a
+        status spinner makes no sense."""
         if self.code != "buckaroo_paypal":
             return super()._buckaroo_handle_no_redirect_response(transaction, response)
         status_code = (
@@ -150,10 +131,8 @@ class PaymentMethodPaypal(models.Model):
         )
         base_url = transaction.provider_id.get_base_url().rstrip("/")
         if status_code == const.BuckarooStatusCode.SUCCESS:
-            transaction.provider_reference = response.key
             self._buckaroo_paypal_write_address(transaction, response)
-            transaction._set_done()
-            return {"api_url": f"{base_url}/payment/status"}
+            return transaction._buckaroo_official_settle_inline(response)
         if response.is_pending():
             transaction.provider_reference = response.key
             transaction._set_pending()

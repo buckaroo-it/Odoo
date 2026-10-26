@@ -20,6 +20,15 @@ class SaleOrderLine(models.Model):
         self.ensure_one()
         return not self.is_buckaroo_surcharge and super()._show_in_cart()
 
+    def _compute_tax_ids(self):
+        # The surcharge takes its VAT from the order's product lines (see
+        # sale.order._apply_buckaroo_surcharge_line), not from the surcharge
+        # product, so the checkout's tax re-check must keep it.
+        surcharge_lines = self.filtered("is_buckaroo_surcharge")
+        for line in surcharge_lines:
+            line.tax_ids = line.tax_ids
+        super(SaleOrderLine, self - surcharge_lines)._compute_tax_ids()
+
 
 class SaleOrder(models.Model):
     _inherit = "sale.order"
@@ -83,12 +92,20 @@ class SaleOrder(models.Model):
             return
         self._apply_buckaroo_surcharge_line(payment_method)
 
-    def _check_cart_is_ready_to_be_paid(self):
-        # Runs under parent's FOR NO KEY UPDATE NOWAIT; concurrent picks serialise.
+    def _get_update_prices_lines(self):
+        """Keep the surcharge out of pricelist recomputation: its price comes
+        from the payment method, not the surcharge product."""
+        return (
+            super()._get_update_prices_lines().filtered(lambda line: not line.is_buckaroo_surcharge)
+        )
+
+    def _buckaroo_sync_surcharge_from_context(self):
+        """Apply the surcharge of the payment method picked for this payment
+        (set in the context by the ``/shop/payment/transaction`` override)."""
         pm_id = self.env.context.get(const.PICK_METHOD_CONTEXT_KEY)
-        if pm_id:
-            pm = self.env["payment.method"].sudo().browse(pm_id).exists()
-            if pm:
-                for order in self:
-                    order._buckaroo_sync_surcharge_for_method(pm)
-        return super()._check_cart_is_ready_to_be_paid()
+        if not pm_id:
+            return
+        pm = self.env["payment.method"].sudo().browse(pm_id).exists()
+        if pm:
+            for order in self:
+                order._buckaroo_sync_surcharge_for_method(pm)

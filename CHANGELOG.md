@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [20.0.1.0.0]
+
+### Added
+- [BTI-1743] Added Odoo 20.0 support.
+
+### Changed
+- [BTI-1743] Switched B2B detection to Odoo 20's company rule: a customer is a business when it is its own commercial entity and has a VAT number. A business customer without a VAT number is sent to Billink, Riverty and in3 as a private customer.
+- [BTI-1743] Moved the Chamber of Commerce number to the partner's company identifier for its country (for example KVK), because Odoo 20 no longer has the Company Registry field.
+
+### Fixed
+- [BTI-1850] Replaced the deprecated `t-esc` in the giftcard payment form with `t-out`.
+- [BTI-1851] Gave the Apple Pay, Google Pay and PayPal settings and the Buckaroo secret key unique field labels.
+- [BTI-1852] Declared the Buckaroo SDK by its PyPI package name, `buckaroo-sdk`, in the manifest.
+
+---
+
 ## [19.0.1.0.3]
 
 ### Changed

@@ -14,6 +14,8 @@ from . import payment_method_paypal
 from . import payment_method_paypermail
 from . import payment_transaction
 from . import sale_order
+from . import res_partner
+from . import website_checkout_step
 from . import account_move
 from . import payment_method_giftcard
 from . import payment_method_alipay

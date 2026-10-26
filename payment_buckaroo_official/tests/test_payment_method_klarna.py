@@ -48,8 +48,7 @@ class TestKlarnaPaymentCreation(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -93,7 +92,7 @@ class TestKlarnaPaymentCreation(BuckarooOfficialCommon):
                 PaymentMethod, "_buckaroo_extract_redirect_url", return_value="https://kl/pay/X"
             ),
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(result["api_url"], "https://kl/pay/X")
         self.assertEqual(tx.provider_reference, "STORED_KEY")
@@ -108,7 +107,7 @@ class TestKlarnaPaymentCreation(BuckarooOfficialCommon):
             patch.object(PaymentMethod, "_buckaroo_extract_redirect_url", return_value=None),
         ):
             with self.assertRaises(ValidationError):
-                tx._get_specific_processing_values({})
+                tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
 
 @tagged("post_install", "-at_install")
@@ -116,8 +115,7 @@ class TestKlarnaWebhookCallbacks(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -170,14 +168,14 @@ class TestKlarnaWebhookCallbacks(BuckarooOfficialCommon):
                     tx = self._create_tx(ref)
                     builder = self._form_callback if fmt == "form" else self._json_callback
                     parsed = builder(ref, code)
-                    self.env["payment.transaction"].sudo()._process("buckaroo_official", parsed)
+                    self._process_push(parsed)
                     self.assertEqual(tx.state, expected_state)
 
     def test_done_status_maps_to_done(self):
         self._assert_status_maps_to_state(CALLBACK_DONE_CODES, "done")
         tx = self._create_tx("KLARNA-WH-REF-190")
         parsed = self._form_callback("KLARNA-WH-REF-190", 190)
-        self.env["payment.transaction"].sudo()._process("buckaroo_official", parsed)
+        self._process_push(parsed)
         self.assertEqual(tx.provider_reference, "KLARNA_TXN_001")
 
     def test_pending_status_maps_to_pending(self):
@@ -210,14 +208,14 @@ class TestKlarnaWebhookCallbacks(BuckarooOfficialCommon):
                 PaymentMethod, "_buckaroo_extract_redirect_url", return_value=redirect_url
             ),
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(result["api_url"], redirect_url)
         self.assertEqual(tx.provider_reference, "E2E_KEY")
         self.assertEqual(tx.buckaroo_official_payment_action, "authorize")
 
         callback = self._form_callback("KLARNA-E2E-001", 190, txn_key="E2E_KEY")
-        self.env["payment.transaction"].sudo()._process("buckaroo_official", callback)
+        self._process_push(callback)
         self.assertEqual(tx.state, "authorized")
 
 
@@ -226,8 +224,7 @@ class TestKlarnaRefundFlow(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -247,7 +244,7 @@ class TestKlarnaRefundFlow(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx._apply_updates(
+        tx.with_context(payment_safe_write=True)._apply_updates(
             parsed_from_form(
                 {
                     "brq_invoicenumber": reference,
@@ -256,7 +253,7 @@ class TestKlarnaRefundFlow(BuckarooOfficialCommon):
                     "brq_statuscode": "190",
                     "brq_transactions": "KLARNA_DONE_KEY",
                 }
-            )
+            ).to_payload(),
         )
         self.assertEqual(tx.state, "done")
         return tx
@@ -274,6 +271,7 @@ class TestKlarnaRefundFlow(BuckarooOfficialCommon):
         tx = self._create_done_tx(reference="KL-REFUND-CREATE")
         with self._patch_refund(self._mock_refund_response()):
             refund_tx = tx._refund()
+            self._run_processing()
 
         self.assertEqual(refund_tx.operation, "refund")
         self.assertEqual(refund_tx.source_transaction_id, tx)
@@ -290,12 +288,14 @@ class TestKlarnaRefundFlow(BuckarooOfficialCommon):
                     )
                 ):
                     refund_tx = tx._refund()
+                    self._run_processing()
                 self.assertEqual(refund_tx.state, expected_state)
 
     def test_partial_refund_passes_amount_to_sdk(self):
         tx = self._create_done_tx(reference="KL-PARTIAL", amount=100.0)
         with self._patch_refund(self._mock_refund_response()) as mock_refund:
             refund_tx = tx._refund(amount_to_refund=25.0)
+            self._run_processing()
 
         self.assertEqual(abs(refund_tx.amount), 25.0)
         refund_tx_arg = mock_refund.call_args[0][1]
@@ -307,6 +307,7 @@ class TestKlarnaRefundFlow(BuckarooOfficialCommon):
                 tx = self._create_done_tx(reference="KL-REFUND-WH-%s" % fmt.upper())
                 with self._patch_refund(self._mock_refund_response(status_code=790)):
                     refund_tx = tx._refund()
+                    self._run_processing()
                 self.assertEqual(refund_tx.state, "pending")
 
                 if fmt == "form":
@@ -331,7 +332,7 @@ class TestKlarnaRefundFlow(BuckarooOfficialCommon):
                             },
                         }
                     )
-                refund_tx._apply_updates(parsed)
+                refund_tx.with_context(payment_safe_write=True)._apply_updates(parsed.to_payload())
                 self.assertEqual(refund_tx.state, "done")
 
 
@@ -340,8 +341,7 @@ class TestKlarnaAmountLimitEnforcement(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.klarna.buckaroo_official_max_amount = "750.00"
         cls.partner_nl = cls.env["res.partner"].create(
             {
@@ -351,8 +351,7 @@ class TestKlarnaAmountLimitEnforcement(BuckarooOfficialCommon):
         )
 
     def _klarna_visible(self, amount):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             self.partner_nl.id,
             currency_id=self.currency_euro.id,
             amount=amount,
@@ -378,8 +377,7 @@ class TestKlarnaCurrencyRestriction(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "NL",
@@ -388,8 +386,7 @@ class TestKlarnaCurrencyRestriction(BuckarooOfficialCommon):
         )
 
     def _visible(self, partner, currency=None):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner.id,
             currency_id=(currency or self.currency_euro).id,
             amount=100.0,
@@ -408,8 +405,7 @@ class TestKlarnaCreatePaymentDispatch(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -431,7 +427,9 @@ class TestKlarnaCreatePaymentDispatch(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         mock_builder.reserve.assert_not_called()
@@ -466,7 +464,7 @@ class TestKlarnaCreatePaymentDispatch(BuckarooOfficialCommon):
                 "price_unit": 50.0,
             }
         )
-        tx.sale_order_ids = [Command.link(order.id)]
+        self._update_transaction(tx, sale_order_ids=[Command.link(order.id)])
 
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
@@ -483,7 +481,9 @@ class TestKlarnaCreatePaymentDispatch(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.klarna._buckaroo_create_payment(tx, client)
+            result = self.klarna._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         params_by_name = {
             call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list
@@ -516,8 +516,7 @@ class TestKlarnaPaymentAction(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
 
     def test_klarna_returns_authorize(self):
         """Klarna MOR has no immediate-capture path; always 'authorize'."""
@@ -536,8 +535,7 @@ class TestKlarnaAuthorizeWebhookSetsAuthorizedState(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -575,7 +573,7 @@ class TestKlarnaAuthorizeWebhookSetsAuthorizedState(BuckarooOfficialCommon):
                 PaymentMethod, "_buckaroo_extract_redirect_url", return_value=redirect_url
             ),
         ):
-            tx._get_specific_processing_values({})
+            tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(tx.buckaroo_official_payment_action, "authorize")
         self.assertEqual(tx.provider_reference, "RES_KEY_E2E")
@@ -589,7 +587,7 @@ class TestKlarnaAuthorizeWebhookSetsAuthorizedState(BuckarooOfficialCommon):
                 "brq_transactions": "RES_KEY_E2E",
             }
         )
-        self.env["payment.transaction"].sudo()._process("buckaroo_official", callback)
+        self._process_push(callback)
         self.assertEqual(tx.state, "authorized")
 
 
@@ -601,8 +599,7 @@ class TestKlarnaCaptureAndVoid(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -622,8 +619,8 @@ class TestKlarnaCaptureAndVoid(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx.provider_reference = provider_reference
-        tx.buckaroo_official_payment_action = "authorize"
+        self._update_transaction(tx, provider_reference=provider_reference)
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
         return tx
 
     def test_capture_calls_sdk_pay_with_data_request_key(self):
@@ -667,7 +664,7 @@ class TestKlarnaCaptureAndVoid(BuckarooOfficialCommon):
     def test_non_klarna_capture_delegates_to_super(self):
         """iDEAL (non-klarna) capture should still use SDK .capture()."""
         tx = self._create_buckaroo_tx(reference="TX-IDEAL-CAP")
-        tx.provider_reference = "IDEAL_AUTH_KEY"
+        self._update_transaction(tx, provider_reference="IDEAL_AUTH_KEY")
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
 
@@ -683,7 +680,7 @@ class TestKlarnaCaptureAndVoid(BuckarooOfficialCommon):
     def test_non_klarna_void_delegates_to_super(self):
         """iDEAL (non-klarna) void should still use SDK .cancelAuthorize()."""
         tx = self._create_buckaroo_tx(reference="TX-IDEAL-VOID")
-        tx.provider_reference = "IDEAL_AUTH_KEY"
+        self._update_transaction(tx, provider_reference="IDEAL_AUTH_KEY")
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
 
@@ -704,8 +701,7 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -725,8 +721,8 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx.provider_reference = provider_reference
-        tx.buckaroo_official_payment_action = "authorize"
+        self._update_transaction(tx, provider_reference=provider_reference)
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
         return tx
 
     def test_send_capture_request_invokes_klarna_capture(self):
@@ -747,6 +743,7 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
             ),
         ):
             tx._send_capture_request()
+            self._run_processing()
 
         mock_capture.assert_called_once()
 
@@ -768,6 +765,7 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
             ),
         ):
             tx._send_void_request()
+            self._run_processing()
 
         mock_void.assert_called_once()
 
@@ -776,7 +774,7 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
         SDK builder.pay(data_request_key=...). Asserts the mocked SDK
         receives the prior Reserve key as DataRequestKey."""
         tx = self._create_authorized_tx(reference="KL-FULL-CAP", provider_reference="RES_FULL_CAP")
-        mock_builder, mock_response = make_mock_sdk_builder()
+        mock_builder, _mock_response = make_mock_sdk_builder()
 
         with (
             patch(
@@ -789,7 +787,9 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
+            mock_builder.pay.return_value = make_mock_sdk_response(190)
             tx._send_capture_request()
+            self._run_processing()
 
         mock_builder.add_parameter.assert_called_once_with("dataRequestKey", "RES_FULL_CAP")
         mock_builder.pay.assert_called_once_with()
@@ -812,6 +812,7 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
             patch.object(type(tx), "_post_process") as mock_pp,
         ):
             tx._send_capture_request()
+            self._run_processing()
 
         self.assertEqual(tx.state, "done")
         mock_pp.assert_called()
@@ -822,7 +823,7 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
         tx = self._create_authorized_tx(
             reference="KL-FULL-VOID", provider_reference="RES_FULL_VOID"
         )
-        mock_builder, mock_response = make_mock_sdk_builder()
+        mock_builder, _mock_response = make_mock_sdk_builder()
 
         with (
             patch(
@@ -835,7 +836,9 @@ class TestKlarnaSendCaptureVoidRequest(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
+            mock_builder.cancelReservation.return_value = make_mock_sdk_response(190)
             tx._send_void_request()
+            self._run_processing()
 
         mock_builder.cancelReservation.assert_called_once_with(
             original_transaction_key="RES_FULL_VOID",
@@ -849,8 +852,7 @@ class TestKlarnaGenderController(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.klarna = cls.env.ref("payment_buckaroo_official.payment_method_klarna")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.klarna.id)]
+        cls.klarna = cls._pm("buckaroo_klarna")
 
     def _call_controller(self, **kwargs):
         import odoo.http
@@ -865,11 +867,9 @@ class TestKlarnaGenderController(BuckarooOfficialCommon):
                 "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
                 return_value="SUPER_OK",
             ) as super_stub,
-            patch.object(
-                odoo.http,
-                "request",
-                fake_req,
-            ),
+            patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.klarna.request",
                 new=fake_req,

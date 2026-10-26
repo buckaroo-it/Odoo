@@ -39,7 +39,7 @@ def _invoke_verb(pm_record, verb, tx, client, *, source_tx=None, session=None):
     # which SDK verb ultimately fires depends on the record's state (authorize
     # config + HF session dict). Callers set those before calling us.
     with _patch_request(session or {}):
-        return pm_record._buckaroo_create_payment(tx, client)
+        return pm_record._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
 
 def _patched_payment_service(module_path):
@@ -54,8 +54,7 @@ class TestCreditcardSdkContract(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
         cls.brand = cls.creditcard._buckaroo_creditcard_redirect_brands()[0]["service"]
 
     def _make_source_authorize_tx(self, reference, service_code="visa"):
@@ -65,8 +64,8 @@ class TestCreditcardSdkContract(BuckarooOfficialCommon):
             amount=50.0,
             payment_method=self.creditcard,
         )
-        tx.provider_reference = f"{reference}_KEY"
-        tx.buckaroo_official_service_code = service_code
+        self._update_transaction(tx, provider_reference=f"{reference}_KEY")
+        self._update_transaction(tx, buckaroo_official_service_code=service_code)
         return tx
 
     def _assert_service_name(self, mock_ps, expected="creditcard"):
@@ -253,8 +252,7 @@ class TestBillinkSdkContract(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.billink = cls.env.ref("payment_buckaroo_official.payment_method_billink")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
+        cls.billink = cls._pm("buckaroo_billink")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -299,7 +297,7 @@ class TestBillinkSdkContract(BuckarooOfficialCommon):
                 "price_unit": 50.0,
             }
         )
-        tx.sale_order_ids = [Command.link(order.id)]
+        self._update_transaction(tx, sale_order_ids=[Command.link(order.id)])
 
         client = MagicMock()
         mock_builder, _ = make_mock_sdk_builder()
@@ -327,7 +325,7 @@ class TestBillinkSdkContract(BuckarooOfficialCommon):
     def test_billink_refund_delegates_without_method_specific_params(self):
         """Billink refund delegates to super — no brand, no article list leakage."""
         source_tx = self._create_billink_tx("SRC-BL-MX-REF")
-        source_tx.provider_reference = "SRC-BL-MX-REF_KEY"
+        self._update_transaction(source_tx, provider_reference="SRC-BL-MX-REF_KEY")
         refund_tx = self._create_billink_tx("REF-BL-MX-REF", amount=-50.0)
         client = MagicMock()
         mock_builder, _ = make_mock_sdk_builder()
@@ -348,7 +346,7 @@ class TestBillinkSdkContract(BuckarooOfficialCommon):
     def test_billink_capture_delegates_without_method_specific_params(self):
         """Billink capture delegates to super — no brand, no article list."""
         tx = self._create_billink_tx("TX-BL-MX-CAP")
-        tx.provider_reference = "TX-BL-MX-CAP_KEY"
+        self._update_transaction(tx, provider_reference="TX-BL-MX-CAP_KEY")
         client = MagicMock()
         mock_builder, _ = make_mock_sdk_builder()
 
@@ -366,7 +364,7 @@ class TestBillinkSdkContract(BuckarooOfficialCommon):
     def test_billink_cancel_authorize_delegates_without_method_specific_params(self):
         """Billink void delegates to super — no brand, no article list."""
         tx = self._create_billink_tx("TX-BL-MX-VOID")
-        tx.provider_reference = "TX-BL-MX-VOID_KEY"
+        self._update_transaction(tx, provider_reference="TX-BL-MX-VOID_KEY")
         client = MagicMock()
         mock_builder, _ = make_mock_sdk_builder()
 
@@ -389,15 +387,14 @@ class TestBaseMethodsSdkContract(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.bancontact = cls.env.ref("payment_buckaroo_official.payment_method_bancontact")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.bancontact.id)]
+        cls.bancontact = cls._pm("buckaroo_bancontact")
 
     def _run_verb_and_get_params(self, pm, verb):
         tx = self._create_buckaroo_tx(
             reference=f"TX-BASE-{pm.code.upper()}-{verb.upper()}",
             payment_method=pm,
         )
-        tx.provider_reference = f"{pm.code}_KEY_{verb}"
+        self._update_transaction(tx, provider_reference=f"{pm.code}_KEY_{verb}")
 
         source_tx = None
         if verb == "refund":
@@ -466,8 +463,7 @@ class TestApplepaySdkContract(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.applepay.id)]
+        cls.applepay = cls._pm("buckaroo_applepay")
 
     def test_applepay_pay_sends_payment_data_and_customer_name_to_applepay_service(self):
         tx = self._create_buckaroo_tx(

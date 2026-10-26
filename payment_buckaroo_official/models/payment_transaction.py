@@ -2,13 +2,16 @@
 
 import logging
 
+from urllib.parse import urlsplit, urlunsplit
+
 from buckaroo.http.client import BuckarooApiError
-from werkzeug.urls import url_decode, url_parse
 
 from odoo import _, api, fields, models
+from odoo.addons.payment import utils as payment_utils
 from odoo.exceptions import ValidationError
 
 from ..utils import const
+from ..utils.push_handlers import ParsedPush
 
 _logger = logging.getLogger(__name__)
 
@@ -31,9 +34,7 @@ class PaymentTransaction(models.Model):
         if self.provider_code != const.PROVIDER_CODE:
             return super()._get_specific_processing_values(processing_values)
 
-        if not self.payment_method_id._buckaroo_official_is_amount_compatible(
-            self.amount, set(self.provider_id.ids)
-        ):
+        if not self.payment_method_id._buckaroo_official_is_amount_compatible(self.amount):
             raise ValidationError(
                 _(
                     "Buckaroo payment method %(payment_method)s is not available for this "
@@ -93,28 +94,66 @@ class PaymentTransaction(models.Model):
     def _buckaroo_official_get_client(self):
         return self.provider_id._buckaroo_official_get_client()
 
-    def _buckaroo_official_handle_response_status(self, response, operation, success_state="done"):
-        """Map a Buckaroo SDK PaymentResponse to a tx state. Strict equality
-        on SUCCESS: SDK's is_successful_payment isn't reliable for refund/
-        capture/void."""
+    def _buckaroo_official_response_payload(self, response, operation, success_state="done"):
+        """Payload that queues a synchronous Buckaroo SDK response for
+        processing (see ``_buckaroo_official_apply_api_response``). The failure
+        message is built here because the response object is not stored."""
         status_code = (
             response.status.code.code if response.status and response.status.code else None
         )
+        is_pending = bool(response.is_pending())
+        is_cancelled = bool(response.is_cancelled())
         if status_code is None:
-            self._set_error("Buckaroo: %s returned no status code" % operation)
-        elif status_code == const.BuckarooStatusCode.SUCCESS:
+            error = "Buckaroo: %s returned no status code" % operation
+        elif status_code == const.BuckarooStatusCode.SUCCESS or is_pending or is_cancelled:
+            error = None
+        else:
+            error = self._buckaroo_official_failure_message(response, operation, status_code)
+        return {
+            "kind": "api_response",
+            "operation": operation,
+            "success_state": success_state,
+            "transaction_key": response.key,
+            "status_code": status_code,
+            "is_pending": is_pending,
+            "is_cancelled": is_cancelled,
+            "error": error,
+        }
+
+    def _buckaroo_official_apply_api_response(self, payload):
+        """Map a recorded SDK response to a tx state. Strict equality on
+        SUCCESS: SDK's is_successful_payment isn't reliable for refund/
+        capture/void."""
+        if payload.get("transaction_key"):
+            self.provider_reference = payload["transaction_key"]
+        if payload.get("error"):
+            self._set_error(payload["error"])
+        elif payload.get("status_code") == const.BuckarooStatusCode.SUCCESS:
+            success_state = payload.get("success_state")
             if success_state == "canceled":
                 self._set_canceled()
+            elif success_state == "authorized":
+                self._set_authorized()
             else:
                 self._set_done()
-        elif response.is_pending():
+        elif payload.get("is_pending"):
             self._set_pending()
-        elif response.is_cancelled():
-            self._set_canceled()
         else:
-            self._set_error(
-                self._buckaroo_official_failure_message(response, operation, status_code)
-            )
+            self._set_canceled()
+
+    def _buckaroo_official_settle_inline(self, response):
+        """Queue a payment the gateway settled synchronously (no redirect) and
+        route the shopper to ``/payment/status``. That page triggers the
+        processing in a fresh request, so the order confirms against an
+        up-to-date paid amount."""
+        self.ensure_one()
+        self.provider_reference = response.key
+        success_state = (
+            "authorized" if self.buckaroo_official_payment_action == "authorize" else "done"
+        )
+        self._record(self._buckaroo_official_response_payload(response, "payment", success_state))
+        base_url = self.provider_id.get_base_url().rstrip("/")
+        return {"api_url": f"{base_url}/payment/status"}
 
     def _buckaroo_is_intersolve_refund(self):
         """Refund tx's source uses an Intersolve-backed giftcard brand."""
@@ -165,21 +204,9 @@ class PaymentTransaction(models.Model):
             response.key,
         )
 
-        if response.key:
-            self.provider_reference = response.key
-
-        self._buckaroo_official_handle_response_status(
-            response,
-            operation,
-            success_state=success_state,
-        )
-
-        # Capture/void/refund are merchant-initiated from the backend, so the
-        # framework's /payment/status/poll route never fires; without this,
-        # `account.payment` records only appear after the post-process cron
-        # runs (default 5min), and the Refund button stays hidden in between.
-        if self.state in ("done", "cancel") and not self.is_post_processed:
-            self._post_process()
+        # Queue the response; the payment processing cron applies it and
+        # post-processes the tx (creating the account.payment right after).
+        self._record(self._buckaroo_official_response_payload(response, operation, success_state))
 
     def _buckaroo_official_is_dispatchable(self, operation):
         if self.state in ("draft", "error"):
@@ -239,9 +266,8 @@ class PaymentTransaction(models.Model):
             return super()._get_specific_rendering_values(processing_values)
 
         api_url = processing_values.get("api_url", "")
-        parsed = url_parse(api_url)
-        base_url = parsed.replace(query="").to_url()
-        url_params = url_decode(parsed.query)
+        base_url = urlunsplit(urlsplit(api_url)._replace(query=""))
+        url_params = payment_utils.extract_url_params(api_url)
 
         return {
             "api_url": base_url,
@@ -261,21 +287,39 @@ class PaymentTransaction(models.Model):
     def _extract_amount_data(self, payment_data):
         if self.provider_code != const.PROVIDER_CODE:
             return super()._extract_amount_data(payment_data)
-        return self.payment_method_id._buckaroo_extract_amount_data(self, payment_data)
+        if payment_data.get("kind") == "api_response":
+            return None  # Echo of the request we sent; nothing to validate.
+        return self.payment_method_id._buckaroo_extract_amount_data(
+            self, ParsedPush.from_payload(payment_data)
+        )
 
     def _buckaroo_split_remainder_push(self, payment_data):
         """Delegate to the payment method. Tx-level shim for the push controller."""
         self.ensure_one()
         return self.payment_method_id._buckaroo_split_remainder_push(self, payment_data)
 
+    def _process(self, payment_data):
+        if self.provider_code != const.PROVIDER_CODE:
+            return super()._process(payment_data)
+        # A push for an already-final tx (redelivery, or a Plaza refund on the
+        # source tx) must skip core's amount check, which runs after the updates
+        # and would flip a confirmed tx to error.
+        if payment_data.get("kind") == "push" and self.state in ("done", "cancel", "error"):
+            self.payment_method_id._buckaroo_handle_duplicate_push(
+                self, ParsedPush.from_payload(payment_data)
+            )
+            return
+        return super()._process(payment_data)
+
     def _apply_updates(self, payment_data):
         if self.provider_code != const.PROVIDER_CODE:
             return super()._apply_updates(payment_data)
 
-        if self.state in ("done", "cancel", "error"):
-            self.payment_method_id._buckaroo_handle_duplicate_push(self, payment_data)
+        if payment_data.get("kind") == "api_response":
+            self._buckaroo_official_apply_api_response(payment_data)
             return
 
+        payment_data = ParsedPush.from_payload(payment_data)
         self.payment_method_id._buckaroo_apply_push_identity(self, payment_data)
         self.payment_method_id._buckaroo_apply_push_metadata(self, payment_data)
 

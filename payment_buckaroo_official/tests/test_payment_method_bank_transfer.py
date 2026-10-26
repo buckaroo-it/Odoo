@@ -11,7 +11,6 @@ is mocked throughout.
 from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import ValidationError
-from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import (
@@ -33,8 +32,7 @@ class TestBankTransferPaymentCreation(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.bank_transfer = cls.env.ref("payment_buckaroo_official.payment_method_bank_transfer")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.bank_transfer.id)]
+        cls.bank_transfer = cls._pm("buckaroo_bank_transfer")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -78,7 +76,7 @@ class TestBankTransferPaymentCreation(BuckarooOfficialCommon):
                 PaymentMethod, "_buckaroo_extract_redirect_url", return_value="https://bt/pay/X"
             ),
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(result["api_url"], "https://bt/pay/X")
         self.assertEqual(tx.provider_reference, "STORED_KEY")
@@ -96,7 +94,7 @@ class TestBankTransferPaymentCreation(BuckarooOfficialCommon):
             patch.object(PaymentMethod, "_buckaroo_extract_redirect_url", return_value=None),
         ):
             with self.assertRaises(ValidationError):
-                tx._get_specific_processing_values({})
+                tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
     def test_payment_creation_pending_without_redirect_routes_to_validate_then_confirmation(self):
         """Buckaroo returns success-pending for Bank Transfer without an
@@ -114,7 +112,7 @@ class TestBankTransferPaymentCreation(BuckarooOfficialCommon):
             patch.object(PaymentMethod, "_buckaroo_create_payment", return_value=response),
             patch.object(PaymentMethod, "_buckaroo_extract_redirect_url", return_value=None),
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertTrue(result["api_url"].endswith("/shop/payment/validate"))
         self.assertEqual(tx.provider_reference, "BT_PENDING_KEY")
@@ -126,8 +124,7 @@ class TestBankTransferWebhookCallbacks(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.bank_transfer = cls.env.ref("payment_buckaroo_official.payment_method_bank_transfer")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.bank_transfer.id)]
+        cls.bank_transfer = cls._pm("buckaroo_bank_transfer")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -180,14 +177,14 @@ class TestBankTransferWebhookCallbacks(BuckarooOfficialCommon):
                     tx = self._create_tx(ref)
                     builder = self._form_callback if fmt == "form" else self._json_callback
                     parsed = builder(ref, code)
-                    self.env["payment.transaction"].sudo()._process("buckaroo_official", parsed)
+                    self._process_push(parsed)
                     self.assertEqual(tx.state, expected_state)
 
     def test_done_status_maps_to_done(self):
         self._assert_status_maps_to_state(CALLBACK_DONE_CODES, "done")
         tx = self._create_tx("BT-WH-REF-190")
         parsed = self._form_callback("BT-WH-REF-190", 190)
-        self.env["payment.transaction"].sudo()._process("buckaroo_official", parsed)
+        self._process_push(parsed)
         self.assertEqual(tx.provider_reference, "BT_TXN_001")
 
     def test_pending_status_maps_to_pending(self):
@@ -205,8 +202,7 @@ class TestBankTransferRefundFlow(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.bank_transfer = cls.env.ref("payment_buckaroo_official.payment_method_bank_transfer")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.bank_transfer.id)]
+        cls.bank_transfer = cls._pm("buckaroo_bank_transfer")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -226,7 +222,7 @@ class TestBankTransferRefundFlow(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx._apply_updates(
+        tx.with_context(payment_safe_write=True)._apply_updates(
             parsed_from_form(
                 {
                     "brq_invoicenumber": reference,
@@ -235,7 +231,7 @@ class TestBankTransferRefundFlow(BuckarooOfficialCommon):
                     "brq_statuscode": "190",
                     "brq_transactions": "BT_DONE_KEY",
                 }
-            )
+            ).to_payload(),
         )
         self.assertEqual(tx.state, "done")
         return tx
@@ -253,6 +249,7 @@ class TestBankTransferRefundFlow(BuckarooOfficialCommon):
         tx = self._create_done_tx(reference="BT-REFUND-CREATE")
         with self._patch_refund(self._mock_refund_response()):
             refund_tx = tx._refund()
+            self._run_processing()
 
         self.assertEqual(refund_tx.operation, "refund")
         self.assertEqual(refund_tx.source_transaction_id, tx)
@@ -269,12 +266,14 @@ class TestBankTransferRefundFlow(BuckarooOfficialCommon):
                     )
                 ):
                     refund_tx = tx._refund()
+                    self._run_processing()
                 self.assertEqual(refund_tx.state, expected_state)
 
     def test_partial_refund_passes_amount_to_sdk(self):
         tx = self._create_done_tx(reference="BT-PARTIAL", amount=100.0)
         with self._patch_refund(self._mock_refund_response()) as mock_refund:
             refund_tx = tx._refund(amount_to_refund=25.0)
+            self._run_processing()
 
         self.assertEqual(abs(refund_tx.amount), 25.0)
         refund_tx_arg = mock_refund.call_args[0][1]
@@ -286,8 +285,7 @@ class TestBankTransferCreatePaymentDispatch(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.bank_transfer = cls.env.ref("payment_buckaroo_official.payment_method_bank_transfer")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.bank_transfer.id)]
+        cls.bank_transfer = cls._pm("buckaroo_bank_transfer")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -324,7 +322,7 @@ class TestBankTransferCreatePaymentDispatch(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_bank_transfer.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            method._buckaroo_create_payment(tx, client)
+            method._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         return mock_builder
 
@@ -337,7 +335,9 @@ class TestBankTransferCreatePaymentDispatch(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         mock_builder.add_parameter.assert_not_called()
@@ -380,7 +380,9 @@ class TestBankTransferCreatePaymentDispatch(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_bank_transfer.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.bank_transfer._buckaroo_create_payment(tx, client)
+            result = self.bank_transfer._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         params = {call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list}
         self.assertEqual(params["customeremail"], "jan@example.nl")
@@ -415,7 +417,9 @@ class TestBankTransferCreatePaymentDispatch(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_bank_transfer.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.bank_transfer._buckaroo_create_payment(tx, client)
+            self.bank_transfer._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         param_names = [call[0][0] for call in mock_builder.add_parameter.call_args_list]
         self.assertNotIn("customerCountry", param_names)
@@ -437,8 +441,7 @@ class TestBankTransferDetailCapture(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.bank_transfer = cls.env.ref("payment_buckaroo_official.payment_method_bank_transfer")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.bank_transfer.id)]
+        cls.bank_transfer = cls._pm("buckaroo_bank_transfer")
 
     def _create_tx(self, reference="BT-DETAIL"):
         return self.env["payment.transaction"].create(
@@ -495,7 +498,7 @@ class TestBankTransferDetailCapture(BuckarooOfficialCommon):
                 },
             }
         )
-        tx._apply_updates(parsed)
+        tx.with_context(payment_safe_write=True)._apply_updates(parsed.to_payload())
         self.assertEqual(tx.buckaroo_official_bank_iban, "NL05RABO0121503038")
         self.assertEqual(tx.buckaroo_official_bank_bic, "RABONL2U")
         self.assertEqual(tx.buckaroo_official_bank_account_holder, "Buckaroo")
@@ -505,7 +508,9 @@ class TestBankTransferDetailCapture(BuckarooOfficialCommon):
         tx = self._create_tx()
         response = self._make_sdk_response_with_services()
 
-        self.bank_transfer._buckaroo_handle_no_redirect_response(tx, response)
+        self.bank_transfer._buckaroo_handle_no_redirect_response(
+            tx.with_context(payment_safe_write=True), response
+        )
 
         self.assertEqual(tx.buckaroo_official_bank_iban, "NL05RABO0121503038")
         self.assertEqual(tx.buckaroo_official_bank_bic, "RABONL2U")
@@ -530,7 +535,7 @@ class TestBankTransferDetailCapture(BuckarooOfficialCommon):
                 "brq_SERVICE_transfer_PaymentReference": "14256252",
             }
         )
-        tx._apply_updates(parsed)
+        tx.with_context(payment_safe_write=True)._apply_updates(parsed.to_payload())
         self.assertEqual(tx.buckaroo_official_bank_iban, "NL05RABO0121503038")
         self.assertEqual(tx.buckaroo_official_bank_payment_reference, "14256252")
 
@@ -540,8 +545,7 @@ class TestBankTransferCurrencyRestriction(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.bank_transfer = cls.env.ref("payment_buckaroo_official.payment_method_bank_transfer")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.bank_transfer.id)]
+        cls.bank_transfer = cls._pm("buckaroo_bank_transfer")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "NL",
@@ -550,8 +554,7 @@ class TestBankTransferCurrencyRestriction(BuckarooOfficialCommon):
         )
 
     def _visible(self, currency=None):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             self.partner_nl.id,
             currency_id=(currency or self.currency_euro).id,
             amount=100.0,

@@ -11,7 +11,6 @@ SDK transport is mocked throughout.
 from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import ValidationError
-from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon, make_mock_sdk_builder, parsed_from_form
@@ -22,8 +21,7 @@ class TestPayPerEmailCreatePayment(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypermail = cls.env.ref("payment_buckaroo_official.payment_method_paypermail")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypermail.id)]
+        cls.paypermail = cls._pm("buckaroo_paypermail")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jane Doe",
@@ -54,7 +52,9 @@ class TestPayPerEmailCreatePayment(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_paypermail.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.paypermail._buckaroo_create_payment(tx, client)
+            result = self.paypermail._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.execute_action.assert_called_once_with("PaymentInvitation")
         mock_builder.pay.assert_not_called()
@@ -66,7 +66,7 @@ class TestPayPerEmailCreatePayment(BuckarooOfficialCommon):
 
     def test_allowed_methods_scopes_paylink_and_excludes_payperemail(self):
         # Only iDEAL + Pay Per Email enabled on the provider.
-        self.buckaroo.payment_method_ids = [Command.set([self.ideal.id, self.paypermail.id])]
+        (self.buckaroo.payment_method_ids - self.ideal - self.paypermail).active = False
         tx = self._create_tx(reference="TX-PPE-ALLOWED")
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
@@ -75,7 +75,9 @@ class TestPayPerEmailCreatePayment(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_paypermail.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.paypermail._buckaroo_create_payment(tx, client)
+            self.paypermail._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         params = {call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list}
         # Enabled methods are sent as the Buckaroo service code; PPE excludes itself.
@@ -85,7 +87,7 @@ class TestPayPerEmailCreatePayment(BuckarooOfficialCommon):
         # Buckaroo requires CustomerLastName; a mononym partner must not send "".
         mononym = self.env["res.partner"].create({"name": "Madonna", "email": "madonna@example.nl"})
         tx = self._create_tx(reference="TX-PPE-MONONYM")
-        tx.partner_id = mononym
+        self._update_transaction(tx, partner_id=mononym)
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
 
@@ -93,7 +95,9 @@ class TestPayPerEmailCreatePayment(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method_paypermail.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.paypermail._buckaroo_create_payment(tx, client)
+            self.paypermail._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         params = {call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list}
         self.assertEqual(params["CustomerFirstName"], "Madonna")
@@ -108,7 +112,9 @@ class TestPayPerEmailCreatePayment(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         mock_builder.execute_action.assert_not_called()
@@ -120,8 +126,7 @@ class TestPayPerEmailNoRedirect(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypermail = cls.env.ref("payment_buckaroo_official.payment_method_paypermail")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypermail.id)]
+        cls.paypermail = cls._pm("buckaroo_paypermail")
 
     def _create_tx(self, reference="TX-PPE-PENDING"):
         return self.env["payment.transaction"].create(
@@ -149,7 +154,9 @@ class TestPayPerEmailNoRedirect(BuckarooOfficialCommon):
 
     def test_handler_sets_pending_and_routes_to_validate(self):
         tx = self._create_tx()
-        result = self.paypermail._buckaroo_handle_no_redirect_response(tx, self._pending_response())
+        result = self.paypermail._buckaroo_handle_no_redirect_response(
+            tx.with_context(payment_safe_write=True), self._pending_response()
+        )
 
         self.assertTrue(result["api_url"].endswith("/shop/payment/validate"))
         self.assertEqual(tx.state, "pending")
@@ -164,7 +171,7 @@ class TestPayPerEmailNoRedirect(BuckarooOfficialCommon):
             patch.object(PaymentMethod, "_buckaroo_create_payment", return_value=response),
             patch.object(PaymentMethod, "_buckaroo_extract_redirect_url", return_value=None),
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertTrue(result["api_url"].endswith("/shop/payment/validate"))
         self.assertEqual(tx.state, "pending")
@@ -183,8 +190,7 @@ class TestPayPerEmailGender(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypermail = cls.env.ref("payment_buckaroo_official.payment_method_paypermail")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypermail.id)]
+        cls.paypermail = cls._pm("buckaroo_paypermail")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jane Doe",
@@ -219,7 +225,9 @@ class TestPayPerEmailGender(BuckarooOfficialCommon):
             patch("odoo.http.request", fake_request),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.paypermail._buckaroo_create_payment(tx, client)
+            self.paypermail._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
         return {call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list}, (
             mock_builder
         )
@@ -249,8 +257,7 @@ class TestPayPerEmailGenderController(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypermail = cls.env.ref("payment_buckaroo_official.payment_method_paypermail")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypermail.id)]
+        cls.paypermail = cls._pm("buckaroo_paypermail")
 
     def _call_controller(self, **kwargs):
         import odoo.http
@@ -266,6 +273,8 @@ class TestPayPerEmailGenderController(BuckarooOfficialCommon):
                 return_value="SUPER_OK",
             ) as super_stub,
             patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.paypermail.request",
                 new=fake_req,
@@ -336,6 +345,8 @@ class TestPayPerEmailGenderController(BuckarooOfficialCommon):
                 return_value="SUPER_OK",
             ),
             patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.paypermail.request",
                 new=fake_req,
@@ -370,7 +381,9 @@ class TestPayPerEmailGenderController(BuckarooOfficialCommon):
             patch("odoo.http.request", fake_req),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.paypermail._buckaroo_create_payment(tx, client)
+            self.paypermail._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         params = {call[0][0]: call[0][1] for call in mock_builder.add_parameter.call_args_list}
         self.assertEqual(params["CustomerGender"], 2)
@@ -388,8 +401,7 @@ class TestPayPerEmailPush(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypermail = cls.env.ref("payment_buckaroo_official.payment_method_paypermail")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypermail.id)]
+        cls.paypermail = cls._pm("buckaroo_paypermail")
 
     def _create_pending_tx(self, reference="TX-PPE-PUSH"):
         tx = self.env["payment.transaction"].create(
@@ -403,8 +415,8 @@ class TestPayPerEmailPush(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx.provider_reference = "PPE_INVITE_KEY"
-        tx._set_pending()
+        self._update_transaction(tx, provider_reference="PPE_INVITE_KEY")
+        tx.with_context(payment_safe_write=True)._set_pending()
         return tx
 
     def test_success_push_completes_and_records_actual_method(self):
@@ -419,7 +431,7 @@ class TestPayPerEmailPush(BuckarooOfficialCommon):
                 "brq_transaction_method": "ideal",
             }
         )
-        tx._process("buckaroo_official", parsed)
+        tx.with_context(payment_safe_write=True)._process(parsed.to_payload())
 
         self.assertEqual(tx.state, "done")
         # Actual method recorded, distinct from the 'payperemail' wrapper.
@@ -442,7 +454,7 @@ class TestPayPerEmailPush(BuckarooOfficialCommon):
                 "brq_transaction_method": "payperemail",
             }
         )
-        tx._process("buckaroo_official", parsed)
+        tx.with_context(payment_safe_write=True)._process(parsed.to_payload())
 
         self.assertEqual(tx.state, "pending")
         self.assertFalse(tx.buckaroo_official_service_code)
@@ -461,7 +473,7 @@ class TestPayPerEmailPush(BuckarooOfficialCommon):
                 "brq_transaction_method": "ideal",
             }
         )
-        tx._process("buckaroo_official", parsed)
+        tx.with_context(payment_safe_write=True)._process(parsed.to_payload())
 
         self.assertNotEqual(tx.state, "done")
         self.assertFalse(tx.buckaroo_official_service_code)
@@ -479,8 +491,7 @@ class TestPayPerEmailRefund(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.paypermail = cls.env.ref("payment_buckaroo_official.payment_method_paypermail")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.paypermail.id)]
+        cls.paypermail = cls._pm("buckaroo_paypermail")
 
     def _make_source_and_refund(self, suffix, service_code="ideal"):
         source_tx = self.env["payment.transaction"].create(
@@ -494,8 +505,8 @@ class TestPayPerEmailRefund(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        source_tx.provider_reference = f"IDEAL_PAID_{suffix}"
-        source_tx.buckaroo_official_service_code = service_code
+        self._update_transaction(source_tx, provider_reference=f"IDEAL_PAID_{suffix}")
+        self._update_transaction(source_tx, buckaroo_official_service_code=service_code)
         refund_tx = self.env["payment.transaction"].create(
             {
                 "provider_id": self.buckaroo.id,

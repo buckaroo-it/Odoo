@@ -12,7 +12,6 @@ from unittest.mock import patch
 from buckaroo.http.client import BuckarooApiError
 
 from odoo.exceptions import ValidationError
-from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon, make_mock_sdk_response
@@ -64,7 +63,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
                 return_value="https://checkout.buckaroo.nl/pay/123",
             ) as mock_extract,
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         mock_create.assert_called_once()
         mock_extract.assert_called_once()
@@ -73,7 +72,9 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
     def test_refund_calls_model_create_refund(self):
         """_send_refund_request calls payment_method_id._buckaroo_create_refund."""
         source_tx = self._create_transaction(payment_method_id=self.ideal.id)
-        source_tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        source_tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(source_tx.state, "done")
 
         mock_response = _make_mock_sdk_response(key="REFUND_KEY")
@@ -84,6 +85,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ) as mock_refund:
             refund_tx = source_tx._refund()
+            self._run_processing()
 
         mock_refund.assert_called_once()
         # Verify the refund tx was created
@@ -92,13 +94,14 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
 
     def test_capture_calls_model_create_capture(self):
         """_capture() dispatches to payment_method_id._buckaroo_create_capture."""
-        creditcard = self.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        self.buckaroo.payment_method_ids = [Command.link(creditcard.id)]
+        creditcard = self._pm("buckaroo_creditcard")
         creditcard.write({"buckaroo_official_creditcard_authorize": "authorize"})
 
         tx = self._create_transaction(payment_method_id=creditcard.id)
-        tx.buckaroo_official_payment_action = "authorize"
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "authorized")
 
         mock_response = _make_mock_sdk_response(key="CAPTURE_KEY")
@@ -109,19 +112,21 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ) as mock_capture:
             capture_tx = tx._capture()
+            self._run_processing()
 
         mock_capture.assert_called_once()
         self.assertEqual(capture_tx.state, "done")
 
     def test_void_calls_model_create_void(self):
         """_void() dispatches to payment_method_id._buckaroo_create_void."""
-        creditcard = self.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        self.buckaroo.payment_method_ids = [Command.link(creditcard.id)]
+        creditcard = self._pm("buckaroo_creditcard")
         creditcard.write({"buckaroo_official_creditcard_authorize": "authorize"})
 
         tx = self._create_transaction(payment_method_id=creditcard.id)
-        tx.buckaroo_official_payment_action = "authorize"
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "authorized")
 
         mock_response = _make_mock_sdk_response(key="VOID_KEY")
@@ -132,6 +137,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ) as mock_void:
             void_tx = tx._void()
+            self._run_processing()
 
         mock_void.assert_called_once()
         self.assertEqual(void_tx.state, "cancel")
@@ -147,7 +153,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             side_effect=sdk_error,
         ):
             with self.assertRaises(ValidationError) as cm:
-                tx._get_specific_processing_values({})
+                tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertIn("payment request failed", str(cm.exception))
         self.assertIn("status 500", str(cm.exception))
@@ -172,7 +178,9 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
         """Create a source tx already in 'done' state, suitable for refund tests."""
         pm = payment_method or self.ideal
         tx = self._create_transaction(payment_method_id=pm.id)
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "done")
         return tx
 
@@ -188,6 +196,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ) as mock_refund:
             refund_tx = source_tx._refund()
+            self._run_processing()
 
         self.assertEqual(mock_refund.call_count, 1)
         self.assertEqual(refund_tx.state, "pending")
@@ -199,6 +208,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ) as mock_refund_retry:
             refund_tx._send_refund_request()
+            self._run_processing()
 
         self.assertEqual(mock_refund_retry.call_count, 0)
 
@@ -213,6 +223,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ):
             refund_tx = source_tx._refund()
+            self._run_processing()
         self.assertEqual(refund_tx.state, "done")
 
         with patch.object(
@@ -221,6 +232,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ) as mock_refund_retry:
             refund_tx._send_refund_request()
+            self._run_processing()
 
         self.assertEqual(mock_refund_retry.call_count, 0)
 
@@ -236,6 +248,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=failed_response,
         ):
             refund_tx = source_tx._refund()
+            self._run_processing()
         self.assertEqual(refund_tx.state, "error")
 
         # Retry: state=error is a legitimate retry window.
@@ -246,19 +259,21 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=success_response,
         ) as mock_refund_retry:
             refund_tx._send_refund_request()
+            self._run_processing()
 
         self.assertEqual(mock_refund_retry.call_count, 1)
         self.assertEqual(refund_tx.state, "done")
 
     def test_capture_is_idempotent_after_completion(self):
         """Double-submit of capture must not re-POST once the tx has moved past draft."""
-        creditcard = self.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        self.buckaroo.payment_method_ids = [Command.link(creditcard.id)]
+        creditcard = self._pm("buckaroo_creditcard")
         creditcard.write({"buckaroo_official_creditcard_authorize": "authorize"})
 
         tx = self._create_transaction(payment_method_id=creditcard.id)
-        tx.buckaroo_official_payment_action = "authorize"
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "authorized")
 
         mock_response = _make_mock_sdk_response(key="CAPTURE_KEY", status_code=190)
@@ -268,6 +283,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ):
             capture_tx = tx._capture()
+            self._run_processing()
         self.assertEqual(capture_tx.state, "done")
 
         # Second submit on the same capture tx: no SDK call.
@@ -277,18 +293,20 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ) as mock_capture_retry:
             capture_tx._send_capture_request()
+            self._run_processing()
 
         self.assertEqual(mock_capture_retry.call_count, 0)
 
     def test_void_is_idempotent_after_completion(self):
         """Double-submit of void must not re-POST once the tx has moved past draft."""
-        creditcard = self.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        self.buckaroo.payment_method_ids = [Command.link(creditcard.id)]
+        creditcard = self._pm("buckaroo_creditcard")
         creditcard.write({"buckaroo_official_creditcard_authorize": "authorize"})
 
         tx = self._create_transaction(payment_method_id=creditcard.id)
-        tx.buckaroo_official_payment_action = "authorize"
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "authorized")
 
         mock_response = _make_mock_sdk_response(key="VOID_KEY", status_code=190)
@@ -298,6 +316,7 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ):
             void_tx = tx._void()
+            self._run_processing()
         self.assertEqual(void_tx.state, "cancel")
 
         with patch.object(
@@ -306,5 +325,6 @@ class TestTransactionModelDispatch(BuckarooOfficialCommon):
             return_value=mock_response,
         ) as mock_void_retry:
             void_tx._send_void_request()
+            self._run_processing()
 
         self.assertEqual(mock_void_retry.call_count, 0)

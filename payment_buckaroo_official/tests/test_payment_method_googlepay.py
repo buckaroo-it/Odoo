@@ -27,7 +27,7 @@ class _patch_request:
 @tagged("post_install", "-at_install")
 class TestGooglepayPaymentMethodRecord(BuckarooOfficialCommon):
     def test_googlepay_record_loads_with_expected_fields(self):
-        method = self.env.ref("payment_buckaroo_official.payment_method_googlepay")
+        method = self._pm("buckaroo_googlepay")
 
         self.assertEqual(method.code, "buckaroo_googlepay")
         self.assertEqual(method.buckaroo_official_sdk_service_name, "googlepay")
@@ -70,7 +70,7 @@ class TestGooglepayPlacementFieldDefaults(BuckarooOfficialCommon):
 @tagged("post_install", "-at_install")
 class TestGooglepayAdminFields(BuckarooOfficialCommon):
     def test_googlepay_admin_fields_persist(self):
-        method = self.env.ref("payment_buckaroo_official.payment_method_googlepay")
+        method = self._pm("buckaroo_googlepay")
         method.write(
             {
                 "buckaroo_official_googlepay_merchant_guid": "BUCK-MERCHANT-GUID-123",
@@ -94,7 +94,7 @@ class TestGooglepaySessionBridgeController(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.googlepay = cls.env.ref("payment_buckaroo_official.payment_method_googlepay")
+        cls.googlepay = cls._pm("buckaroo_googlepay")
 
     def _call_controller(self, payment_method_id=None, **kwargs):
         import odoo.http
@@ -111,11 +111,9 @@ class TestGooglepaySessionBridgeController(BuckarooOfficialCommon):
                 "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
                 return_value="SUPER_OK",
             ) as super_stub,
-            patch.object(
-                odoo.http,
-                "request",
-                fake_req,
-            ),
+            patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.googlepay.request",
                 new=fake_req,
@@ -256,8 +254,7 @@ class TestGooglepayCreatePayment(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.googlepay = cls.env.ref("payment_buckaroo_official.payment_method_googlepay")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.googlepay.id)]
+        cls.googlepay = cls._pm("buckaroo_googlepay")
 
     def test_create_payment_sends_payment_data_and_customer_name_when_session_has_them(self):
         tx = self._create_buckaroo_tx(
@@ -279,7 +276,9 @@ class TestGooglepayCreatePayment(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.googlepay._buckaroo_create_payment(tx, client)
+            result = self.googlepay._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         self.assertEqual(result, mock_response)
@@ -313,7 +312,9 @@ class TestGooglepayCreatePayment(BuckarooOfficialCommon):
             _patch_request(session_dict),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.googlepay._buckaroo_create_payment(tx, client)
+            self.googlepay._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         self.assertNotIn("buckaroo_googlepay_token", session_dict)
         self.assertNotIn("buckaroo_googlepay_customer_name", session_dict)
@@ -338,7 +339,9 @@ class TestGooglepayCreatePayment(BuckarooOfficialCommon):
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
             with self.assertRaises(ValidationError):
-                self.googlepay._buckaroo_create_payment(tx, client)
+                self.googlepay._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), client
+                )
 
     def test_create_payment_raises_validation_error_when_customer_name_missing(self):
         tx = self._create_buckaroo_tx(
@@ -360,7 +363,9 @@ class TestGooglepayCreatePayment(BuckarooOfficialCommon):
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
             with self.assertRaises(ValidationError):
-                self.googlepay._buckaroo_create_payment(tx, client)
+                self.googlepay._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), client
+                )
 
     def test_non_googlepay_method_delegates_to_base(self):
         tx = self._create_buckaroo_tx(reference="TX-IDEAL-GP-OFF")
@@ -371,7 +376,9 @@ class TestGooglepayCreatePayment(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService",
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         param_keys = [call.args[0] for call in mock_builder.add_parameter.call_args_list]
@@ -384,8 +391,7 @@ class TestGooglepayRefundDelegatesToBase(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.googlepay = cls.env.ref("payment_buckaroo_official.payment_method_googlepay")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.googlepay.id)]
+        cls.googlepay = cls._pm("buckaroo_googlepay")
 
     def test_refund_delegates_to_base_without_googlepay_params(self):
         source_tx = self._create_buckaroo_tx(
@@ -393,7 +399,7 @@ class TestGooglepayRefundDelegatesToBase(BuckarooOfficialCommon):
             amount=50.0,
             payment_method=self.googlepay,
         )
-        source_tx.provider_reference = "SRC_GP_KEY"
+        self._update_transaction(source_tx, provider_reference="SRC_GP_KEY")
         refund_tx = self._create_buckaroo_tx(
             reference="REF-GP-001",
             amount=-50.0,
@@ -434,11 +440,10 @@ class TestGooglepayCompatibilityFilter(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.googlepay = cls.env.ref("payment_buckaroo_official.payment_method_googlepay")
+        cls.googlepay = cls._pm("buckaroo_googlepay")
 
     def _compatible_codes(self):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            provider_ids=self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner_id=self.env.ref("base.partner_admin").id,
             currency_id=self.env.ref("base.EUR").id,
         )
@@ -453,7 +458,7 @@ class TestGooglepayCompatibilityFilter(BuckarooOfficialCommon):
         self.assertIn("buckaroo_googlepay", self._compatible_codes())
 
     def test_googlepay_hidden_in_prod_when_google_merchant_id_unset(self):
-        self.buckaroo.state = "enabled"
+        self.buckaroo.is_live = True
         self.googlepay.write(
             {
                 "buckaroo_official_googlepay_merchant_guid": "BUCK-GUID-AAA",
@@ -463,7 +468,7 @@ class TestGooglepayCompatibilityFilter(BuckarooOfficialCommon):
         self.assertNotIn("buckaroo_googlepay", self._compatible_codes())
 
     def test_googlepay_visible_in_prod_when_fully_configured(self):
-        self.buckaroo.state = "enabled"
+        self.buckaroo.is_live = True
         self.googlepay.write(
             {
                 "buckaroo_official_googlepay_merchant_guid": "BUCK-GUID-AAA",
@@ -473,7 +478,7 @@ class TestGooglepayCompatibilityFilter(BuckarooOfficialCommon):
         self.assertIn("buckaroo_googlepay", self._compatible_codes())
 
     def test_googlepay_visible_in_test_without_google_merchant_id(self):
-        self.buckaroo.state = "test"
+        self.buckaroo.is_live = False
         self.googlepay.write(
             {
                 "buckaroo_official_googlepay_merchant_guid": "BUCK-GUID-AAA",
@@ -515,7 +520,7 @@ class TestGooglepayExpressCheckoutCapability(BuckarooOfficialCommon):
 @tagged("post_install", "-at_install")
 class TestGooglepayMethodExpressFlag(BuckarooOfficialCommon):
     def test_googlepay_method_supports_express_checkout(self):
-        method = self.env.ref("payment_buckaroo_official.payment_method_googlepay")
+        method = self._pm("buckaroo_googlepay")
         self.assertTrue(method.support_express_checkout)
 
 
@@ -524,12 +529,10 @@ class TestGooglepayExpressCompatFilter(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.googlepay = cls.env.ref("payment_buckaroo_official.payment_method_googlepay")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.googlepay.id)]
+        cls.googlepay = cls._pm("buckaroo_googlepay")
 
     def _express_compatible_codes(self):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            provider_ids=self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner_id=self.env.ref("base.partner_admin").id,
             currency_id=self.env.ref("base.EUR").id,
             is_express_checkout=True,
@@ -550,7 +553,7 @@ class TestGooglepayExpressCompatFilter(BuckarooOfficialCommon):
         self.assertNotIn("buckaroo_googlepay", self._express_compatible_codes())
 
     def test_express_filter_drops_googlepay_in_prod_without_google_merchant_id(self):
-        self.buckaroo.state = "enabled"
+        self.buckaroo.is_live = True
         self.googlepay.write(
             {
                 "buckaroo_official_googlepay_merchant_guid": "BUCK-GUID-AAA",
@@ -574,12 +577,10 @@ class TestGooglepayCheckoutListCompatFilter(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.googlepay = cls.env.ref("payment_buckaroo_official.payment_method_googlepay")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.googlepay.id)]
+        cls.googlepay = cls._pm("buckaroo_googlepay")
 
     def _checkout_compatible_codes(self):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            provider_ids=self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner_id=self.env.ref("base.partner_admin").id,
             currency_id=self.env.ref("base.EUR").id,
             is_express_checkout=False,
@@ -587,8 +588,7 @@ class TestGooglepayCheckoutListCompatFilter(BuckarooOfficialCommon):
         return set(methods.mapped("code"))
 
     def _express_compatible_codes(self):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            provider_ids=self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner_id=self.env.ref("base.partner_admin").id,
             currency_id=self.env.ref("base.EUR").id,
             is_express_checkout=True,
@@ -636,7 +636,7 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.googlepay = cls.env.ref("payment_buckaroo_official.payment_method_googlepay")
+        cls.googlepay = cls._pm("buckaroo_googlepay")
 
     def _call_endpoint(
         self,
@@ -703,11 +703,9 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
                 "odoo.addons.payment_buckaroo_official.controllers.express_wallet.request",
                 new=fake_req,
             ),
-            patch.object(
-                odoo.http,
-                "request",
-                fake_req,
-            ),
+            patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch.object(
                 BuckarooGooglepayExpressController,
                 "add_to_cart",
@@ -885,8 +883,7 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
         fake_req = MagicMock()
         # The shopper's pre-existing cart, which the buy-now must not touch.
         fake_req.cart = order
-        fake_req.env = self.env
-        fake_req.website = website
+        fake_req.env = self.env(context=dict(self.env.context, website_id=website.id))
         # `_prepare_sale_order_values` (used to build the dedicated express
         # order) reads these off the request.
         fake_req.fiscal_position = self.env["account.fiscal.position"]
@@ -911,11 +908,9 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
                 "odoo.addons.website.models.website.request",
                 new=fake_req,
             ),
-            patch.object(
-                odoo.http,
-                "request",
-                fake_req,
-            ),
+            patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch.object(
                 BuckarooGooglepayExpressController,
                 "_get_express_shop_payment_values",
