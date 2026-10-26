@@ -20,7 +20,7 @@
                 <t t-set="billink_invoice_partner"
                    t-value="(sale_order and sale_order.sudo().partner_invoice_id) or (partner_id and request.env['res.partner'].sudo().browse(partner_id).exists()) or request.env['res.partner']"/>
                 <t t-set="billink_is_b2b"
-                   t-value="bool(billink_invoice_partner and (billink_invoice_partner.is_company or billink_invoice_partner.commercial_company_name))"/>
+                   t-value="bool(billink_invoice_partner and billink_invoice_partner.commercial_partner_id.is_company)"/>
                 <div class="mt-2">
                     <div class="mb-2">
                         <label class="form-label mb-1"
@@ -42,7 +42,7 @@
                                class="form-control o_buckaroo_billink_chamber_of_commerce"
                                id="o_buckaroo_billink_chamber_of_commerce"
                                required="required"
-                               t-att-value="billink_invoice_partner.company_registry or ''"/>
+                               t-att-value="billink_invoice_partner._buckaroo_official_get_company_registry()"/>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input o_buckaroo_billink_tc"

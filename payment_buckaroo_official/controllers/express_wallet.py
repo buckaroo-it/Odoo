@@ -75,7 +75,7 @@ class BuckarooWalletExpressMixin:
 
         # Buy-now: a dedicated order holding only this product, so the charge
         # matches the sheet and the shopper's cart is left untouched.
-        website = request.website
+        website = request.env.website
         with self._buckaroo_preserve_cart_badge():
             request.cart = (
                 request.env["sale.order"]

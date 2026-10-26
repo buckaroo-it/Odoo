@@ -4,7 +4,6 @@ import os
 from unittest.mock import patch, MagicMock
 
 from odoo.exceptions import ValidationError
-from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon, make_mock_sdk_response, parsed_from_form
@@ -49,7 +48,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                 return_value="https://testcheckout.buckaroo.nl/pay/123",
             ),
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(result["api_url"], "https://testcheckout.buckaroo.nl/pay/123")
         self.assertEqual(tx.provider_reference, "BUCK_TXN_KEY_123")
@@ -65,7 +64,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
             patch.object(PaymentMethod, "_buckaroo_extract_redirect_url", return_value=None),
         ):
             with self.assertRaises(ValidationError):
-                tx._get_specific_processing_values({})
+                tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
     def test_direct_success_without_redirect_completes_payment(self):
         """A redirect method that settles inline (EPS in test mode returns
@@ -77,8 +76,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         ``get_some_error()``, rolling back the request so no transaction or
         order was created.
         """
-        eps = self.env.ref("payment_buckaroo_official.payment_method_eps")
-        self.buckaroo.payment_method_ids = [Command.link(eps.id)]
+        eps = self._pm("buckaroo_eps")
         response = make_mock_sdk_response(190)
         response.key = "EPS_DIRECT_KEY"
         response.get_redirect_url.return_value = None
@@ -87,11 +85,13 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         tx = self._create_transaction(payment_method_id=eps.id, reference="TX-EPS-DIRECT")
         PaymentMethod = type(tx.payment_method_id)
         with patch.object(PaymentMethod, "_buckaroo_create_payment", return_value=response):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
-        # Success routes to /payment/status so the poll post-processes the tx
-        # in a fresh request and the order confirms now, not on the cron.
+        # Success queues the response and routes to /payment/status, which
+        # processes it in a fresh request so the order confirms now.
         self.assertTrue(result["api_url"].endswith("/payment/status"))
+        self.assertEqual(tx.state, "draft")
+        self._run_processing()
         self.assertEqual(tx.state, "done")
         self.assertEqual(tx.provider_reference, "EPS_DIRECT_KEY")
 
@@ -100,8 +100,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         stay ``done`` when Buckaroo also delivers a webhook push for it: the
         duplicate 190 push is deduped (no state change, no spawned refund
         child), so no second account.payment can be created."""
-        eps = self.env.ref("payment_buckaroo_official.payment_method_eps")
-        self.buckaroo.payment_method_ids = [Command.link(eps.id)]
+        eps = self._pm("buckaroo_eps")
         response = make_mock_sdk_response(190)
         response.key = "EPS_DIRECT_KEY"
         response.get_redirect_url.return_value = None
@@ -110,7 +109,8 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         tx = self._create_transaction(payment_method_id=eps.id, reference="TX-EPS-DUP")
         PaymentMethod = type(tx.payment_method_id)
         with patch.object(PaymentMethod, "_buckaroo_create_payment", return_value=response):
-            tx._get_specific_processing_values({})
+            tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
+        self._run_processing()
         self.assertEqual(tx.state, "done")
 
         # The async webhook lands afterwards, carrying the same 190 success.
@@ -123,7 +123,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                 "brq_transactions": "EPS_DIRECT_KEY",
             }
         )
-        tx._apply_updates(push)
+        tx.with_context(payment_safe_write=True)._apply_updates(push.to_payload())
 
         self.assertEqual(tx.state, "done")
         self.assertFalse(tx.child_transaction_ids)
@@ -134,7 +134,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         tx = self._create_transaction(payment_method_id=self.ideal.id, amount=50.00)
 
         with self.assertRaises(ValidationError):
-            tx._get_specific_processing_values({})
+            tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
     # -- Reference extraction tests --
 
@@ -156,7 +156,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         """Amount and currency are extracted from ``parsed.amount`` / ``parsed.currency``."""
         tx = self._create_transaction()
         parsed = self._get_buckaroo_callback_data()
-        result = tx._extract_amount_data(parsed)
+        result = tx._extract_amount_data(parsed.to_payload())
         self.assertEqual(result["amount"], 50.00)
         self.assertEqual(result["currency_code"], "EUR")
 
@@ -166,7 +166,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         Klarna reservations carry no amount)."""
         tx = self._create_transaction()
         empty = parsed_from_form({})
-        result = tx._extract_amount_data(empty)
+        result = tx._extract_amount_data(empty.to_payload())
         self.assertIsNone(result)
 
     def test_extract_amount_data_uses_credit_when_no_debit(self):
@@ -180,7 +180,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                 "brq_invoicenumber": "TX-BUCK-001",
             }
         )
-        result = tx._extract_amount_data(parsed)
+        result = tx._extract_amount_data(parsed.to_payload())
         self.assertEqual(result["amount"], 25.0)
 
     def test_extract_amount_data_both_missing_returns_none(self):
@@ -193,7 +193,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                 "brq_invoicenumber": "TX-BUCK-001",
             }
         )
-        result = tx._extract_amount_data(parsed)
+        result = tx._extract_amount_data(parsed.to_payload())
         self.assertIsNone(result)
 
     # -- Rendering values tests (URL splitting) --
@@ -235,8 +235,8 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         for status_code, expected_state in self._APPLY_UPDATES_STATUS_MATRIX:
             with self.subTest(status_code=status_code):
                 tx = self._create_transaction(reference="TX-APPLY-%s" % status_code)
-                tx._apply_updates(
-                    self._get_buckaroo_callback_data(status_code=status_code),
+                tx.with_context(payment_safe_write=True)._apply_updates(
+                    self._get_buckaroo_callback_data(status_code=status_code).to_payload(),
                 )
                 self.assertEqual(tx.state, expected_state)
                 if status_code == 190:
@@ -245,7 +245,9 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
     def test_apply_updates_unknown_status_sets_error(self):
         """An unknown status code sets the transaction to error."""
         tx = self._create_transaction()
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=999))
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=999).to_payload()
+        )
         self.assertEqual(tx.state, "error")
 
     def test_apply_updates_null_status_sets_error(self):
@@ -259,7 +261,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                 "brq_transactions": "BUCK_TXN_KEY_123",
             }
         )
-        tx._apply_updates(parsed)
+        tx.with_context(payment_safe_write=True)._apply_updates(parsed.to_payload())
         self.assertEqual(tx.state, "error")
 
     def test_apply_updates_stores_service_code(self):
@@ -269,7 +271,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
             status_code=190,
             brq_transaction_method="ideal",
         )
-        tx._apply_updates(parsed)
+        tx.with_context(payment_safe_write=True)._apply_updates(parsed.to_payload())
         self.assertEqual(tx.buckaroo_official_service_code, "ideal")
 
     # -- End-to-end _process() tests --
@@ -291,10 +293,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                     status_code=status_code,
                     brq_invoicenumber=ref,
                 )
-                self.env["payment.transaction"].sudo()._process(
-                    "buckaroo_official",
-                    parsed,
-                )
+                self._route_push(parsed)
                 self.assertEqual(tx.state, expected_state)
                 if status_code == 190:
                     self.assertEqual(tx.provider_reference, "BUCK_TXN_KEY_123")
@@ -303,7 +302,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
         """Full _process() flow sets error when callback amount doesn't match."""
         tx = self._create_transaction()
         parsed = self._get_buckaroo_callback_data(status_code=190, brq_amount="999.99")
-        self.env["payment.transaction"].sudo()._process("buckaroo_official", parsed)
+        self._process_push(parsed)
         self.assertEqual(tx.state, "error")
 
     # -- Duplicate Push safety tests --
@@ -323,46 +322,50 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                 tx = self._create_transaction(
                     reference="TX-DUP-%s" % terminal_state,
                 )
-                tx._apply_updates(
-                    self._get_buckaroo_callback_data(status_code=initial_code),
+                tx.with_context(payment_safe_write=True)._apply_updates(
+                    self._get_buckaroo_callback_data(status_code=initial_code).to_payload(),
                 )
                 self.assertEqual(tx.state, terminal_state)
 
-                tx._apply_updates(
-                    self._get_buckaroo_callback_data(status_code=follow_up_code),
-                )
+                self._process_push(self._get_buckaroo_callback_data(status_code=follow_up_code), tx)
                 self.assertEqual(tx.state, terminal_state)
 
     def test_pending_can_transition_to_done(self):
         """A pending transaction can still be updated to done by a later callback."""
         tx = self._create_transaction()
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=790))
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=790).to_payload()
+        )
         self.assertEqual(tx.state, "pending")
 
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "done")
 
     # -- Authorize flow tests --
 
     def test_apply_updates_sets_authorized_for_creditcard_authorize_mode(self):
         """Status 190 with creditcard in authorize mode sets state to authorized."""
-        creditcard = self.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        self.buckaroo.payment_method_ids = [Command.link(creditcard.id)]
+        creditcard = self._pm("buckaroo_creditcard")
         creditcard.write({"buckaroo_official_creditcard_authorize": "authorize"})
 
         tx = self._create_transaction(payment_method_id=creditcard.id)
-        tx.buckaroo_official_payment_action = "authorize"
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "authorized")
 
     def test_apply_updates_sets_done_for_creditcard_pay_mode(self):
         """Status 190 with creditcard in pay mode still sets state to done."""
-        creditcard = self.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        self.buckaroo.payment_method_ids = [Command.link(creditcard.id)]
+        creditcard = self._pm("buckaroo_creditcard")
         creditcard.write({"buckaroo_official_creditcard_authorize": "pay"})
 
         tx = self._create_transaction(payment_method_id=creditcard.id)
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "done")
 
     # -- Capture tests --
@@ -375,12 +378,13 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
 
     def _create_authorized_creditcard_tx(self, **overrides):
         """Create a creditcard tx in authorized state."""
-        creditcard = self.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        self.buckaroo.payment_method_ids = [Command.link(creditcard.id)]
+        creditcard = self._pm("buckaroo_creditcard")
         creditcard.write({"buckaroo_official_creditcard_authorize": "authorize"})
         tx = self._create_transaction(payment_method_id=creditcard.id, **overrides)
-        tx.buckaroo_official_payment_action = "authorize"
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        self._update_transaction(tx, buckaroo_official_payment_action="authorize")
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "authorized")
         return tx
 
@@ -404,6 +408,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                     return_value=self._mock_capture_response(status_code=status_code),
                 ):
                     capture_tx = tx._capture()
+                    self._run_processing()
                 self.assertEqual(capture_tx.state, expected_state)
 
     # -- Void tests --
@@ -427,6 +432,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                     return_value=self._mock_capture_response(status_code=status_code),
                 ):
                     void_tx = tx._void()
+                    self._run_processing()
                 self.assertEqual(void_tx.state, expected_state)
 
     # -- Refund tests --
@@ -440,7 +446,9 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
     def _create_done_transaction(self, **overrides):
         """Create a transaction and set it to done (simulating a completed payment)."""
         tx = self._create_transaction(**overrides)
-        tx._apply_updates(self._get_buckaroo_callback_data(status_code=190))
+        tx.with_context(payment_safe_write=True)._apply_updates(
+            self._get_buckaroo_callback_data(status_code=190).to_payload()
+        )
         self.assertEqual(tx.state, "done")
         return tx
 
@@ -453,6 +461,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
             PaymentMethod, "_buckaroo_create_refund", return_value=self._mock_refund_response()
         ):
             refund_tx = tx._refund()
+            self._run_processing()
 
         self.assertTrue(refund_tx.exists())
         self.assertEqual(refund_tx.operation, "refund")
@@ -479,6 +488,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                     return_value=self._mock_refund_response(status_code=status_code),
                 ):
                     refund_tx = tx._refund()
+                    self._run_processing()
                 self.assertEqual(refund_tx.state, expected_state)
                 if status_code == 190:
                     self.assertEqual(refund_tx.provider_reference, "REFUND_KEY_001")
@@ -492,6 +502,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
             PaymentMethod, "_buckaroo_create_refund", return_value=self._mock_refund_response()
         ) as mock_refund:
             refund_tx = tx._refund(amount_to_refund=10.00)
+            self._run_processing()
 
         self.assertEqual(abs(refund_tx.amount), 10.00)
         mock_refund.assert_called_once()
@@ -520,6 +531,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
             return_value=self._mock_refund_response(status_code=790),
         ):
             refund_tx = tx._refund()
+            self._run_processing()
 
         self.assertEqual(refund_tx.state, "pending")
 
@@ -532,7 +544,7 @@ class TestBuckarooOfficialProcessingFlows(BuckarooOfficialCommon):
                 "brq_transactions": "REFUND_KEY_001",
             }
         )
-        refund_tx._apply_updates(parsed)
+        refund_tx.with_context(payment_safe_write=True)._apply_updates(parsed.to_payload())
         self.assertEqual(refund_tx.state, "done")
 
 
@@ -684,11 +696,10 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
 
     def _create_done_tx_for_method(self, method_code):
         """Create a transaction linked to *method_code* and set it to done."""
-        pm_record = self.env["payment.method"].search([("code", "=", method_code)], limit=1)
-        # If no payment.method record exists for this code in the test DB we
-        # fall back to the default payment_method_id from common so the
-        # transaction can still be created.
-        pm_id = pm_record.id if pm_record else self.payment_method_id
+        pm_record = self._pm(method_code)
+        # If the test provider has no payment.method for this code we fall
+        # back to iDEAL so the transaction can still be created.
+        pm_id = pm_record.id if pm_record else self.ideal.id
 
         tx = self.env["payment.transaction"].create(
             {
@@ -701,12 +712,12 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx._apply_updates(
+        tx.with_context(payment_safe_write=True)._apply_updates(
             self._get_buckaroo_callback_data(
                 status_code=190,
                 brq_invoicenumber="E2E-%s-001" % method_code.upper(),
                 brq_amount="10.00",
-            )
+            ).to_payload(),
         )
         self.assertEqual(tx.state, "done")
         return tx
@@ -722,8 +733,8 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
         )
         patches = self._mock_pm_responses(payment_response=payment_response)
 
-        pm_record = self.env["payment.method"].search([("code", "=", method_code)], limit=1)
-        pm_id = pm_record.id if pm_record else self.payment_method_id
+        pm_record = self._pm(method_code)
+        pm_id = pm_record.id if pm_record else self.ideal.id
 
         tx = self.env["payment.transaction"].create(
             {
@@ -742,7 +753,7 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
             mocks[k] = p.start()
             self.addCleanup(p.stop)
 
-        result = tx._get_specific_processing_values({})
+        result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(
             result["api_url"],
@@ -776,6 +787,7 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
             self.addCleanup(p.stop)
 
         refund_tx = source_tx._refund()
+        self._run_processing()
 
         self.assertTrue(
             refund_tx.exists(), "Refund transaction must be created for %s" % method_code
@@ -803,8 +815,8 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
         """Callback with *buckaroo_status_code* must transition *method_code* tx to *expected_state*."""
         self._skip_if_no_credentials()
 
-        pm_record = self.env["payment.method"].search([("code", "=", method_code)], limit=1)
-        pm_id = pm_record.id if pm_record else self.payment_method_id
+        pm_record = self._pm(method_code)
+        pm_id = pm_record.id if pm_record else self.ideal.id
 
         ref = "E2E-STATUS-%s-%s" % (method_code.upper(), buckaroo_status_code)
         tx = self.env["payment.transaction"].create(
@@ -828,7 +840,7 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
                 "brq_transactions": "SANDBOX_%s_TXN" % method_code.upper(),
             }
         )
-        tx._apply_updates(parsed)
+        tx.with_context(payment_safe_write=True)._apply_updates(parsed.to_payload())
 
         self.assertEqual(
             tx.state,
@@ -870,3 +882,56 @@ class TestBuckarooOfficialE2ESandbox(BuckarooOfficialCommon):
         for method_code, status_code, expected_state in cases:
             with self.subTest(method=method_code, status=status_code):
                 self._assert_status_code_mapping(method_code, status_code, expected_state)
+
+
+@tagged("post_install", "-at_install")
+class TestBuckarooOfficialPushLock(BuckarooOfficialCommon):
+    """The push controller takes a NOWAIT lock on the transaction. The
+    processing cron holds that lock while it processes, so the shopper's
+    return must not fail when it meets a busy transaction."""
+
+    def _locked_handle_push(self, tx, **kwargs):
+        from psycopg2.errors import LockNotAvailable
+
+        from odoo.addons.payment_buckaroo_official.controllers import main
+
+        parsed = parsed_from_form(
+            {
+                "brq_amount": str(tx.amount),
+                "brq_currency": "EUR",
+                "brq_statuscode": "190",
+                "brq_invoicenumber": tx.reference,
+                "brq_transactions": "BUCK-LOCK-KEY",
+            }
+        )
+        cursor_cls = type(self.env.cr)
+        execute = cursor_cls.execute
+
+        def _execute(cr, query, *args, **kw):
+            if "FOR UPDATE NOWAIT" in str(query):
+                raise LockNotAvailable()
+            return execute(cr, query, *args, **kw)
+
+        req = MagicMock()
+        req.env = self.env
+        Transaction = type(tx)
+        with (
+            patch.object(main, "parse_push", return_value=parsed),
+            patch.object(main, "verify_signature"),
+            patch.object(Transaction, "try_lock_for_update", lambda recs, **kw: recs.browse()),
+            patch.object(cursor_cls, "execute", _execute),
+        ):
+            main.BuckarooOfficialController._handle_push(req, **kwargs)
+
+    def test_return_skips_busy_transaction(self):
+        tx = self._create_buckaroo_tx(reference="TX-LOCK-RETURN")
+        self._locked_handle_push(tx, skip_if_locked=True)
+        self.assertFalse(tx.payment_data_ids, "a busy tx must be left to the push")
+        self.assertEqual(tx.state, "draft")
+
+    def test_webhook_raises_on_busy_transaction(self):
+        from psycopg2.errors import LockNotAvailable
+
+        tx = self._create_buckaroo_tx(reference="TX-LOCK-WEBHOOK")
+        with self.assertRaises(LockNotAvailable):
+            self._locked_handle_push(tx)

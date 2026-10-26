@@ -8,7 +8,6 @@ on both the method-selection form and the saved-token form (desktop +
 mobile). Non-Buckaroo providers keep their original label.
 """
 
-from odoo.fields import Command
 from odoo.tests import tagged
 from odoo.tools import is_html_empty
 
@@ -63,7 +62,6 @@ class TestSecuredByNotice(BuckarooOfficialCommon):
         label = dict(
             self.dummy_provider._fields["code"]._description_selection(self.dummy_provider.env)
         )[self.dummy_provider.code]
-        self.dummy_provider.payment_method_ids = [Command.link(self.payment_method.id)]
 
         html = self._render_method_form(self.payment_method, self.dummy_provider)
 

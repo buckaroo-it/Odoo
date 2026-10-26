@@ -30,8 +30,7 @@ class TestIn3CreatePaymentDispatch(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.in3 = cls.env.ref("payment_buckaroo_official.payment_method_in3")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.in3.id)]
+        cls.in3 = cls._pm("buckaroo_in3")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -53,7 +52,9 @@ class TestIn3CreatePaymentDispatch(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         mock_builder.add_parameter.assert_not_called()
@@ -83,7 +84,7 @@ class TestIn3CreatePaymentDispatch(BuckarooOfficialCommon):
                 "price_unit": 75.0,
             }
         )
-        tx.sale_order_ids = [Command.link(order.id)]
+        self._update_transaction(tx, sale_order_ids=[Command.link(order.id)])
 
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
@@ -98,7 +99,9 @@ class TestIn3CreatePaymentDispatch(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.in3._buckaroo_create_payment(tx, client)
+            result = self.in3._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         param_names = [call[0][0] for call in mock_builder.add_parameter.call_args_list]
         self.assertIn("article", param_names)
@@ -123,8 +126,7 @@ class TestIn3RefundFlow(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.in3 = cls.env.ref("payment_buckaroo_official.payment_method_in3")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.in3.id)]
+        cls.in3 = cls._pm("buckaroo_in3")
         cls.partner_nl = cls.env["res.partner"].create(
             {"name": "Jan", "country_id": cls.env.ref("base.nl").id}
         )
@@ -141,7 +143,7 @@ class TestIn3RefundFlow(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx._apply_updates(
+        tx.with_context(payment_safe_write=True)._apply_updates(
             parsed_from_form(
                 {
                     "brq_invoicenumber": reference,
@@ -150,7 +152,7 @@ class TestIn3RefundFlow(BuckarooOfficialCommon):
                     "brq_statuscode": "190",
                     "brq_transactions": "IN3_DONE_KEY",
                 }
-            )
+            ).to_payload(),
         )
         self.assertEqual(tx.state, "done")
         return tx
@@ -167,6 +169,7 @@ class TestIn3RefundFlow(BuckarooOfficialCommon):
                 response.key = "IN3_REFUND_%s" % status_code
                 with self._patch_refund(response):
                     refund_tx = tx._refund()
+                    self._run_processing()
                 self.assertEqual(refund_tx.state, expected_state)
 
 
@@ -175,8 +178,7 @@ class TestIn3CountryRestriction(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.in3 = cls.env.ref("payment_buckaroo_official.payment_method_in3")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.in3.id)]
+        cls.in3 = cls._pm("buckaroo_in3")
         cls.partner_nl = cls.env["res.partner"].create(
             {"name": "NL", "country_id": cls.env.ref("base.nl").id}
         )
@@ -185,8 +187,7 @@ class TestIn3CountryRestriction(BuckarooOfficialCommon):
         )
 
     def _visible(self, partner, currency=None):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner.id,
             currency_id=(currency or self.currency_euro).id,
             amount=100.0,
@@ -208,8 +209,7 @@ class TestIn3ShopPaymentControllerValidations(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.in3 = cls.env.ref("payment_buckaroo_official.payment_method_in3")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.in3.id)]
+        cls.in3 = cls._pm("buckaroo_in3")
 
     def _invoke(self, **kwargs):
         import odoo.http
@@ -221,6 +221,8 @@ class TestIn3ShopPaymentControllerValidations(BuckarooOfficialCommon):
         mock_request.session = {}
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.in3.request",
                 new=mock_request,

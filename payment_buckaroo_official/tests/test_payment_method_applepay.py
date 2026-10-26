@@ -28,7 +28,7 @@ class _patch_request:
 @tagged("post_install", "-at_install")
 class TestApplepayPaymentMethodRecord(BuckarooOfficialCommon):
     def test_applepay_record_loads_with_expected_fields(self):
-        method = self.env.ref("payment_buckaroo_official.payment_method_applepay")
+        method = self._pm("buckaroo_applepay")
 
         self.assertEqual(method.code, "buckaroo_applepay")
         self.assertEqual(method.buckaroo_official_sdk_service_name, "applepay")
@@ -77,7 +77,7 @@ class TestApplepayConfigFieldDefaults(BuckarooOfficialCommon):
 @tagged("post_install", "-at_install")
 class TestApplepayAdminFields(BuckarooOfficialCommon):
     def test_applepay_merchant_guid_persists(self):
-        method = self.env.ref("payment_buckaroo_official.payment_method_applepay")
+        method = self._pm("buckaroo_applepay")
         method.buckaroo_official_applepay_merchant_guid = "BUCK-APPLE-GUID-123"
 
         method.invalidate_recordset()
@@ -92,7 +92,7 @@ class TestApplepayIsConfigured(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
+        cls.applepay = cls._pm("buckaroo_applepay")
 
     def test_not_configured_without_merchant_guid(self):
         self.applepay.buckaroo_official_applepay_merchant_guid = ""
@@ -108,12 +108,10 @@ class TestApplepayCompatibilityFilter(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.applepay.id)]
+        cls.applepay = cls._pm("buckaroo_applepay")
 
     def _compatible_codes(self, is_express_checkout=False):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            provider_ids=self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner_id=self.env.ref("base.partner_admin").id,
             currency_id=self.env.ref("base.EUR").id,
             is_express_checkout=is_express_checkout,
@@ -176,7 +174,7 @@ class TestApplepaySessionBridgeController(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
+        cls.applepay = cls._pm("buckaroo_applepay")
 
     def _call_controller(self, payment_method_id=None, **kwargs):
         import odoo.http
@@ -193,11 +191,9 @@ class TestApplepaySessionBridgeController(BuckarooOfficialCommon):
                 "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
                 return_value="SUPER_OK",
             ) as super_stub,
-            patch.object(
-                odoo.http,
-                "request",
-                fake_req,
-            ),
+            patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.applepay.request",
                 new=fake_req,
@@ -323,8 +319,7 @@ class TestApplepayCreatePayment(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.applepay.id)]
+        cls.applepay = cls._pm("buckaroo_applepay")
 
     def test_create_payment_sends_payment_data_and_customer_name_when_session_has_them(self):
         tx = self._create_buckaroo_tx(
@@ -346,7 +341,9 @@ class TestApplepayCreatePayment(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.applepay._buckaroo_create_payment(tx, client)
+            result = self.applepay._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         self.assertEqual(result, mock_response)
@@ -380,7 +377,7 @@ class TestApplepayCreatePayment(BuckarooOfficialCommon):
             _patch_request(session_dict),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.applepay._buckaroo_create_payment(tx, client)
+            self.applepay._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         self.assertNotIn("buckaroo_applepay_token", session_dict)
         self.assertNotIn("buckaroo_applepay_customer_name", session_dict)
@@ -405,7 +402,9 @@ class TestApplepayCreatePayment(BuckarooOfficialCommon):
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
             with self.assertRaises(ValidationError):
-                self.applepay._buckaroo_create_payment(tx, client)
+                self.applepay._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), client
+                )
 
     def test_create_payment_raises_validation_error_when_customer_name_missing(self):
         tx = self._create_buckaroo_tx(
@@ -427,7 +426,9 @@ class TestApplepayCreatePayment(BuckarooOfficialCommon):
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
             with self.assertRaises(ValidationError):
-                self.applepay._buckaroo_create_payment(tx, client)
+                self.applepay._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), client
+                )
 
     def test_non_applepay_method_delegates_to_base(self):
         tx = self._create_buckaroo_tx(reference="TX-IDEAL-AP-OFF")
@@ -438,7 +439,9 @@ class TestApplepayCreatePayment(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService",
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         param_keys = [call.args[0] for call in mock_builder.add_parameter.call_args_list]
@@ -463,7 +466,9 @@ class TestApplepayCreatePayment(BuckarooOfficialCommon):
             _patch_request({}),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.applepay._buckaroo_create_payment(tx, client)
+            result = self.applepay._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         self.assertEqual(result, mock_response)
@@ -536,7 +541,7 @@ class TestApplepayExpressCheckoutCapability(BuckarooOfficialCommon):
         self.assertTrue(self.buckaroo.support_express_checkout)
 
     def test_applepay_method_supports_express_checkout(self):
-        method = self.env.ref("payment_buckaroo_official.payment_method_applepay")
+        method = self._pm("buckaroo_applepay")
         self.assertTrue(method.support_express_checkout)
 
     def test_express_checkout_form_view_renders_applepay(self):
@@ -566,8 +571,7 @@ class TestApplepayExpressFormIntegrationModeGate(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.applepay.id)]
+        cls.applepay = cls._pm("buckaroo_applepay")
         cls.applepay.write(
             {
                 "buckaroo_official_applepay_merchant_guid": "BUCK-APPLE-GUID",
@@ -621,7 +625,7 @@ class TestApplepayProductExpressInitController(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
+        cls.applepay = cls._pm("buckaroo_applepay")
 
     def _call_endpoint(
         self,
@@ -688,11 +692,9 @@ class TestApplepayProductExpressInitController(BuckarooOfficialCommon):
                 "odoo.addons.payment_buckaroo_official.controllers.express_wallet.request",
                 new=fake_req,
             ),
-            patch.object(
-                odoo.http,
-                "request",
-                fake_req,
-            ),
+            patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch.object(
                 BuckarooApplepayExpressController,
                 "add_to_cart",
@@ -870,8 +872,7 @@ class TestApplepayProductExpressInitController(BuckarooOfficialCommon):
         fake_req = MagicMock()
         # The shopper's pre-existing cart, which the buy-now must not touch.
         fake_req.cart = order
-        fake_req.env = self.env
-        fake_req.website = website
+        fake_req.env = self.env(context=dict(self.env.context, website_id=website.id))
         # `_prepare_sale_order_values` (used to build the dedicated express
         # order) reads these off the request.
         fake_req.fiscal_position = self.env["account.fiscal.position"]
@@ -896,11 +897,9 @@ class TestApplepayProductExpressInitController(BuckarooOfficialCommon):
                 "odoo.addons.website.models.website.request",
                 new=fake_req,
             ),
-            patch.object(
-                odoo.http,
-                "request",
-                fake_req,
-            ),
+            patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch.object(
                 BuckarooApplepayExpressController,
                 "_get_express_shop_payment_values",
@@ -986,6 +985,14 @@ class TestApplepayProductExpressIsolation(HttpCase):
         self.assertEqual(resp.status_code, 200)
         return resp.json().get("result")
 
+    def _cart_badge_qty(self):
+        """Header cart count held in the shopper's session."""
+        from odoo.http.session import session_store  # noqa: PLC0415
+
+        return (
+            session_store().get(self.session.sid, keep_sid=True).get("website_sale_cart_quantity")
+        )
+
     def test_express_init_isolated_and_non_accumulating(self):
         self.authenticate("ap_express_shopper", "ap_express_shopper")
         # Seed a real shopping cart with a different product.
@@ -999,7 +1006,8 @@ class TestApplepayProductExpressIsolation(HttpCase):
                 "quantity": 2,
             },
         )
-        qty_before = self._rpc("/shop/cart/quantity", {})
+        qty_before = self._cart_badge_qty()
+        self.assertEqual(qty_before, 2)
 
         order_ids = set()
         for _ in range(3):
@@ -1018,7 +1026,7 @@ class TestApplepayProductExpressIsolation(HttpCase):
         # A fresh order per click - nothing piles onto one growing order.
         self.assertEqual(len(order_ids), 3)
         # The shopper's cart is exactly as it was before the buy-now.
-        self.assertEqual(self._rpc("/shop/cart/quantity", {}), qty_before)
+        self.assertEqual(self._cart_badge_qty(), qty_before)
 
     def test_express_checkout_applies_address_to_isolated_order_not_cart(self):
         # The address step must land on the dedicated express order, never on
@@ -1034,7 +1042,8 @@ class TestApplepayProductExpressIsolation(HttpCase):
                 "quantity": 2,
             },
         )
-        qty_before = self._rpc("/shop/cart/quantity", {})
+        qty_before = self._cart_badge_qty()
+        self.assertEqual(qty_before, 2)
         res = self._rpc(
             "/shop/buckaroo/applepay/express_init",
             {"product_id": self.product.id, "qty": 1},
@@ -1058,7 +1067,7 @@ class TestApplepayProductExpressIsolation(HttpCase):
         # Address recorded on the express order; cart still holds only the filler.
         self.assertEqual(express.partner_invoice_id.city, "Rotterdam")
         self.assertEqual(express.order_line.product_id, self.product)
-        self.assertEqual(self._rpc("/shop/cart/quantity", {}), qty_before)
+        self.assertEqual(self._cart_badge_qty(), qty_before)
 
     def test_express_checkout_pins_total_against_address_tax_change(self):
         # The wallet sheet authorizes a total before the address is known.
@@ -1115,7 +1124,8 @@ class TestApplepayProductExpressIsolation(HttpCase):
                 "quantity": 2,
             },
         )
-        qty_before = self._rpc("/shop/cart/quantity", {})
+        qty_before = self._cart_badge_qty()
+        self.assertEqual(qty_before, 2)
         resp = self.url_open(
             "/shop/buckaroo/wallet/express_checkout",
             data=json.dumps(
@@ -1143,4 +1153,4 @@ class TestApplepayProductExpressIsolation(HttpCase):
             "werkzeug.exceptions.NotFound",
         )
         # The shopper's cart was not touched by the rejected call.
-        self.assertEqual(self._rpc("/shop/cart/quantity", {}), qty_before)
+        self.assertEqual(self._cart_badge_qty(), qty_before)

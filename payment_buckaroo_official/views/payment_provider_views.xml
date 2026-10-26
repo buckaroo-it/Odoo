@@ -9,9 +9,9 @@
             <group name="provider_credentials" position="inside">
                 <group invisible="code != 'buckaroo_official'">
                     <field name="buckaroo_official_website_key"
-                           required="code == 'buckaroo_official' and state != 'disabled'"/>
+                           required="code == 'buckaroo_official' and active"/>
                     <field name="buckaroo_official_secret_key"
-                           required="code == 'buckaroo_official' and state != 'disabled'"
+                           required="code == 'buckaroo_official' and active"
                            password="True"/>
                     <div colspan="2">
                         <button name="action_buckaroo_official_test_connection"
@@ -19,7 +19,7 @@
                                 string="Test Connection"
                                 icon="fa-plug"
                                 class="btn-link"
-                                invisible="state == 'disabled'"
+                                invisible="not active"
                                 confirm="This will send a test request to the Buckaroo API. Continue?"/>
                     </div>
                     <separator string="Descriptions" colspan="2"/>

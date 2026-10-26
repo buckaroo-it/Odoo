@@ -20,19 +20,6 @@ from odoo.addons.payment_buckaroo_official.utils.push_handlers import (
 from .common import BuckarooOfficialCommon, make_mock_request, parsed_from_form, parsed_from_json
 
 
-def _route_push(env, parsed):
-    """Drive the same split + process path the webhook controller runs."""
-    tx_sudo = env["payment.transaction"].sudo()._search_by_reference("buckaroo_official", parsed)
-    if not tx_sudo:
-        return None
-    remainder_tx = tx_sudo._buckaroo_split_remainder_push(parsed)
-    target = remainder_tx or tx_sudo
-    target._process("buckaroo_official", parsed)
-    if remainder_tx and remainder_tx.state == "done":
-        remainder_tx._post_process()
-    return remainder_tx or tx_sudo
-
-
 def _refund_push(invoicenumber, refund_relation, txn_key, credit="50.00", service="ideal"):
     return parsed_from_form(
         {
@@ -471,14 +458,14 @@ class TestPlazaRefundPush(BuckarooOfficialCommon):
 
     def _done_ideal_tx(self, reference, key, amount=50.0):
         tx = self._create_buckaroo_tx(reference=reference, amount=amount, payment_method=self.ideal)
-        tx.provider_reference = key
-        tx._set_done()
+        self._update_transaction(tx, provider_reference=key)
+        tx.with_context(payment_safe_write=True)._set_done()
         return tx
 
     def test_refund_push_spawns_refund_child_for_ideal(self):
         tx = self._done_ideal_tx("IDEAL-RF-001", "IDEAL_KEY")
 
-        _route_push(self.env, _refund_push("IDEAL-RF-001", "IDEAL_KEY", "IDEAL_REFUND_KEY"))
+        self._route_push(_refund_push("IDEAL-RF-001", "IDEAL_KEY", "IDEAL_REFUND_KEY"))
 
         refund = tx.child_transaction_ids.filtered(lambda t: t.operation == "refund")
         self.assertEqual(len(refund), 1)
@@ -492,8 +479,8 @@ class TestPlazaRefundPush(BuckarooOfficialCommon):
         tx = self._done_ideal_tx("IDEAL-RF-002", "IDEAL_KEY_2")
         push = _refund_push("IDEAL-RF-002", "IDEAL_KEY_2", "IDEAL_REFUND_KEY_2")
 
-        _route_push(self.env, push)
-        _route_push(self.env, push)  # replay
+        self._route_push(push)
+        self._route_push(push)  # replay
 
         refunds = tx.child_transaction_ids.filtered(lambda t: t.operation == "refund")
         self.assertEqual(len(refunds), 1)
@@ -501,12 +488,10 @@ class TestPlazaRefundPush(BuckarooOfficialCommon):
     def test_two_distinct_partial_refunds_each_registered(self):
         tx = self._done_ideal_tx("IDEAL-RF-004", "IDEAL_KEY_4")
 
-        _route_push(
-            self.env,
+        self._route_push(
             _refund_push("IDEAL-RF-004", "IDEAL_KEY_4", "IDEAL_REFUND_KEY_4A", credit="20.00"),
         )
-        _route_push(
-            self.env,
+        self._route_push(
             _refund_push("IDEAL-RF-004", "IDEAL_KEY_4", "IDEAL_REFUND_KEY_4B", credit="15.00"),
         )
 
@@ -530,8 +515,7 @@ class TestPlazaRefundPush(BuckarooOfficialCommon):
     def test_duplicate_190_without_refund_relation_does_not_spawn(self):
         tx = self._done_ideal_tx("IDEAL-RF-003", "IDEAL_KEY_3")
 
-        _route_push(
-            self.env,
+        self._route_push(
             parsed_from_form(
                 {
                     "brq_invoicenumber": "IDEAL-RF-003",

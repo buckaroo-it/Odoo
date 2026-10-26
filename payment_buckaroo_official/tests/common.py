@@ -1,9 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import json as _json
-from unittest.mock import MagicMock
-
-from odoo.fields import Command
+from unittest.mock import MagicMock, patch
 
 from odoo.addons.payment.tests.common import PaymentCommon
 
@@ -131,21 +129,82 @@ class BuckarooOfficialCommon(PaymentCommon):
                 "buckaroo_official_secret_key": "test_secret_key",
             },
         )
-        cls.ideal = cls.env.ref("payment_buckaroo_official.payment_method_ideal")
-        # Ensure the payment method is linked to the test provider (the data
-        # file sets the link on the *template* provider, but _prepare_provider
-        # may resolve a different record).
-        cls.buckaroo.payment_method_ids = [Command.link(cls.ideal.id)]
+        # Odoo 20 no longer forces test mode in ``_prepare_provider``.
+        cls.buckaroo.write({"is_live": False, "active": True})
+        # Payment methods belong to one provider in Odoo 20: resolve them on
+        # the test provider instead of by xmlid.
+        cls.ideal = cls._pm("buckaroo_ideal")
+        assert cls.ideal, "The Buckaroo test provider has no iDEAL payment method"
+
+        # Run the real processing logic: 19 never mocked ``_process``.
+        cls.enable_process_patcher = False
 
         cls.buckaroo_tx_values = {
             "provider_id": cls.buckaroo.id,
-            "payment_method_id": cls.payment_method_id,
+            "payment_method_id": cls.ideal.id,
             "reference": "TX-BUCK-001",
             "amount": 50.00,
             "currency_id": cls.currency_euro.id,
             "partner_id": cls.partner.id,
             "operation": "online_redirect",
         }
+
+    def setUp(self):
+        super().setUp()
+        # Queued payloads must be plain JSON. Fail fast on anything else (e.g.
+        # an unconfigured MagicMock SDK response) instead of letting the Json
+        # field stringify it recursively.
+        PaymentTransaction = self.registry["payment.transaction"]
+        record = PaymentTransaction._record
+
+        def _strict_record(tx, payment_data):
+            _json.dumps(payment_data)
+            return record(tx, payment_data)
+
+        self.startPatcher(patch.object(PaymentTransaction, "_record", _strict_record))
+
+    @classmethod
+    def _pm(cls, code):
+        """Return the Buckaroo test provider's payment method with *code*."""
+        return cls.buckaroo._get_pm_from_code(code)
+
+    def _route_push(self, parsed):
+        """Drive the webhook controller path for *parsed*: resolve the tx,
+        split a remainder push, queue the push and run the processing cron.
+        Returns the transaction the push was recorded on."""
+        tx_sudo = (
+            self.env["payment.transaction"].sudo()._search_by_reference("buckaroo_official", parsed)
+        )
+        if not tx_sudo:
+            return None
+        remainder_tx = tx_sudo._buckaroo_split_remainder_push(parsed)
+        target = remainder_tx or tx_sudo
+        target._record(parsed.to_payload())
+        self._run_processing()
+        return target
+
+    def _run_processing(self):
+        """Run the processing cron and fail on any payload it could not
+        process: the cron only logs those and flags them as errored."""
+        PaymentData = self.env["payment.data"].sudo()
+        known_errors = PaymentData.search([("errored", "=", True)])
+        super()._run_processing()
+        self.env.invalidate_all()
+        errored = PaymentData.search([("errored", "=", True)]) - known_errors
+        if errored:
+            self.fail("Payment data processing failed:\n%s" % errored[:1].error_traceback)
+
+    def _process_push(self, parsed, tx=None):
+        """Process *parsed* synchronously, as the processing cron does, on *tx*
+        or on the transaction its reference resolves to. Returns the tx."""
+        if tx is None:
+            tx = (
+                self.env["payment.transaction"]
+                .sudo()
+                ._search_by_reference("buckaroo_official", parsed)
+            )
+        tx.with_context(payment_safe_write=True)._process(parsed.to_payload())
+        return tx
 
     def _create_buckaroo_tx(self, reference="TX-100", amount=50.0, payment_method=None):
         """Create a payment.transaction tied to the Buckaroo test provider.

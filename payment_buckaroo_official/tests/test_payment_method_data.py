@@ -147,7 +147,7 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
                     currencies,
                 )
 
-        giftcard = self.env.ref("payment_buckaroo_official.payment_method_giftcard")
+        giftcard = self._pm("buckaroo_giftcard")
         self.assertFalse(giftcard.supported_country_ids)
         self.assertEqual(
             set(giftcard.supported_currency_ids.mapped("name")),
@@ -168,9 +168,9 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
             )
 
     def test_module_upgrade_preserves_merchant_fields(self):
-        billink = self.env.ref("payment_buckaroo_official.payment_method_billink")
-        custom_image = self.env.ref("payment_buckaroo_official.payment_method_ideal").image
-        self.assertNotEqual(custom_image, billink.image)
+        billink = self._pm("buckaroo_billink")
+        custom_image = self._pm("buckaroo_ideal").image
+        self.assertNotEqual(custom_image.content, billink.image.content)
         billink.write(
             {
                 "name": "Custom Billink",
@@ -183,22 +183,18 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
                 "buckaroo_official_max_amount": "20.00",
             }
         )
-        self.buckaroo.payment_method_ids = [Command.unlink(billink.id)]
 
         self._reload_payment_method_data()
 
         self.assertEqual(billink.name, "Custom Billink")
         self.assertFalse(billink.active)
         self.assertEqual(billink.sequence, 5)
-        self.assertEqual(billink.image, custom_image)
+        self.assertEqual(billink.image.content, custom_image.content)
         self.assertEqual(set(billink.supported_country_ids.mapped("code")), {"DE"})
         self.assertEqual(set(billink.supported_currency_ids.mapped("name")), {"USD"})
         self.assertEqual(billink.buckaroo_official_min_amount, "10.00")
         self.assertEqual(billink.buckaroo_official_max_amount, "20.00")
-        self.assertNotIn(
-            billink,
-            self.buckaroo.with_context(active_test=False).payment_method_ids,
-        )
+        self.assertEqual(billink.provider_id, self.buckaroo)
 
     def test_module_upgrade_recreates_missing_method(self):
         xml_id = "payment_buckaroo_official.payment_method_brand_nexi"
@@ -221,21 +217,20 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
         self.assertTrue(recreated.image)
 
     def test_methods_available_for_nl_partner(self):
-        pm_ids = [
-            self.env.ref(f"payment_buckaroo_official.payment_method_{code}").id
-            for code, _c, _co in METHOD_DATA
-        ]
-        self.buckaroo.payment_method_ids = [Command.set(pm_ids)]
-        self.env.ref(
-            "payment_buckaroo_official.payment_method_googlepay"
+        pms = self.env["payment.method"].browse(
+            self._pm(f"buckaroo_{code}").id for code, _c, _co in METHOD_DATA
+        )
+        pms.active = True
+        self._pm(
+            "buckaroo_googlepay"
         ).buckaroo_official_googlepay_merchant_guid = "test_merchant_guid"
-        self.env.ref(
-            "payment_buckaroo_official.payment_method_applepay"
+        self._pm(
+            "buckaroo_applepay"
         ).buckaroo_official_applepay_merchant_guid = "test_merchant_guid"
         # PayPal shows on checkout only when configured for the provider's mode
         # and flagged on. The provider runs in test mode (reads the sandbox id),
         # and show_on_checkout can be off on upgraded records, so set both.
-        paypal = self.env.ref("payment_buckaroo_official.payment_method_paypal")
+        paypal = self._pm("buckaroo_paypal")
         paypal.buckaroo_official_paypal_merchant_id = "test_merchant_id"
         paypal.buckaroo_official_paypal_sandbox_merchant_id = "test_sandbox_merchant_id"
         paypal.buckaroo_official_paypal_show_on_checkout = True
@@ -250,18 +245,16 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
 
         for code, currencies, _countries in METHOD_DATA:
             with self.subTest(code=code):
-                pm = self.env.ref(f"payment_buckaroo_official.payment_method_{code}")
+                pm = self._pm(f"buckaroo_{code}")
                 currency = self.env.ref(f"base.{next(iter(currencies))}")
-                methods = self.env["payment.method"]._get_compatible_payment_methods(
-                    self.buckaroo.ids,
+                methods = self.buckaroo._find_available_payment_methods(
                     nl_partner.id,
                     currency_id=currency.id,
                 )
                 self.assertIn(pm, methods)
 
     def test_mbway_excluded_for_non_eur_currency(self):
-        mbway = self.env.ref("payment_buckaroo_official.payment_method_mbway")
-        self.buckaroo.payment_method_ids = [Command.link(mbway.id)]
+        mbway = self._pm("buckaroo_mbway")
 
         nl_partner = self.env["res.partner"].create(
             {
@@ -270,8 +263,7 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
             }
         )
 
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             nl_partner.id,
             currency_id=self.env.ref("base.USD").id,
         )

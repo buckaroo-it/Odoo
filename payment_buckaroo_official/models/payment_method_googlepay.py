@@ -58,24 +58,11 @@ class PaymentMethodGooglepay(models.Model):
         copy=False,
     )
 
-    def _get_compatible_payment_methods(
-        self,
-        provider_ids,
-        partner_id,
-        currency_id=None,
-        force_tokenization=False,
-        is_express_checkout=False,
-        report=None,
-        **kwargs,
+    def _buckaroo_official_filter_available(
+        self, providers, is_express_checkout=False, report=None, **kwargs
     ):
-        payment_methods = super()._get_compatible_payment_methods(
-            provider_ids,
-            partner_id,
-            currency_id=currency_id,
-            force_tokenization=force_tokenization,
-            is_express_checkout=is_express_checkout,
-            report=report,
-            **kwargs,
+        payment_methods = super()._buckaroo_official_filter_available(
+            providers, is_express_checkout=is_express_checkout, report=report, **kwargs
         )
         return payment_methods.filtered(
             lambda pm: (
@@ -96,8 +83,8 @@ class PaymentMethodGooglepay(models.Model):
         self.ensure_one()
         if not self.buckaroo_official_googlepay_merchant_guid:
             return False
-        prod_provider = self.provider_ids.filtered(
-            lambda p: p.code == const.PROVIDER_CODE and p.state == "enabled"
+        prod_provider = self.provider_id.filtered(
+            lambda p: p.code == const.PROVIDER_CODE and p.is_live
         )
         if prod_provider and not self.buckaroo_official_googlepay_google_merchant_id:
             return False

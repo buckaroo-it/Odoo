@@ -10,7 +10,6 @@ session handling, token flows, and card brand injection for post-authorize
 from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import ValidationError
-from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon, make_mock_sdk_builder
@@ -41,7 +40,9 @@ class TestCreditCardNonCreditCardUnaffected(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         mock_builder.authorize.assert_not_called()
@@ -55,8 +56,7 @@ class TestCreditCardRedirectPay(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
         cls.creditcard.buckaroo_official_creditcard_authorize = "pay"
         cls.creditcard.buckaroo_official_creditcard_method = "redirect"
         cls.brand = cls.creditcard._buckaroo_creditcard_redirect_brands()[0]["service"]
@@ -74,7 +74,9 @@ class TestCreditCardRedirectPay(BuckarooOfficialCommon):
             _patch_request({"buckaroo_cc_brand": self.brand}),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.creditcard._buckaroo_create_payment(tx, client)
+            result = self.creditcard._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         mock_builder.authorize.assert_not_called()
@@ -95,7 +97,9 @@ class TestCreditCardRedirectPay(BuckarooOfficialCommon):
             _patch_request({}),
         ):
             with self.assertRaises(ValidationError):
-                self.creditcard._buckaroo_create_payment(tx, MagicMock())
+                self.creditcard._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), MagicMock()
+                )
 
     def test_redirect_invalid_brand_raises(self):
         """A brand not in the configured set is rejected."""
@@ -107,7 +111,9 @@ class TestCreditCardRedirectPay(BuckarooOfficialCommon):
             _patch_request({"buckaroo_cc_brand": "NotACard"}),
         ):
             with self.assertRaises(ValidationError):
-                self.creditcard._buckaroo_create_payment(tx, MagicMock())
+                self.creditcard._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), MagicMock()
+                )
 
     def test_redirect_brands_deduped_by_service(self):
         """Brand records sharing a service (V PAY/Carte Bancaire -> Visa) collapse."""
@@ -126,8 +132,7 @@ class TestCreditCardRedirectAuthorize(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
         cls.creditcard.buckaroo_official_creditcard_authorize = "authorize"
         cls.creditcard.buckaroo_official_creditcard_method = "redirect"
         cls.brand = cls.creditcard._buckaroo_creditcard_redirect_brands()[0]["service"]
@@ -145,7 +150,9 @@ class TestCreditCardRedirectAuthorize(BuckarooOfficialCommon):
             _patch_request({"buckaroo_cc_brand": self.brand}),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.creditcard._buckaroo_create_payment(tx, client)
+            result = self.creditcard._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.authorize.assert_called_once()
         mock_builder.pay.assert_not_called()
@@ -162,8 +169,7 @@ class TestCreditCardInlinePay(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
         cls.creditcard.buckaroo_official_creditcard_authorize = "pay"
 
     def test_inline_pay_calls_pay_with_token(self):
@@ -184,7 +190,9 @@ class TestCreditCardInlinePay(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.creditcard._buckaroo_create_payment(tx, client)
+            result = self.creditcard._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.payWithToken.assert_called_once()
         mock_builder.authorize.assert_not_called()
@@ -209,7 +217,9 @@ class TestCreditCardInlinePay(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.creditcard._buckaroo_create_payment(tx, client)
+            self.creditcard._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.add_parameter.assert_called_once_with("SessionId", "hf-sess-XYZ")
 
@@ -231,7 +241,9 @@ class TestCreditCardInlinePay(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.creditcard._buckaroo_create_payment(tx, client)
+            self.creditcard._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         params = MockPS.return_value.create_payment.call_args[0][1]
         self.assertEqual(params.get("brand"), "visa")
@@ -254,7 +266,9 @@ class TestCreditCardInlinePay(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.creditcard._buckaroo_create_payment(tx, client)
+            self.creditcard._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         self.assertEqual(tx.buckaroo_official_service_code, "mastercard")
 
@@ -276,7 +290,9 @@ class TestCreditCardInlinePay(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.creditcard._buckaroo_create_payment(tx, client)
+            self.creditcard._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         service_arg = MockPS.return_value.create_payment.call_args[0][0]
         self.assertEqual(service_arg, "creditcard")
@@ -298,7 +314,9 @@ class TestCreditCardInlinePay(BuckarooOfficialCommon):
             _patch_request(session_dict),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.creditcard._buckaroo_create_payment(tx, client)
+            self.creditcard._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         self.assertNotIn("buckaroo_hf_session_id", session_dict)
         self.assertNotIn("buckaroo_hf_service", session_dict)
@@ -311,8 +329,7 @@ class TestCreditCardInlineAuthorize(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
         cls.creditcard.buckaroo_official_creditcard_authorize = "authorize"
 
     def test_inline_authorize_calls_authorize_with_token(self):
@@ -333,7 +350,9 @@ class TestCreditCardInlineAuthorize(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.creditcard._buckaroo_create_payment(tx, client)
+            result = self.creditcard._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.authorizeWithToken.assert_called_once()
         mock_builder.payWithToken.assert_not_called()
@@ -348,8 +367,7 @@ class TestCreditCardNoRequestContext(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
         cls.creditcard.buckaroo_official_creditcard_method = "redirect"
         cls.creditcard.buckaroo_official_creditcard_authorize = "pay"
 
@@ -363,7 +381,9 @@ class TestCreditCardNoRequestContext(BuckarooOfficialCommon):
             patch("odoo.http.request", None),
         ):
             with self.assertRaises(ValidationError):
-                self.creditcard._buckaroo_create_payment(tx, MagicMock())
+                self.creditcard._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), MagicMock()
+                )
 
     def test_no_request_authorize_raises_without_brand(self):
         """Redirect authorize with no request -> no brand -> ValidationError."""
@@ -376,7 +396,9 @@ class TestCreditCardNoRequestContext(BuckarooOfficialCommon):
             patch("odoo.http.request", None),
         ):
             with self.assertRaises(ValidationError):
-                self.creditcard._buckaroo_create_payment(tx, MagicMock())
+                self.creditcard._buckaroo_create_payment(
+                    tx.with_context(payment_safe_write=True), MagicMock()
+                )
 
 
 @tagged("post_install", "-at_install")
@@ -386,8 +408,7 @@ class TestCreditCardGetPaymentAction(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
 
     def test_returns_authorize_when_configured(self):
         """Creditcard with authorize setting should return 'authorize'."""
@@ -411,14 +432,13 @@ class TestCreditCardPostAuthorizeParams(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
 
     def test_post_authorize_params_include_brand(self):
         """Capture/void params should include the card brand from service code."""
         tx = self._create_buckaroo_tx(reference="TX-CC-PA-001", payment_method=self.creditcard)
-        tx.provider_reference = "AUTH_KEY_CC"
-        tx.buckaroo_official_service_code = "visa"
+        self._update_transaction(tx, provider_reference="AUTH_KEY_CC")
+        self._update_transaction(tx, buckaroo_official_service_code="visa")
         params, original_key = self.creditcard._buckaroo_get_post_authorize_params(tx)
         self.assertEqual(params["brand"], "visa")
         self.assertEqual(original_key, "AUTH_KEY_CC")
@@ -426,13 +446,13 @@ class TestCreditCardPostAuthorizeParams(BuckarooOfficialCommon):
     def test_post_authorize_uses_source_tx_service_code(self):
         """When source_transaction_id is set, brand comes from source tx."""
         source_tx = self._create_buckaroo_tx(reference="SRC-CC-001", payment_method=self.creditcard)
-        source_tx.provider_reference = "SRC_KEY_CC"
-        source_tx.buckaroo_official_service_code = "mastercard"
+        self._update_transaction(source_tx, provider_reference="SRC_KEY_CC")
+        self._update_transaction(source_tx, buckaroo_official_service_code="mastercard")
 
         child_tx = self._create_buckaroo_tx(
             reference="CHILD-CC-001", payment_method=self.creditcard
         )
-        child_tx.source_transaction_id = source_tx
+        self._update_transaction(child_tx, source_transaction_id=source_tx)
 
         params, original_key = self.creditcard._buckaroo_get_post_authorize_params(child_tx)
         self.assertEqual(params["brand"], "mastercard")
@@ -441,8 +461,8 @@ class TestCreditCardPostAuthorizeParams(BuckarooOfficialCommon):
     def test_post_authorize_raises_without_service_code(self):
         """Missing service code should raise ValidationError."""
         tx = self._create_buckaroo_tx(reference="TX-CC-PA-002", payment_method=self.creditcard)
-        tx.provider_reference = "AUTH_KEY_NO_SC"
-        tx.buckaroo_official_service_code = False
+        self._update_transaction(tx, provider_reference="AUTH_KEY_NO_SC")
+        self._update_transaction(tx, buckaroo_official_service_code=False)
 
         with self.assertRaises(ValidationError):
             self.creditcard._buckaroo_get_post_authorize_params(tx)
@@ -460,7 +480,7 @@ class TestCreditCardPostAuthorizeParams(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx.provider_reference = "IDEAL_AUTH_KEY"
+        self._update_transaction(tx, provider_reference="IDEAL_AUTH_KEY")
         params, original_key = self.ideal._buckaroo_get_post_authorize_params(tx)
         self.assertNotIn("brand", params)
 
@@ -472,8 +492,7 @@ class TestCreditCardRefundParams(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.creditcard = cls.env.ref("payment_buckaroo_official.payment_method_creditcard")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.creditcard.id)]
+        cls.creditcard = cls._pm("buckaroo_creditcard")
 
     def _make_source_and_refund(self, reference_suffix, service_code="visa"):
         source_tx = self._create_buckaroo_tx(
@@ -481,8 +500,8 @@ class TestCreditCardRefundParams(BuckarooOfficialCommon):
             amount=50.0,
             payment_method=self.creditcard,
         )
-        source_tx.provider_reference = f"SRC_KEY_{reference_suffix}"
-        source_tx.buckaroo_official_service_code = service_code
+        self._update_transaction(source_tx, provider_reference=f"SRC_KEY_{reference_suffix}")
+        self._update_transaction(source_tx, buckaroo_official_service_code=service_code)
         refund_tx = self._create_buckaroo_tx(
             reference=f"REF-CC-{reference_suffix}",
             amount=-50.0,
@@ -511,8 +530,8 @@ class TestCreditCardRefundParams(BuckarooOfficialCommon):
             amount=50.0,
             payment_method=self.creditcard,
         )
-        source_tx.provider_reference = "SRC_KEY_NOSC"
-        source_tx.buckaroo_official_service_code = False
+        self._update_transaction(source_tx, provider_reference="SRC_KEY_NOSC")
+        self._update_transaction(source_tx, buckaroo_official_service_code=False)
         refund_tx = self._create_buckaroo_tx(
             reference="REF-CC-NOSC",
             amount=-50.0,
@@ -528,15 +547,15 @@ class TestCreditCardRefundParams(BuckarooOfficialCommon):
             amount=50.0,
             payment_method=self.creditcard,
         )
-        authorize_tx.provider_reference = "AUTH_KEY_CHAIN"
-        authorize_tx.buckaroo_official_service_code = "visa"
+        self._update_transaction(authorize_tx, provider_reference="AUTH_KEY_CHAIN")
+        self._update_transaction(authorize_tx, buckaroo_official_service_code="visa")
         capture_tx = self._create_buckaroo_tx(
             reference="P-SRC-CC-CHAIN",
             amount=50.0,
             payment_method=self.creditcard,
         )
-        capture_tx.provider_reference = "CAP_KEY_CHAIN"
-        capture_tx.source_transaction_id = authorize_tx.id
+        self._update_transaction(capture_tx, provider_reference="CAP_KEY_CHAIN")
+        self._update_transaction(capture_tx, source_transaction_id=authorize_tx.id)
         # Capture tx itself has no service code; brand must come from authorize.
         self.assertFalse(capture_tx.buckaroo_official_service_code)
         refund_tx = self._create_buckaroo_tx(
@@ -550,7 +569,7 @@ class TestCreditCardRefundParams(BuckarooOfficialCommon):
     def test_ideal_refund_has_no_brand(self):
         """Non-creditcard refund params should NOT include brand."""
         source_tx = self._create_buckaroo_tx(reference="SRC-IDEAL-REF", amount=50.0)
-        source_tx.provider_reference = "SRC_IDEAL_KEY"
+        self._update_transaction(source_tx, provider_reference="SRC_IDEAL_KEY")
         refund_tx = self._create_buckaroo_tx(reference="REF-IDEAL-001", amount=-50.0)
         params = self.ideal._buckaroo_get_refund_params(source_tx, refund_tx)
         self.assertNotIn("brand", params)

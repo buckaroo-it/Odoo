@@ -51,73 +51,42 @@ class PaymentMethodGiftcard(models.Model):
         self.ensure_one()
         return (self.primary_payment_method_id or self).code == "buckaroo_giftcard"
 
-    def _get_compatible_payment_methods(
-        self,
-        provider_ids,
-        partner_id,
-        currency_id=None,
-        force_tokenization=False,
-        is_express_checkout=False,
-        report=None,
-        **kwargs,
+    def _buckaroo_official_filter_available(
+        self, providers, is_express_checkout=False, report=None, **kwargs
     ):
-        payment_methods = super()._get_compatible_payment_methods(
-            provider_ids,
-            partner_id,
-            currency_id=currency_id,
-            force_tokenization=force_tokenization,
-            is_express_checkout=is_express_checkout,
-            report=report,
-            **kwargs,
+        payment_methods = super()._buckaroo_official_filter_available(
+            providers, is_express_checkout=is_express_checkout, report=report, **kwargs
         )
 
-        buckaroo_provider_ids = set(
-            self.env["payment.provider"]
-            .browse(list(provider_ids))
-            .filtered(lambda p: p.code == const.PROVIDER_CODE)
-            .ids
-        )
-        if not buckaroo_provider_ids:
+        buckaroo_providers = providers.filtered(lambda p: p.code == const.PROVIDER_CODE)
+        if not buckaroo_providers:
             return payment_methods
 
-        parent = self.env.ref(
-            "payment_buckaroo_official.payment_method_giftcard",
-            raise_if_not_found=False,
-        )
-        if not parent:
-            return payment_methods
+        for provider in buckaroo_providers:
+            parent = provider._get_pm_from_code("buckaroo_giftcard")
+            if not parent or (parent.buckaroo_official_giftcard_method or "redirect") != "inline":
+                continue
 
-        mode = parent.buckaroo_official_giftcard_method or "redirect"
-        if mode != "inline":
-            return payment_methods
+            # Inline mode: hide the parent picker, surface brand sub-methods so
+            # each brand renders its own inline form.
+            payment_methods = payment_methods - parent
+            surfaced = parent.brand_ids.filtered("active")
 
-        # Inline mode: hide the parent picker, surface brand sub-methods so
-        # each brand renders its own inline form.
-        payment_methods = payment_methods - parent
-        surfaced = self.env["payment.method"]
-        for brand in parent.brand_ids:
-            if brand.provider_ids.filtered(lambda p: p.id in buckaroo_provider_ids):
-                surfaced |= brand
-        surfaced = surfaced.filtered("active")
+            amount = self._buckaroo_official_get_order_amount(**kwargs)
+            if amount is not None:
+                unfiltered = surfaced
+                surfaced = surfaced.filtered(
+                    lambda pm: pm._buckaroo_official_is_amount_compatible(amount)
+                )
+                payment_utils.add_to_report(
+                    report,
+                    unfiltered - surfaced,
+                    available=False,
+                    reason=_("Amount outside the Buckaroo payment method limits."),
+                )
+            payment_methods |= surfaced
 
-        amount = kwargs.get("amount")
-        if amount is None and kwargs.get("sale_order_id"):
-            order = self.env["sale.order"].sudo().browse(kwargs["sale_order_id"]).exists()
-            if order:
-                amount = order.amount_total
-        if amount is not None:
-            unfiltered = surfaced
-            surfaced = surfaced.filtered(
-                lambda pm: pm._buckaroo_official_is_amount_compatible(amount, buckaroo_provider_ids)
-            )
-            payment_utils.add_to_report(
-                report,
-                unfiltered - surfaced,
-                available=False,
-                reason=_("Amount outside the Buckaroo payment method limits."),
-            )
-
-        return payment_methods | surfaced
+        return payment_methods
 
     def _buckaroo_giftcard_primary(self):
         """Giftcard parent for *self*; empty recordset for non-giftcard methods."""
@@ -210,10 +179,7 @@ class PaymentMethodGiftcard(models.Model):
         if self._buckaroo_extract_redirect_url(response):
             return None
 
-        transaction.provider_reference = response.key
-        transaction._set_done()
-        base_url = transaction.provider_id.get_base_url().rstrip("/")
-        return {"api_url": f"{base_url}/payment/status"}
+        return transaction._buckaroo_official_settle_inline(response)
 
     def _buckaroo_handle_redirect_response(self, transaction, response):
         """Inline-mode partial-pay: record the consumed slice, capture the
@@ -255,7 +221,7 @@ class PaymentMethodGiftcard(models.Model):
             transaction._set_done()
             # /shop/payment bounce skips /payment/status, so post-process must
             # fire inline or account_payment never creates the payment record.
-            transaction._post_process()
+            transaction._try_post_process()
         base_url = transaction.provider_id.get_base_url().rstrip("/")
         return {"api_url": f"{base_url}/shop/payment"}
 
@@ -409,7 +375,6 @@ class PaymentMethodGiftcard(models.Model):
                 transaction.reference,
             )
             transaction._set_canceled(extra_allowed_states=("done",))
-            transaction._post_process()
             return
         return super()._buckaroo_handle_duplicate_push(transaction, payment_data)
 

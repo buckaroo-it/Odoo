@@ -8,7 +8,7 @@ These tests use only mocks and do not require a database connection.
 from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import ValidationError
-from odoo.tests import BaseCase
+from odoo.tests import BaseCase, tagged
 
 from odoo.addons.payment_buckaroo_official.helpers.articles import get_order_articles
 from odoo.addons.payment_buckaroo_official.helpers.customer import (
@@ -20,6 +20,8 @@ from odoo.addons.payment_buckaroo_official.helpers.customer import (
     sanitize_phone,
     validate_bnpl_registry,
 )
+
+from .common import BuckarooOfficialCommon
 
 
 def make_tax(amount_type="percent", amount=21.0):
@@ -102,9 +104,16 @@ def make_partner(
     partner.phone = phone
     partner.mobile = mobile
     partner.is_company = is_company
-    partner.company_name = company_name
-    partner.commercial_company_name = commercial_company_name
-    partner.company_registry = company_registry
+    # Odoo 20: a contact's commercial partner is its company (or itself).
+    company = commercial_company_name or company_name
+    if not company:
+        partner.commercial_partner_id = partner
+    else:
+        commercial = MagicMock()
+        commercial.is_company = True
+        commercial.name = company
+        partner.commercial_partner_id = commercial
+    partner._buckaroo_official_get_company_registry.return_value = company_registry or ""
     partner.vat = vat
     return partner
 
@@ -524,7 +533,9 @@ class TestValidateBnplRegistry(BaseCase):
             )
         self.assertEqual(result, "12345678")
         self.assertEqual(mock_req.session["buckaroo_b2b_registry"], "12345678")
-        self.assertEqual(user.partner_id.sudo().company_registry, "12345678")
+        user.partner_id.sudo()._buckaroo_official_set_company_registry.assert_called_once_with(
+            "12345678"
+        )
 
     def test_skips_partner_write_for_public_user(self):
         mock_req, user = self._make_request(is_public=True)
@@ -553,4 +564,42 @@ class TestValidateBnplRegistry(BaseCase):
             )
         self.assertEqual(result, "12345678")
         self.assertEqual(mock_req.session["buckaroo_b2b_registry"], "12345678")
-        self.assertEqual(user.partner_id.sudo().company_registry, "12345678")
+        user.partner_id.sudo()._buckaroo_official_set_company_registry.assert_called_once_with(
+            "12345678"
+        )
+
+
+@tagged("post_install", "-at_install")
+class TestPartnerCompanyRegistry(BuckarooOfficialCommon):
+    """The Chamber of Commerce number lives in the partner's additional
+    identifiers, keyed by the country's enterprise-number identifier."""
+
+    def _make_partner(self, country_xmlid="base.nl"):
+        return self.env["res.partner"].create(
+            {"name": "Acme BV", "is_company": True, "country_id": self.env.ref(country_xmlid).id}
+        )
+
+    def test_reads_country_enterprise_number(self):
+        partner = self._make_partner()
+        partner._set_additional_identifier("NL_KVK", "12345678")
+        self.assertEqual(partner._buckaroo_official_get_company_registry(), "12345678")
+
+    def test_reads_commercial_partner_number_for_contact(self):
+        company = self._make_partner()
+        company._set_additional_identifier("NL_KVK", "12345678")
+        contact = self.env["res.partner"].create({"name": "Jan", "parent_id": company.id})
+        self.assertEqual(contact._buckaroo_official_get_company_registry(), "12345678")
+
+    def test_empty_without_number_or_partner(self):
+        self.assertEqual(self._make_partner()._buckaroo_official_get_company_registry(), "")
+        self.assertEqual(self.env["res.partner"]._buckaroo_official_get_company_registry(), "")
+
+    def test_set_stores_valid_number(self):
+        partner = self._make_partner()
+        partner._buckaroo_official_set_company_registry("12345678")
+        self.assertEqual(partner._get_additional_identifier("NL_KVK"), "12345678")
+
+    def test_set_skips_number_odoo_rejects(self):
+        partner = self._make_partner()
+        partner._buckaroo_official_set_company_registry("not-a-kvk")
+        self.assertFalse(partner._get_additional_identifier("NL_KVK"))

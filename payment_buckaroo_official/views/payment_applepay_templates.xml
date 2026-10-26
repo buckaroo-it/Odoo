@@ -49,7 +49,7 @@
               name="Buckaroo Apple Pay Express on Product Page"
               inherit_id="website_sale.cta_wrapper">
         <xpath expr="//div[@id='add_to_cart_wrap']" position="before">
-            <t t-set="ap_provider" t-value="request.env['payment.provider'].sudo().search([('code', '=', 'buckaroo_official'), ('state', 'in', ['enabled', 'test']), ('allow_express_checkout', '=', True)], limit=1)"/>
+            <t t-set="ap_provider" t-value="request.env['payment.provider'].sudo().search([('code', '=', 'buckaroo_official'), ('allow_express_checkout', '=', True)], limit=1)"/>
             <t t-set="ap_method" t-value="ap_provider and ap_provider.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_applepay' and m.active and m.buckaroo_official_applepay_integration_mode == 'inline' and m.buckaroo_official_applepay_show_on_product and m._buckaroo_applepay_is_configured())[:1]"/>
             <t t-if="ap_provider and ap_method">
                 <t t-set="ap_country"

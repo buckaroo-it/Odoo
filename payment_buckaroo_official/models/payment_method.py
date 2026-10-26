@@ -56,14 +56,11 @@ class PaymentMethod(models.Model):
         ),
     )
 
-    def _is_linked_to_buckaroo(self, provider_ids=None):
+    def _is_linked_to_buckaroo(self):
         self.ensure_one()
-        providers = self.provider_ids
-        if provider_ids is not None:
-            providers = providers.filtered(lambda p: p.id in provider_ids)
-        return any(p.code == const.PROVIDER_CODE for p in providers)
+        return self.provider_id.code == const.PROVIDER_CODE
 
-    @api.depends("provider_ids.code")
+    @api.depends("provider_id.code")
     def _compute_buckaroo_official_is_linked(self):
         for pm in self:
             pm.buckaroo_official_is_linked = pm._is_linked_to_buckaroo()
@@ -108,9 +105,9 @@ class PaymentMethod(models.Model):
                     )
                 )
 
-    def _buckaroo_official_is_amount_compatible(self, amount, provider_id_set):
+    def _buckaroo_official_is_amount_compatible(self, amount):
         self.ensure_one()
-        if not self._is_linked_to_buckaroo(provider_id_set):
+        if not self._is_linked_to_buckaroo():
             return True
         min_v = self._buckaroo_parse_amount_limit(self.buckaroo_official_min_amount)
         max_v = self._buckaroo_parse_amount_limit(self.buckaroo_official_max_amount)
@@ -120,47 +117,36 @@ class PaymentMethod(models.Model):
             return False
         return True
 
-    def _get_compatible_payment_methods(
-        self,
-        provider_ids,
-        partner_id,
-        currency_id=None,
-        force_tokenization=False,
-        is_express_checkout=False,
-        report=None,
-        **kwargs,
-    ):
-        payment_methods = super()._get_compatible_payment_methods(
-            provider_ids,
-            partner_id,
-            currency_id=currency_id,
-            force_tokenization=force_tokenization,
-            is_express_checkout=is_express_checkout,
-            report=report,
-            **kwargs,
-        )
+    @api.model
+    def _buckaroo_official_get_order_amount(self, **kwargs):
+        """Order total to check the amount limits against, or ``None`` when the
+        caller (e.g. the portal payment-method page) has no order."""
         amount = kwargs.get("amount")
         if amount is None and kwargs.get("sale_order_id"):
             order = self.env["sale.order"].sudo().browse(kwargs["sale_order_id"]).exists()
             if order:
                 amount = order.amount_total
-        if amount is None:
-            return payment_methods
+        return amount
 
-        provider_id_set = set(provider_ids)
-        # Batch prefetch provider codes before filtering one-by-one.
-        payment_methods.mapped("provider_ids.code")
-        unfiltered_payment_methods = payment_methods
-        payment_methods = payment_methods.filtered(
-            lambda pm: pm._buckaroo_official_is_amount_compatible(amount, provider_id_set)
+    def _buckaroo_official_filter_available(
+        self, providers, is_express_checkout=False, report=None, **kwargs
+    ):
+        """Narrow ``self`` (the methods core found available for ``providers``)
+        to the ones Buckaroo can offer here. Methods of other providers pass
+        through untouched. Per-method modules override this to add their rules."""
+        amount = self._buckaroo_official_get_order_amount(**kwargs)
+        if amount is None:
+            return self
+
+        payment_methods = self.filtered(
+            lambda pm: pm._buckaroo_official_is_amount_compatible(amount)
         )
         payment_utils.add_to_report(
             report,
-            unfiltered_payment_methods - payment_methods,
+            self - payment_methods,
             available=False,
             reason=_("Amount outside the Buckaroo payment method limits."),
         )
-
         return payment_methods
 
     def _buckaroo_parse_fee_amount(self):
@@ -276,30 +262,22 @@ class PaymentMethod(models.Model):
         this, the caller reads that as "no redirect URL" and raises the
         response's status message ("Transaction successfully processed") as an
         error, rolling back the whole request so no transaction or order is
-        created. Settle a terminal success instead: record the key, move the
-        tx to its terminal state, and route to ``/payment/status`` so its poll
-        post-processes the tx in a fresh request (see the PayPal override for
-        why not ``/shop/payment/validate``). Return ``None`` for any
-        non-success response so the caller falls through to its error
-        handling.
+        created. Settle a terminal success instead: queue the response and
+        route to ``/payment/status``, which processes and post-processes the tx
+        in a fresh request (see ``_buckaroo_official_settle_inline``). Return
+        ``None`` for any non-success response so the caller falls through to
+        its error handling.
 
-        The inline path intentionally skips ``_validate_amount`` (which only
-        runs on the push/return ``_process`` path): the amount is echoed from
-        the create request we just sent, so it is trusted here — consistent
-        with the PayPal and Riverty inline-settlement hooks."""
+        The recorded response skips ``_validate_amount``: the amount is echoed
+        from the create request we just sent, so it is trusted here —
+        consistent with the PayPal and Riverty inline-settlement hooks."""
         self.ensure_one()
         status_code = (
             response.status.code.code if response.status and response.status.code else None
         )
         if status_code != const.BuckarooStatusCode.SUCCESS:
             return None
-        transaction.provider_reference = response.key
-        if transaction.buckaroo_official_payment_action == "authorize":
-            transaction._set_authorized()
-        else:
-            transaction._set_done()
-        base_url = transaction.provider_id.get_base_url().rstrip("/")
-        return {"api_url": f"{base_url}/payment/status"}
+        return transaction._buckaroo_official_settle_inline(response)
 
     def _buckaroo_handle_redirect_response(self, transaction, response):
         self.ensure_one()
@@ -395,7 +373,9 @@ class PaymentMethod(models.Model):
             ),
         )
         refund_tx._set_done()
-        refund_tx._post_process()
+        # Children spawned while processing are not post-processed by the
+        # processing cron (it only covers the tx and its source).
+        refund_tx._try_post_process()
         _logger.info(
             "Spawned Plaza-initiated refund child %s for %s (amount %s)",
             refund_tx.reference,

@@ -50,7 +50,7 @@ class GiftcardPaymentPortal(PaymentPortal):
         # key, not as an Odoo payment parent/child.
         remainder = sale_order._buckaroo_partial_payment_remainder()
         if sale_order.currency_id.compare_amounts(transaction.amount, remainder) != 0:
-            transaction.amount = remainder
+            transaction.with_context(payment_safe_write=True).amount = remainder
         return result
 
     @staticmethod

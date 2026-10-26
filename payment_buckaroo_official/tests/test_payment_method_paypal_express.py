@@ -4,7 +4,6 @@ import inspect
 from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import UserError
-from odoo.fields import Command
 from odoo.tests import tagged
 
 from .common import BuckarooOfficialCommon, make_mock_sdk_builder
@@ -71,6 +70,8 @@ class TestPaypalProductExpressInitController(BuckarooOfficialCommon):
                 new=fake_req,
             ),
             patch.object(odoo.http, "request", fake_req),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", fake_req),
             patch.object(
                 BuckarooPaypalExpressController,
                 "add_to_cart",
@@ -191,8 +192,7 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
         param the `PaymentForm` patch injects. Chain the controller call into
         `_buckaroo_create_payment` to prove that stash is exactly what it
         needs to pop."""
-        paypal = self.env.ref("payment_buckaroo_official.payment_method_paypal")
-        self.buckaroo.payment_method_ids = [Command.link(paypal.id)]
+        paypal = self._pm("buckaroo_paypal")
 
         from ..controllers.paypal import PaypalPaymentPortal
         from odoo.addons.website_sale.controllers.payment import PaymentPortal
@@ -233,7 +233,7 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
         mock_builder, _ = make_mock_sdk_builder()
         with patch(_PAYPAL_PS) as MockPS, patch("odoo.http.request", fake_req):
             MockPS.return_value.create_payment.return_value = mock_builder
-            paypal._buckaroo_create_payment(tx, client)
+            paypal._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         self.assertNotIn("buckaroo_paypal_order_id", session)
         param_calls = {

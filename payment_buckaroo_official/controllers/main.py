@@ -25,7 +25,7 @@ class BuckarooOfficialController(http.Controller):
     )
     def buckaroo_official_return(self, **_kwargs):
         """Handle the return from Buckaroo after the shopper completes or cancels."""
-        self._handle_push(request)
+        self._handle_push(request, skip_if_locked=True)
         return request.redirect("/payment/status")
 
     @http.route(
@@ -41,8 +41,13 @@ class BuckarooOfficialController(http.Controller):
         return ""
 
     @staticmethod
-    def _handle_push(req):
-        """Parse, verify, and process a Buckaroo push or return request."""
+    def _handle_push(req, skip_if_locked=False):
+        """Parse, verify, and record a Buckaroo push or return request.
+
+        With *skip_if_locked*, a transaction locked by a concurrent push or by
+        the payment processing cron is left to them: the shopper's return only
+        needs to reach ``/payment/status``, which shows the outcome once the
+        processing is done."""
         parsed = parse_push(req)
         _logger.info("Buckaroo Official push data:\n%s", pprint.pformat(parsed.raw))
 
@@ -57,28 +62,30 @@ class BuckarooOfficialController(http.Controller):
         if tx_sudo:
             verify_signature(parsed, tx_sudo.provider_id)
             # Serialize concurrent pushes for the same transaction. Buckaroo can
-            # deliver several pushes for one order at once (e.g. two separate
-            # refunds, each spawning a child whose reference core derives from
-            # the parent as ``R-{order}``). Odoo cursors run at REPEATABLE READ,
+            # deliver several pushes for one order at once, and the code below
+            # may spawn a child whose reference core derives from the parent
+            # (e.g. a giftcard remainder sibling). Odoo cursors run at REPEATABLE READ,
             # so a blocking lock wouldn't help: the second push keeps its stale
             # snapshot, recomputes the same reference and still hits the unique
-            # constraint (HTTP 422 "Reference must be unique!"). NOWAIT instead
-            # raises LockNotAvailable, which Odoo's request layer retries with a
-            # fresh snapshot; the retry sees the committed sibling and computes
-            # the next reference (``R-{order}-1``). This relies on push
-            # processing below staying free of external side-effects (gateway
-            # calls, outbound mail) so a retried request is safe to re-run.
-            req.env.cr.execute(
-                "SELECT id FROM payment_transaction WHERE id = %s FOR UPDATE NOWAIT",
-                [tx_sudo.id],
-            )
+            # constraint (HTTP 422 "Reference must be unique!"). For a busy tx,
+            # NOWAIT instead raises LockNotAvailable, which Odoo's request layer
+            # retries with a fresh snapshot; the retry sees the committed
+            # sibling and computes the next reference. This relies on the code
+            # below staying free of external side-effects (gateway calls,
+            # outbound mail) so a retried request is safe to re-run.
+            if not tx_sudo.try_lock_for_update():
+                if skip_if_locked:
+                    _logger.info(
+                        "Buckaroo return for %s: transaction busy, leaving it to the push",
+                        tx_sudo.reference,
+                    )
+                    return
+                req.env.cr.execute(
+                    "SELECT id FROM payment_transaction WHERE id = %s FOR UPDATE NOWAIT",
+                    [tx_sudo.id],
+                )
             remainder_tx = tx_sudo._buckaroo_split_remainder_push(parsed)
             target = remainder_tx or tx_sudo
-            target._process("buckaroo_official", parsed)
-            # A push confirms the payment server-to-server and never reaches
-            # /payment/status, so the framework's status-poll never post-processes
-            # it; account.payment would otherwise only appear after the 10-min
-            # cron. Post-process inline instead (also covers spawned siblings,
-            # which skip the poll route too).
-            if target.state in ("done", "authorized", "cancel") and not target.is_post_processed:
-                target._post_process()
+            # Queue the push; the payment processing cron applies it and
+            # post-processes the transaction.
+            target._record(parsed.to_payload())

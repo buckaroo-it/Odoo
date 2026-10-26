@@ -11,6 +11,21 @@ from . import const
 
 _logger = logging.getLogger(__name__)
 
+# ParsedPush fields kept when a push is queued for processing.
+PAYLOAD_FIELDS = (
+    "reference",
+    "amount",
+    "credit_amount",
+    "currency",
+    "status_code",
+    "transaction_key",
+    "service_code",
+    "raw",
+    "lowered_keys",
+    "service_parameters",
+    "is_json",
+)
+
 
 @dataclass(frozen=True)
 class ParsedPush:
@@ -32,6 +47,20 @@ class ParsedPush:
     uri: str | None = None
     method: str | None = None
     body_bytes: bytes | None = None
+
+    def to_payload(self):
+        """JSON-safe dict for ``payment.transaction._record``. The signature
+        fields are dropped: the push is verified before it is recorded."""
+        return {"kind": "push", **{name: getattr(self, name) for name in PAYLOAD_FIELDS}}
+
+    @classmethod
+    def from_payload(cls, payload):
+        values = {name: payload.get(name) for name in PAYLOAD_FIELDS}
+        values["raw"] = values["raw"] or {}
+        values["lowered_keys"] = values["lowered_keys"] or {}
+        values["service_parameters"] = values["service_parameters"] or {}
+        values["is_json"] = bool(values["is_json"])
+        return cls(signature=None, **values)
 
     def is_success(self):
         return self._check("done")

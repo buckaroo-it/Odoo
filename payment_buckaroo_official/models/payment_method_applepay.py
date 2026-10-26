@@ -61,24 +61,11 @@ class PaymentMethodApplepay(models.Model):
         copy=False,
     )
 
-    def _get_compatible_payment_methods(
-        self,
-        provider_ids,
-        partner_id,
-        currency_id=None,
-        force_tokenization=False,
-        is_express_checkout=False,
-        report=None,
-        **kwargs,
+    def _buckaroo_official_filter_available(
+        self, providers, is_express_checkout=False, report=None, **kwargs
     ):
-        payment_methods = super()._get_compatible_payment_methods(
-            provider_ids,
-            partner_id,
-            currency_id=currency_id,
-            force_tokenization=force_tokenization,
-            is_express_checkout=is_express_checkout,
-            report=report,
-            **kwargs,
+        payment_methods = super()._buckaroo_official_filter_available(
+            providers, is_express_checkout=is_express_checkout, report=report, **kwargs
         )
         return payment_methods.filtered(
             lambda pm: (

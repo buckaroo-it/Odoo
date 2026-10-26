@@ -27,12 +27,8 @@ class TestGiftcardSummaryTemplate(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.giftcard = cls.env.ref("payment_buckaroo_official.payment_method_giftcard")
-        cls.brand_vvv = cls.env.ref("payment_buckaroo_official.payment_method_brand_vvvgiftcard")
-        cls.buckaroo.payment_method_ids = [
-            Command.link(cls.giftcard.id),
-            Command.link(cls.brand_vvv.id),
-        ]
+        cls.giftcard = cls._pm("buckaroo_giftcard")
+        cls.brand_vvv = cls._pm("buckaroo_vvvgiftcard")
         cls.product = cls.env["product.product"].create(
             {
                 "name": "Test Product",
@@ -275,7 +271,7 @@ class TestGiftcardSummaryTemplate(BuckarooOfficialCommon):
         # A pending tx (not draft) shouldn't be mutated — hook is meant for
         # the freshly-created draft only.
         pending_tx = self._make_draft_tx(order, amount=22.0, payment_method=self.ideal)
-        pending_tx.state = "pending"
+        self._update_transaction(pending_tx, state="pending")
 
         self._invoke_validate_hook(order, pending_tx)
 

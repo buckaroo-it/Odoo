@@ -76,12 +76,13 @@ def resolve_b2b_registry(transaction, session_key, *, missing_error=None):
     """Resolve a B2B registry number (Chamber of Commerce / VAT id) from session → partner.
 
     *session_key* is consumed via :func:`pop_session_value`; the partner
-    fallback reads the billing partner's ``company_registry``. Returns
+    fallback reads the billing partner's Chamber of Commerce number. Returns
     ``''`` when neither is present unless *missing_error* is supplied,
     in which case :class:`ValidationError` is raised with that message.
     """
     registry = (
-        pop_session_value(session_key) or get_billing_partner(transaction).company_registry or ""
+        pop_session_value(session_key)
+        or get_billing_partner(transaction)._buckaroo_official_get_company_registry()
     )
     if not registry and missing_error is not None:
         from odoo.exceptions import ValidationError  # noqa: PLC0415
@@ -123,7 +124,8 @@ def parse_street(street):
 
 
 def is_b2b(partner):
-    return bool(partner.is_company or getattr(partner, "commercial_company_name", None))
+    """The partner is a company or a contact of one."""
+    return bool(partner.commercial_partner_id.is_company)
 
 
 def get_customer_data(partner):
@@ -160,12 +162,8 @@ def get_customer_data(partner):
     }
 
     if b2b:
-        data["company_name"] = (
-            getattr(partner, "commercial_company_name", None)
-            or getattr(partner, "company_name", None)
-            or ""
-        )
-        data["chamber_of_commerce"] = getattr(partner, "company_registry", None) or ""
+        data["company_name"] = partner.commercial_partner_id.name or ""
+        data["chamber_of_commerce"] = partner._buckaroo_official_get_company_registry()
         data["vat_number"] = getattr(partner, "vat", None) or ""
 
     return data
@@ -209,8 +207,8 @@ def validate_bnpl_registry(kwargs, *, registry_kwarg, session_key, missing_msg):
     Raises :class:`ValidationError` with *missing_msg* on empty /
     whitespace-only input. On success persists the raw value to
     ``request.session[session_key]`` and, for a logged-in user, to
-    ``request.env.user.partner_id.company_registry`` for the next
-    checkout to prefill.
+    the user's partner (Chamber of Commerce number) for the next checkout
+    to prefill.
     """
     from odoo.exceptions import ValidationError  # noqa: PLC0415
     from odoo.http import request as http_request  # noqa: PLC0415
@@ -223,7 +221,7 @@ def validate_bnpl_registry(kwargs, *, registry_kwarg, session_key, missing_msg):
     http_request.session[session_key] = cleaned
     user = http_request.env.user
     if not user._is_public():
-        user.partner_id.sudo().company_registry = cleaned
+        user.partner_id.sudo()._buckaroo_official_set_company_registry(cleaned)
     return cleaned
 
 

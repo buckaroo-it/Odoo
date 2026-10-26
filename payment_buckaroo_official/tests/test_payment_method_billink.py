@@ -70,8 +70,7 @@ class TestBillinkPaymentCreation(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.billink = cls.env.ref("payment_buckaroo_official.payment_method_billink")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
+        cls.billink = cls._pm("buckaroo_billink")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -115,7 +114,7 @@ class TestBillinkPaymentCreation(BuckarooOfficialCommon):
                 PaymentMethod, "_buckaroo_extract_redirect_url", return_value="https://bl/pay/X"
             ),
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(result["api_url"], "https://bl/pay/X")
         self.assertEqual(tx.provider_reference, "STORED_KEY")
@@ -130,7 +129,7 @@ class TestBillinkPaymentCreation(BuckarooOfficialCommon):
             patch.object(PaymentMethod, "_buckaroo_extract_redirect_url", return_value=None),
         ):
             with self.assertRaises(ValidationError):
-                tx._get_specific_processing_values({})
+                tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
 
 @tagged("post_install", "-at_install")
@@ -138,8 +137,7 @@ class TestBillinkWebhookCallbacks(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.billink = cls.env.ref("payment_buckaroo_official.payment_method_billink")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
+        cls.billink = cls._pm("buckaroo_billink")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -192,7 +190,7 @@ class TestBillinkWebhookCallbacks(BuckarooOfficialCommon):
                     tx = self._create_tx(ref)
                     builder = self._form_callback if fmt == "form" else self._json_callback
                     parsed = builder(ref, code)
-                    self.env["payment.transaction"].sudo()._process("buckaroo_official", parsed)
+                    self._process_push(parsed)
                     self.assertEqual(tx.state, expected_state)
 
     def test_done_status_maps_to_done(self):
@@ -200,7 +198,7 @@ class TestBillinkWebhookCallbacks(BuckarooOfficialCommon):
         # Spot-check provider_reference storage on the canonical success code.
         tx = self._create_tx("BILLINK-WH-REF-190")
         parsed = self._form_callback("BILLINK-WH-REF-190", 190)
-        self.env["payment.transaction"].sudo()._process("buckaroo_official", parsed)
+        self._process_push(parsed)
         self.assertEqual(tx.provider_reference, "BILLINK_TXN_001")
 
     def test_pending_status_maps_to_pending(self):
@@ -231,13 +229,13 @@ class TestBillinkWebhookCallbacks(BuckarooOfficialCommon):
                 PaymentMethod, "_buckaroo_extract_redirect_url", return_value=redirect_url
             ),
         ):
-            result = tx._get_specific_processing_values({})
+            result = tx.with_context(payment_safe_write=True)._get_specific_processing_values({})
 
         self.assertEqual(result["api_url"], redirect_url)
         self.assertEqual(tx.provider_reference, "E2E_KEY")
 
         callback = self._form_callback("BILLINK-E2E-001", 190, txn_key="E2E_KEY")
-        self.env["payment.transaction"].sudo()._process("buckaroo_official", callback)
+        self._process_push(callback)
         self.assertEqual(tx.state, "done")
 
 
@@ -246,8 +244,7 @@ class TestBillinkRefundFlow(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.billink = cls.env.ref("payment_buckaroo_official.payment_method_billink")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
+        cls.billink = cls._pm("buckaroo_billink")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan de Vries",
@@ -267,7 +264,7 @@ class TestBillinkRefundFlow(BuckarooOfficialCommon):
                 "operation": "online_redirect",
             }
         )
-        tx._apply_updates(
+        tx.with_context(payment_safe_write=True)._apply_updates(
             parsed_from_form(
                 {
                     "brq_invoicenumber": reference,
@@ -276,7 +273,7 @@ class TestBillinkRefundFlow(BuckarooOfficialCommon):
                     "brq_statuscode": "190",
                     "brq_transactions": "BILLINK_DONE_KEY",
                 }
-            )
+            ).to_payload(),
         )
         self.assertEqual(tx.state, "done")
         return tx
@@ -294,6 +291,7 @@ class TestBillinkRefundFlow(BuckarooOfficialCommon):
         tx = self._create_done_tx(reference="BL-REFUND-CREATE")
         with self._patch_refund(self._mock_refund_response()):
             refund_tx = tx._refund()
+            self._run_processing()
 
         self.assertEqual(refund_tx.operation, "refund")
         self.assertEqual(refund_tx.source_transaction_id, tx)
@@ -310,12 +308,14 @@ class TestBillinkRefundFlow(BuckarooOfficialCommon):
                     )
                 ):
                     refund_tx = tx._refund()
+                    self._run_processing()
                 self.assertEqual(refund_tx.state, expected_state)
 
     def test_partial_refund_passes_amount_to_sdk(self):
         tx = self._create_done_tx(reference="BL-PARTIAL", amount=100.0)
         with self._patch_refund(self._mock_refund_response()) as mock_refund:
             refund_tx = tx._refund(amount_to_refund=25.0)
+            self._run_processing()
 
         self.assertEqual(abs(refund_tx.amount), 25.0)
         refund_tx_arg = mock_refund.call_args[0][1]
@@ -327,6 +327,7 @@ class TestBillinkRefundFlow(BuckarooOfficialCommon):
                 tx = self._create_done_tx(reference="BL-REFUND-WH-%s" % fmt.upper())
                 with self._patch_refund(self._mock_refund_response(status_code=790)):
                     refund_tx = tx._refund()
+                    self._run_processing()
                 self.assertEqual(refund_tx.state, "pending")
 
                 if fmt == "form":
@@ -351,7 +352,7 @@ class TestBillinkRefundFlow(BuckarooOfficialCommon):
                             },
                         }
                     )
-                refund_tx._apply_updates(parsed)
+                refund_tx.with_context(payment_safe_write=True)._apply_updates(parsed.to_payload())
                 self.assertEqual(refund_tx.state, "done")
 
 
@@ -360,8 +361,7 @@ class TestBillinkAmountLimitEnforcement(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.billink = cls.env.ref("payment_buckaroo_official.payment_method_billink")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
+        cls.billink = cls._pm("buckaroo_billink")
         cls.billink.buckaroo_official_max_amount = "750.00"
         cls.partner_nl = cls.env["res.partner"].create(
             {
@@ -371,8 +371,7 @@ class TestBillinkAmountLimitEnforcement(BuckarooOfficialCommon):
         )
 
     def _billink_visible(self, amount):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             self.partner_nl.id,
             currency_id=self.currency_euro.id,
             amount=amount,
@@ -398,8 +397,7 @@ class TestBillinkCurrencyRestriction(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.billink = cls.env.ref("payment_buckaroo_official.payment_method_billink")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
+        cls.billink = cls._pm("buckaroo_billink")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "NL",
@@ -408,8 +406,7 @@ class TestBillinkCurrencyRestriction(BuckarooOfficialCommon):
         )
 
     def _visible(self, partner, currency=None):
-        methods = self.env["payment.method"]._get_compatible_payment_methods(
-            self.buckaroo.ids,
+        methods = self.buckaroo._find_available_payment_methods(
             partner.id,
             currency_id=(currency or self.currency_euro).id,
             amount=100.0,
@@ -428,8 +425,7 @@ class TestBillinkShopPaymentControllerValidations(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.billink = cls.env.ref("payment_buckaroo_official.payment_method_billink")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
+        cls.billink = cls._pm("buckaroo_billink")
 
     def _invoke(self, order_id=1, **kwargs):
         """Fire the Billink controller handler; it raises before super() is reached."""
@@ -445,6 +441,8 @@ class TestBillinkShopPaymentControllerValidations(BuckarooOfficialCommon):
         mock_request.session = {}
         with (
             patch.object(odoo.http, "request", mock_request),
+            # ``Controller.env`` (read by ``_()``) binds its own ``request``.
+            patch("odoo.http.routing_map.request", mock_request),
             patch(
                 "odoo.addons.payment_buckaroo_official.controllers.billink.request",
                 new=mock_request,
@@ -508,7 +506,7 @@ class TestBillinkShopPaymentControllerValidations(BuckarooOfficialCommon):
         self.assertEqual(partner.buckaroo_billink_birthdate, date(1990, 5, 15))
 
     def test_b2b_order_missing_chamber_of_commerce_raises(self):
-        b2b_partner = self.env["res.partner"].create({"name": "Acme BV", "is_company": True})
+        b2b_partner = self.env["res.partner"].create({"name": "Acme BV", "vat": "NL000099998B57"})
         order = self._make_order(b2b_partner)
         with self.assertRaises(ValidationError) as ctx:
             self._invoke(
@@ -519,7 +517,7 @@ class TestBillinkShopPaymentControllerValidations(BuckarooOfficialCommon):
         self.assertIn("Chamber of Commerce", str(ctx.exception))
 
     def test_b2b_order_with_chamber_of_commerce_succeeds(self):
-        b2b_partner = self.env["res.partner"].create({"name": "Acme BV", "is_company": True})
+        b2b_partner = self.env["res.partner"].create({"name": "Acme BV", "vat": "NL000099998B57"})
         order = self._make_order(b2b_partner)
         with patch(
             "odoo.addons.website_sale.controllers.payment.PaymentPortal.shop_payment_transaction",
@@ -553,8 +551,7 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.billink = cls.env.ref("payment_buckaroo_official.payment_method_billink")
-        cls.buckaroo.payment_method_ids = [Command.link(cls.billink.id)]
+        cls.billink = cls._pm("buckaroo_billink")
         cls.partner_nl = cls.env["res.partner"].create(
             {
                 "name": "Jan",
@@ -576,7 +573,9 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
             "odoo.addons.payment_buckaroo_official.models.payment_method.PaymentService"
         ) as MockPS:
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.ideal._buckaroo_create_payment(tx, client)
+            result = self.ideal._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         mock_builder.pay.assert_called_once()
         mock_builder.add_parameter.assert_not_called()
@@ -610,7 +609,7 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
                 "price_unit": 50.0,
             }
         )
-        tx.sale_order_ids = [Command.link(order.id)]
+        self._update_transaction(tx, sale_order_ids=[Command.link(order.id)])
 
         client = MagicMock()
         mock_builder, mock_response = make_mock_sdk_builder()
@@ -625,7 +624,9 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.billink._buckaroo_create_payment(tx, client)
+            result = self.billink._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         param_names = [call[0][0] for call in mock_builder.add_parameter.call_args_list]
         self.assertIn("article", param_names)
@@ -639,14 +640,13 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
         b2b_partner = self.env["res.partner"].create(
             {
                 "name": "Acme BV",
-                "is_company": True,
+                "vat": "NL000099998B57",
                 "street": "Keizersgracht 424",
                 "zip": "1016 GC",
                 "city": "Amsterdam",
                 "country_id": self.env.ref("base.nl").id,
                 "email": "info@acme.example",
                 "phone": "+31612345678",
-                "company_registry": "",
             }
         )
         tx = self.env["payment.transaction"].create(
@@ -678,7 +678,9 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.billink._buckaroo_create_payment(tx, client)
+            result = self.billink._buckaroo_create_payment(
+                tx.with_context(payment_safe_write=True), client
+            )
 
         calls = {call[0][0]: call[0][1][0] for call in mock_builder.add_parameter.call_args_list}
         self.assertEqual(calls["billingCustomer"]["ChamberOfCommerce"], "87654321")
@@ -738,7 +740,7 @@ class TestBillinkCreatePaymentDispatch(BuckarooOfficialCommon):
             ),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            self.billink._buckaroo_create_payment(tx, client)
+            self.billink._buckaroo_create_payment(tx.with_context(payment_safe_write=True), client)
 
         calls = {call[0][0]: call[0][1][0] for call in mock_builder.add_parameter.call_args_list}
         self.assertEqual(calls["billingCustomer"]["ChamberOfCommerce"], "12345678")
