@@ -17,7 +17,7 @@ authorize & capture, Pay Per Email and optional payment surcharges.
 """,
     "depends": ["payment", "website_sale", "account_payment"],
     "external_dependencies": {
-        "python": ["buckaroo"],
+        "python": ["buckaroo-sdk"],
     },
     "data": [
         "views/payment_provider_views.xml",
