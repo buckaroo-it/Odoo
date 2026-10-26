@@ -8,9 +8,9 @@
 
 <p align="center">
   <a href="https://github.com/buckaroo-it/Odoo/releases"><img src="https://img.shields.io/github/v/release/buckaroo-it/Odoo.svg?label=release" alt="Latest release"></a>
-  <a href="https://github.com/buckaroo-it/Odoo/blob/19.0/LICENSE"><img src="https://img.shields.io/github/license/buckaroo-it/Odoo.svg?label=license" alt="License"></a>
+  <a href="https://github.com/buckaroo-it/Odoo/blob/20.0/LICENSE"><img src="https://img.shields.io/github/license/buckaroo-it/Odoo.svg?label=license" alt="License"></a>
   <a href="https://docs.buckaroo.io/docs/odoo"><img src="https://img.shields.io/badge/docs-docs.buckaroo.io-1a1a4b.svg" alt="Documentation"></a>
-  <a href="https://apps.odoo.com/apps/modules/19.0/payment_buckaroo_official"><img src="https://img.shields.io/badge/Odoo%20Apps-download-714b67.svg" alt="Download from Odoo Apps"></a>
+  <a href="https://apps.odoo.com/apps/modules/20.0/payment_buckaroo_official"><img src="https://img.shields.io/badge/Odoo%20Apps-download-714b67.svg" alt="Download from Odoo Apps"></a>
 </p>
 
 <p align="center">
@@ -43,7 +43,7 @@ The Buckaroo app for Odoo connects your webshop to the Buckaroo payment gateway,
 
 | Requirement | Supported versions |
 |---|---|
-| Odoo | 19.0 |
+| Odoo | 20.0 |
 | Editions | Community and Enterprise |
 | Hosting | Odoo.sh and self-hosted |
 
@@ -56,10 +56,10 @@ You also need a Buckaroo account. Don't have one yet? [Request an account](https
 
 ## Installation
 
-Download the module from the [Odoo Apps store](https://apps.odoo.com/apps/modules/19.0/payment_buckaroo_official), or clone it from this repository:
+Download the module from the [Odoo Apps store](https://apps.odoo.com/apps/modules/20.0/payment_buckaroo_official), or clone it from this repository:
 
 ```bash
-git clone --branch 19.0 https://github.com/buckaroo-it/Odoo.git
+git clone --branch 20.0 https://github.com/buckaroo-it/Odoo.git
 ```
 
 Then add the module to your database:
@@ -88,7 +88,7 @@ Replace the module folder with the latest version, then upgrade it. On Odoo.sh, 
 ```
 
 > [!TIP]
-> Always test an upgrade on a staging database first and check the [changelog](https://github.com/buckaroo-it/Odoo/blob/19.0/CHANGELOG.md) for breaking changes.
+> Always test an upgrade on a staging database first and check the [changelog](https://github.com/buckaroo-it/Odoo/blob/20.0/CHANGELOG.md) for breaking changes.
 
 ---
 
@@ -145,7 +145,7 @@ Still stuck? Contact us and include your Odoo version, app version, hosting type
 
 ## Contribute
 
-We really appreciate it when developers help improve the Buckaroo plugins. Please read our [Contribution Guidelines](https://github.com/buckaroo-it/Odoo/blob/19.0/CONTRIBUTING.md) before opening a pull request, and target the branch matching your Odoo version.
+We really appreciate it when developers help improve the Buckaroo plugins. Please read our [Contribution Guidelines](https://github.com/buckaroo-it/Odoo/blob/20.0/CONTRIBUTING.md) before opening a pull request, and target the branch matching your Odoo version.
 
 Found a security issue? Please report it privately to [support@buckaroo.nl](mailto:support@buckaroo.nl) instead of opening a public issue.
 
@@ -159,7 +159,7 @@ We follow semantic versioning (`MAJOR.MINOR.PATCH`):
 - **MINOR** — new functionality with limited impact.
 - **PATCH** — bug fixes and hotfixes only.
 
-All changes are documented in the [changelog](https://github.com/buckaroo-it/Odoo/blob/19.0/CHANGELOG.md) and on the [releases page](https://github.com/buckaroo-it/Odoo/releases).
+All changes are documented in the [changelog](https://github.com/buckaroo-it/Odoo/blob/20.0/CHANGELOG.md) and on the [releases page](https://github.com/buckaroo-it/Odoo/releases).
 
 ---
 
