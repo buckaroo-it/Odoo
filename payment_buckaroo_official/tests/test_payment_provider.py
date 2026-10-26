@@ -96,13 +96,13 @@ class TestPaymentProvider(BuckarooOfficialCommon):
     def test_software_header_format(self):
         """The Software header is the JSON object the Buckaroo gateway requires."""
         plugin_version = get_manifest("payment_buckaroo_official")["version"]
-        with patch.object(odoo.release, "version", "19.0-20260630"):
+        with patch.object(odoo.release, "version", "20.0-20260630"):
             header = json.loads(_buckaroo_official_software_header())
         self.assertEqual(
             header,
             {
                 "PlatformName": "Odoo",
-                "PlatformVersion": "19.0-20260630",
+                "PlatformVersion": "20.0-20260630",
                 "ModuleSupplier": "Buckaroo",
                 "ModuleName": "Odoo",
                 "ModuleVersion": plugin_version,
