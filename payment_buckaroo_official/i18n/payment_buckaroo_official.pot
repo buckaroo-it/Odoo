@@ -1386,9 +1386,7 @@ msgstr ""
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_method_riverty.py:0
-msgid ""
-"Riverty partial refunds are not supported via Odoo. For partial refunds, use"
-" Buckaroo Plaza."
+msgid "Riverty partial refunds need the paid order's product lines."
 msgstr ""
 
 #. module: payment_buckaroo_official

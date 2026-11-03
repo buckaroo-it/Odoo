@@ -115,22 +115,14 @@ class TestBuckarooOfficialPaymentMethodData(BuckarooOfficialCommon):
                 self.assertTrue(record.exists(), "Record %s not found" % xml_id)
 
     def test_methods_support_refund(self):
-        # Riverty refund is full-only because Odoo's amount-based refund
-        # flow can't supply the article-level breakdown Riverty requires.
-        full_only_codes = {"buckaroo_riverty"}
         for xml_id in ALL_XML_IDS:
             with self.subTest(xml_id=xml_id):
                 record = self.env.ref(xml_id)
-                expected = "full_only" if record.code in full_only_codes else "partial"
                 self.assertEqual(
                     record.support_refund,
-                    expected,
-                    "Expected support_refund='%s' for %s, got '%s'"
-                    % (
-                        expected,
-                        xml_id,
-                        record.support_refund,
-                    ),
+                    "partial",
+                    "Expected support_refund='partial' for %s, got '%s'"
+                    % (xml_id, record.support_refund),
                 )
 
     def test_payment_method_xml_data(self):
