@@ -1048,6 +1048,12 @@ msgid "PayPal"
 msgstr "PayPal"
 
 #. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/payment_paypal.js:0
+msgid "PayPal is not available right now. Please choose another payment method."
+msgstr "PayPal n'est pas disponible pour le moment. Veuillez choisir un autre moyen de paiement."
+
+#. module: payment_buckaroo_official
 #: model:payment.method,name:payment_buckaroo_official.payment_method_payconiq
 msgid "Payconiq"
 msgstr "Payconiq"

@@ -1,7 +1,6 @@
 /** @odoo-module **/
 
 import { _t } from "@web/core/l10n/translation";
-import { loadJS } from "@web/core/assets";
 import { rpc } from '@web/core/network/rpc';
 import { patch } from '@web/core/utils/patch';
 import { registry } from '@web/core/registry';
@@ -12,6 +11,7 @@ import {
     displayWalletError,
     finalizeExpressTransaction,
     isDuplicatePlacement,
+    loadBuckarooSdk,
     snapshotProductDom,
     truthyData,
 } from '@payment_buckaroo_official/js/express_wallet_utils';
@@ -26,19 +26,10 @@ import {
 const BUCKAROO_SDK_URL = 'https://checkout.buckaroo.nl/api/buckaroosdk/script';
 const BUCKAROO_SDK_URL_TEST = 'https://testcheckout.buckaroo.nl/api/buckaroosdk/script';
 
-let _ppSdkPromise = null;
-
-// Memoize the SDK load so every PayPal surface (cart, product, checkout) shares
-// one fetch; `loadJS` also dedupes by URL across the other Buckaroo wallets.
+// `loadBuckarooSdk` memoizes per URL, so every PayPal surface (cart, product,
+// checkout) and the other Buckaroo wallets share one fetch.
 function _ppEnsureSdk(testMode) {
-    if (!_ppSdkPromise) {
-        const url = testMode ? BUCKAROO_SDK_URL_TEST : BUCKAROO_SDK_URL;
-        _ppSdkPromise = loadJS(url).catch((error) => {
-            _ppSdkPromise = null;
-            throw error;
-        });
-    }
-    return _ppSdkPromise;
+    return loadBuckarooSdk(testMode ? BUCKAROO_SDK_URL_TEST : BUCKAROO_SDK_URL);
 }
 
 // PayPal's `onShippingChange` only exposes a partial address (city, state,
@@ -259,20 +250,36 @@ function _ppInitiate(interaction, container, merchantId, websiteKey, paymentMeth
 }
 
 // PayPal's Buttons cannot render into a hidden (zero-width) container, so on the
-// checkout page the button is mounted only once its inline form is shown. Cart
-// and product surfaces are visible at load and mount immediately.
+// checkout page the button is mounted once its inline form is shown, wherever
+// the buyer has scrolled. Cart and product surfaces are visible at load and
+// mount immediately.
 function _ppWhenVisible(el, callback) {
-    if (el.offsetParent !== null || typeof IntersectionObserver === 'undefined') {
+    if (el.offsetParent !== null || typeof ResizeObserver === 'undefined') {
         callback();
         return;
     }
-    const observer = new IntersectionObserver((entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
+    const observer = new ResizeObserver((entries) => {
+        if (entries.some((entry) => entry.contentRect.width > 0)) {
             observer.disconnect();
             callback();
         }
     });
     observer.observe(el);
+}
+
+// At checkout "Pay now" is hidden while PayPal is selected, so a silently
+// hidden button would leave the buyer stuck: tell them to pick another method.
+function _ppUnavailable(container) {
+    if (container.dataset.placement !== 'checkout') {
+        container.classList.add('d-none');
+        return;
+    }
+    const message = document.createElement('div');
+    message.className = 'alert alert-warning mb-0';
+    message.textContent = _t(
+        "PayPal is not available right now. Please choose another payment method.",
+    );
+    container.replaceChildren(message);
 }
 
 async function _ppMountButton(interaction) {
@@ -281,7 +288,7 @@ async function _ppMountButton(interaction) {
     const websiteKey = container.dataset.websiteKey || '';
     const paymentMethodId = parseInt(container.dataset.paymentMethodId);
     if (!merchantId || !websiteKey || !paymentMethodId || !container.id) {
-        container.classList.add('d-none');
+        _ppUnavailable(container);
         return;
     }
     // Keep only the first cart button when a theme renders the express form twice.
@@ -297,11 +304,12 @@ async function _ppMountButton(interaction) {
             await _ppEnsureSdk(truthyData(container.dataset.testMode));
         } catch (error) {
             console.error('PayPal SDK load failed:', error);
-            container.classList.add('d-none');
+            _ppUnavailable(container);
             return;
         }
         if (typeof BuckarooSdk === 'undefined' || !BuckarooSdk.PayPal) {
-            container.classList.add('d-none');
+            console.error('PayPal SDK loaded without BuckarooSdk.PayPal.');
+            _ppUnavailable(container);
             return;
         }
         if (container.dataset.placement === 'product') {
