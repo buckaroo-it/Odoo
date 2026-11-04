@@ -11,6 +11,7 @@ from odoo.exceptions import UserError
 from odoo.modules.module import get_manifest
 from odoo.tests import tagged
 
+from odoo.addons.http_routing.tests.common import MockRequest
 from odoo.addons.payment_buckaroo_official.utils import const
 from odoo.addons.payment_buckaroo_official.models.payment_provider import (
     PaymentProvider,
@@ -214,3 +215,15 @@ class TestExpressProviderLookup(BuckarooOfficialCommon):
         self.assertNotEqual(found, self.buckaroo)
         if found:
             self.assertEqual(found.company_id, company)
+
+
+@tagged("post_install", "-at_install")
+class TestFrontendTranslations(BuckarooOfficialCommon):
+    """Shop pages load JS translations only for the listed modules; ours must
+    be one of them or NL/DE/FR shops show the wallet messages in English."""
+
+    def test_module_js_strings_load_on_shop_pages(self):
+        website = self.env["website"].search([], limit=1)
+        with MockRequest(self.env, website=website):
+            modules = self.env["ir.http"]._get_translation_frontend_modules_name()
+        self.assertIn("payment_buckaroo_official", modules)
