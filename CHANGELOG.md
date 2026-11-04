@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - [BTI-1850] Replaced the deprecated `t-esc` in the giftcard payment form with `t-out`.
 - [BTI-1851] Gave the Apple Pay, Google Pay and PayPal settings and the Buckaroo secret key unique field labels.
 - [BTI-1852] Declared the Buckaroo SDK by its PyPI package name, `buckaroo-sdk`, in the manifest.
+- [BTI-1998] Riverty orders can now be partially refunded from Odoo. The refund amount is editable, and a partial refund is sent to Riverty as one returned article with that amount and the VAT rate of the order's first product. Databases upgraded from Odoo 19 get partial refunds for Riverty.
 
 ---
 
