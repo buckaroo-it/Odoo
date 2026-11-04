@@ -10,6 +10,8 @@ API formatters (article + customer + ImageUrl resolver), and the
 birthdate-from-session flow. SDK transport is mocked throughout.
 """
 
+import importlib.util
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import ValidationError
@@ -256,21 +258,114 @@ class TestRivertyRefundFlow(BuckarooOfficialCommon):
                     refund_tx = tx._refund()
                 self.assertEqual(refund_tx.state, expected_state)
 
-    def test_partial_refund_marks_refund_tx_as_error(self):
-        """Riverty partial refund needs an article-level breakdown that
-        Odoo's amount-based refund flow cannot supply. Refuse loudly so
-        Odoo flags the refund_tx as error rather than send an
-        unbalanced request and let Riverty 491.
+    def _create_done_order_tx(self, reference):
+        """Done Riverty tx paid for a sale order with one 21% VAT line of 121.00."""
+        tax = self.env["account.tax"].create(
+            {"name": "VAT 21%", "amount": 21.0, "amount_type": "percent", "type_tax_use": "sale"}
+        )
+        product = self.env["product.product"].create(
+            {"name": "Riverty Chair", "default_code": "RV-CHAIR", "list_price": 100.0}
+        )
+        order = self.env["sale.order"].create(
+            {
+                "partner_id": self.partner_nl.id,
+                "order_line": [
+                    Command.create(
+                        {
+                            "product_id": product.id,
+                            "product_uom_qty": 1,
+                            "price_unit": 100.0,
+                            "tax_ids": [Command.set(tax.ids)],
+                        }
+                    )
+                ],
+            }
+        )
+        tx = self._create_done_tx(reference=reference, amount=order.amount_total)
+        tx.sale_order_ids = [Command.set(order.ids)]
+        return tx
 
-        Odoo's ``_refund`` wraps ``_send_refund_request`` in a
-        ``try/except ValidationError`` that calls ``_set_error`` on the
-        refund tx — so the test asserts on the resulting state, not on
-        a propagated exception.
-        """
-        tx = self._create_done_tx(reference="RV-PARTIAL", amount=100.0)
-        refund_tx = tx._refund(amount_to_refund=25.0)
+    def _refund_and_capture_request(self, tx, amount_to_refund=None):
+        """Run ``tx._refund`` through the real SDK builder and return the
+        request body it posts to Buckaroo."""
+        captured = {}
+
+        def fake_post(builder, request_data):
+            captured.update(request_data)
+            return self._mock_refund_response()
+
+        with patch(
+            "buckaroo.builders.base_builder.BaseBuilder._post_transaction",
+            autospec=True,
+            side_effect=fake_post,
+        ):
+            refund_tx = tx._refund(amount_to_refund=amount_to_refund)
+        return refund_tx, captured
+
+    @staticmethod
+    def _article_params(request_data):
+        service = request_data["Services"]["ServiceList"][0]
+        return {
+            param["Name"]: param["Value"]
+            for param in service.get("Parameters") or []
+            if param["GroupType"] == "Article"
+        }
+
+    def test_partial_refund_sends_one_return_article_for_the_amount(self):
+        # BTI-1998: Riverty needs an article on an amount-based partial refund.
+        tx = self._create_done_order_tx("RV-PARTIAL")
+        refund_tx, request_data = self._refund_and_capture_request(tx, amount_to_refund=25.0)
+
+        self.assertEqual(refund_tx.state, "done")
+        self.assertEqual(request_data["AmountCredit"], 25.0)
+        self.assertEqual(request_data["OriginalTransactionKey"], "RIVERTY_DONE_KEY")
+        article = self._article_params(request_data)
+        self.assertEqual(article["Identifier"], "RV-CHAIR")
+        self.assertEqual(article["Quantity"], "1")
+        self.assertEqual(article["Grossunitprice"], "25.0")
+        self.assertEqual(article["Vatpercentage"], "21.0")
+        self.assertEqual(article["Refundtype"], "Return")
+
+    def test_partial_refund_of_captured_authorization_reads_the_authorized_order(self):
+        # A capture is a child tx without sale orders; the refund targets it.
+        authorized_tx = self._create_done_order_tx("RV-AUTH")
+        capture_tx = authorized_tx._create_child_transaction(authorized_tx.amount)
+        capture_tx.provider_reference = "RIVERTY_CAPTURE_KEY"
+        capture_tx._set_done()
+
+        refund_tx, request_data = self._refund_and_capture_request(
+            capture_tx, amount_to_refund=25.0
+        )
+
+        self.assertEqual(refund_tx.state, "done")
+        self.assertEqual(request_data["OriginalTransactionKey"], "RIVERTY_CAPTURE_KEY")
+        self.assertEqual(self._article_params(request_data)["Identifier"], "RV-CHAIR")
+
+    def test_refund_of_the_remaining_amount_after_a_partial_refund_sends_an_article(self):
+        tx = self._create_done_order_tx("RV-REMAINDER")
+        self._refund_and_capture_request(tx, amount_to_refund=25.0)
+        refund_tx, request_data = self._refund_and_capture_request(tx, amount_to_refund=96.0)
+
+        self.assertEqual(refund_tx.state, "done")
+        self.assertEqual(request_data["AmountCredit"], 96.0)
+        self.assertEqual(self._article_params(request_data)["Grossunitprice"], "96.0")
+
+    def test_partial_refund_without_order_lines_marks_refund_tx_as_error(self):
+        # Odoo's ``_refund`` turns the ValidationError into an error state.
+        tx = self._create_done_tx(reference="RV-PARTIAL-NO-ORDER", amount=100.0)
+        refund_tx, request_data = self._refund_and_capture_request(tx, amount_to_refund=25.0)
+
         self.assertEqual(refund_tx.state, "error")
-        self.assertIn("partial refunds", refund_tx.state_message.lower())
+        self.assertIn("product lines", refund_tx.state_message)
+        self.assertEqual(request_data, {})
+
+    def test_full_refund_sends_no_article(self):
+        tx = self._create_done_order_tx("RV-FULL")
+        refund_tx, request_data = self._refund_and_capture_request(tx)
+
+        self.assertEqual(refund_tx.state, "done")
+        self.assertEqual(request_data["AmountCredit"], 121.0)
+        self.assertEqual(self._article_params(request_data), {})
 
 
 @tagged("post_install", "-at_install")
@@ -1519,3 +1614,21 @@ class TestRivertyNoRedirectSettlement(BuckarooOfficialCommon):
             )
         self.assertFalse(base.called)
         self.assertTrue(result["api_url"].endswith("/payment/status"))
+
+
+@tagged("post_install", "-at_install")
+class TestRivertyPartialRefundMigration(BuckarooOfficialCommon):
+    def test_migration_enables_partial_refunds(self):
+        """BTI-1998: existing databases still have the old ``full_only`` value
+        because the payment method data is install-only."""
+        riverty = self.env.ref("payment_buckaroo_official.payment_method_riverty")
+        riverty.support_refund = "full_only"
+        script = Path(__file__).parent.parent / "migrations/19.0.1.0.4/post-migrate.py"
+        spec = importlib.util.spec_from_file_location("riverty_partial_refund_migration", script)
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+
+        migration.migrate(self.env.cr, "19.0.1.0.3")
+
+        riverty.invalidate_recordset(["support_refund"])
+        self.assertEqual(riverty.support_refund, "partial")

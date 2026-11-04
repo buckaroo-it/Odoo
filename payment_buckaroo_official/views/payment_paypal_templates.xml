@@ -22,7 +22,7 @@
               name="Buckaroo PayPal Express on Product Page"
               inherit_id="website_sale.cta_wrapper">
         <xpath expr="//div[@id='add_to_cart_wrap']" position="before">
-            <t t-set="pp_provider" t-value="request.env['payment.provider'].sudo().search([('code', '=', 'buckaroo_official'), ('state', 'in', ['enabled', 'test']), ('allow_express_checkout', '=', True)], limit=1)"/>
+            <t t-set="pp_provider" t-value="request.env['payment.provider']._buckaroo_official_express_provider(website)"/>
             <t t-set="pp_method" t-value="pp_provider and pp_provider.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_paypal' and m.active and m.buckaroo_official_paypal_show_on_product and m._buckaroo_paypal_is_configured())[:1]"/>
             <t t-if="pp_provider and pp_method">
                 <t t-set="pp_currency"

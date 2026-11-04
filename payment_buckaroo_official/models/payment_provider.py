@@ -8,8 +8,9 @@ import requests as req_lib
 from buckaroo.config.buckaroo_config import BuckarooConfig, create_config_from_mode
 from buckaroo.http.client import BuckarooApiError
 
-from odoo import _, fields, models, release
+from odoo import _, api, fields, models, release
 from odoo.exceptions import UserError
+from odoo.fields import Domain
 from odoo.modules.module import get_manifest
 
 from ..utils import const
@@ -74,7 +75,7 @@ class PaymentProvider(models.Model):
         copy=False,
     )
     buckaroo_official_secret_key = fields.Char(
-        string="Secret Key",
+        string="Buckaroo Secret Key",
         required_if_provider=const.PROVIDER_CODE,
         copy=False,
         groups="base.group_system",
@@ -91,6 +92,24 @@ class PaymentProvider(models.Model):
         "{order_number}, {shop_name}. "
         "Leave empty to use the transaction description above.",
     )
+
+    @api.model
+    def _buckaroo_official_express_provider(self, website):
+        """The Buckaroo provider the product-page express buttons use on
+        *website*: one of the website's company (or shared) and of this website
+        (or none). A shopper only gets a published one; internal users also see
+        unpublished providers so they can test them."""
+        domain = Domain(
+            [
+                ("code", "=", const.PROVIDER_CODE),
+                ("state", "in", ["enabled", "test"]),
+                ("allow_express_checkout", "=", True),
+                ("website_id", "in", [False, website.id]),
+            ]
+        ) & Domain(self._check_company_domain(website.company_id))
+        if not self.env.user._is_internal():
+            domain &= Domain("is_published", "=", True)
+        return self.sudo().search(domain, limit=1)
 
     def _compute_feature_support_fields(self):
         super()._compute_feature_support_fields()
