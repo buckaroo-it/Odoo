@@ -28,6 +28,10 @@ class PaypalPaymentPortal(PaymentPortal):
         paypal_order_id = sanitize_token(kwargs.pop("buckaroo_paypal_order_id", None))
         if paypal_order_id:
             request.session["buckaroo_paypal_order_id"] = paypal_order_id
+        # The cart/product express button only knows a stub address until
+        # capture; let the checkout step skip address completeness for it.
+        if kwargs.pop("buckaroo_paypal_express", False):
+            request.update_context(buckaroo_paypal_express=True)
         try:
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
         except Exception:

@@ -213,7 +213,9 @@ async function _ppCreatePayment(interaction, container, paymentMethodId, data) {
         providerId: container.dataset.providerId,
         paymentMethodId,
         addresses,
-        txExtra: { buckaroo_paypal_order_id: data.orderID },
+        // The address is a stub until capture; the flag lets the tx route skip
+        // Odoo's address-completeness check for this express order only.
+        txExtra: { buckaroo_paypal_order_id: data.orderID, buckaroo_paypal_express: true },
         txError: _t("PayPal payment could not be processed. Please try again."),
     });
 }
