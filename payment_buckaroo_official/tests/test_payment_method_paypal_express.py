@@ -4,7 +4,9 @@ import inspect
 from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import UserError
-from odoo.tests import tagged
+from odoo.tests import new_test_user, tagged
+
+from odoo.addons.website_sale.tests.common import WebsiteSaleCommon
 
 from .common import BuckarooOfficialCommon, make_mock_sdk_builder
 
@@ -132,7 +134,16 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
     PayPal order id so `_buckaroo_create_payment` can pop it, and drops the
     stash if the transaction aborts before it is consumed."""
 
-    def _call(self, *, pm_code="buckaroo_paypal", order_id="PP-ORDER-1", super_raises=False):
+    def _call(
+        self,
+        *,
+        pm_code="buckaroo_paypal",
+        order_id="PP-ORDER-1",
+        super_raises=False,
+        express=None,
+        fake_req=None,
+        super_kwargs=None,
+    ):
         from ..controllers.paypal import PaypalPaymentPortal
         from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
@@ -143,15 +154,19 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
         fake_env = MagicMock()
         fake_env.__getitem__.return_value.sudo.return_value.browse.return_value = pm
 
-        fake_req = MagicMock()
+        fake_req = fake_req or MagicMock()
         fake_req.env = fake_env
         fake_req.session = session
 
         kwargs = {"payment_method_id": 5}
         if order_id is not None:
             kwargs["buckaroo_paypal_order_id"] = order_id
+        if express is not None:
+            kwargs["buckaroo_paypal_express"] = express
 
         def _super(self_, order_id_, access_token, **kw):
+            if super_kwargs is not None:
+                super_kwargs.update(kw)
             if super_raises:
                 raise ValueError("boom")
             return {"ok": True}
@@ -183,6 +198,28 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
         result, session = self._call(pm_code="buckaroo_ideal")
         self.assertEqual(result, {"ok": True})
         self.assertNotIn("buckaroo_paypal_order_id", session)
+
+    def test_express_flag_sets_context_and_is_popped(self):
+        fake_req = MagicMock()
+        super_kwargs = {}
+        self._call(express=True, fake_req=fake_req, super_kwargs=super_kwargs)
+        fake_req.update_context.assert_called_once_with(buckaroo_paypal_express=True)
+        self.assertNotIn("buckaroo_paypal_express", super_kwargs)
+
+    def test_checkout_call_without_flag_sets_no_context(self):
+        fake_req = MagicMock()
+        self._call(fake_req=fake_req)
+        fake_req.update_context.assert_not_called()
+
+    def test_express_flag_ignored_for_other_methods(self):
+        """Left in kwargs for core's whitelist to reject; never sets the context."""
+        fake_req = MagicMock()
+        super_kwargs = {}
+        self._call(
+            pm_code="buckaroo_ideal", express=True, fake_req=fake_req, super_kwargs=super_kwargs
+        )
+        fake_req.update_context.assert_not_called()
+        self.assertTrue(super_kwargs.get("buckaroo_paypal_express"))
 
     def test_checkout_transaction_route_call_stash_is_consumable_by_create_payment(self):
         """The checkout ("Pay now") entry point never runs an express
@@ -240,3 +277,56 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
             call.args[0]: call.args[1] for call in mock_builder.add_parameter.call_args_list
         }
         self.assertEqual(param_calls.get("payPalOrderId"), "PP-CHECKOUT-1")
+
+
+@tagged("post_install", "-at_install")
+class TestPaypalExpressAddressStep(WebsiteSaleCommon):
+    """Odoo 20 runs the checkout steps on ``/shop/payment/transaction``. A
+    PayPal express order only has the "PayPal Customer" stub address until
+    capture, so the address step must let it through - and only it."""
+
+    TX_STEP = "/shop/payment/transaction"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.buyer = new_test_user(cls.env, login="pp_express_buyer", groups="base.group_portal")
+        # The stub `_ppPartialToAddress` sends: no street, phone or email.
+        cls.buyer.partner_id.write(
+            {
+                "name": "PayPal Customer",
+                "country_id": cls.env.ref("base.nl").id,
+                "zip": "1012AB",
+                "city": "Amsterdam",
+                "street": False,
+                "phone": False,
+                "email": False,
+            }
+        )
+        cls.order = cls._create_so(partner_id=cls.buyer.partner_id.id)
+        cls.order._set_delivery_method(cls.carrier)
+
+    def _validate(self, order, express=False):
+        ctx = {"website_id": self.website.id}
+        if express:
+            ctx["buckaroo_paypal_express"] = True
+        env = self.env(user=self.buyer, context=dict(self.env.context, **ctx))
+        return env["website.checkout.step"].validate_checkout_progress(
+            self.TX_STEP, order.with_env(env).sudo()
+        )
+
+    def test_stub_address_is_rejected_without_flag(self):
+        redirect = self._validate(self.order)
+        self.assertTrue(redirect and redirect.startswith("/shop/address"), redirect)
+
+    def test_stub_address_passes_with_express_flag(self):
+        self.assertIsNone(self._validate(self.order, express=True))
+
+    def test_anonymous_cart_still_redirects_with_express_flag(self):
+        order = self._create_so(partner_id=self.public_partner.id)
+        order._set_delivery_method(self.carrier)
+        self.assertEqual(self._validate(order, express=True), "/shop/address")
+
+    def test_missing_carrier_still_blocks_with_express_flag(self):
+        order = self._create_so(partner_id=self.buyer.partner_id.id)
+        self.assertEqual(self._validate(order, express=True), "/shop/checkout")

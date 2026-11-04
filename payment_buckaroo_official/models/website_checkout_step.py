@@ -14,3 +14,10 @@ class WebsiteCheckoutStep(models.Model):
         if not redirect and step_href == "/shop/payment/transaction":
             order_sudo._buckaroo_sync_surcharge_from_context()
         return redirect
+
+    def _check_shop_address_completion(self, order_sudo, **kwargs):
+        if self.env.context.get("buckaroo_paypal_express"):
+            # PayPal gives the full address only after capture, when
+            # `_buckaroo_paypal_write_address` replaces the express stub.
+            order_sudo = order_sudo.with_context(buckaroo_skip_address_completeness=True)
+        return super()._check_shop_address_completion(order_sudo, **kwargs)

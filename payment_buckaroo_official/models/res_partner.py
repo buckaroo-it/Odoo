@@ -12,6 +12,17 @@ _logger = logging.getLogger(__name__)
 class ResPartner(models.Model):
     _inherit = "res.partner"
 
+    def _check_billing_address(self, **kwargs):
+        # Set only by the PayPal express address step (website_checkout_step).
+        if self.env.context.get("buckaroo_skip_address_completeness"):
+            return True
+        return super()._check_billing_address(**kwargs)
+
+    def _check_delivery_address(self, **kwargs):
+        if self.env.context.get("buckaroo_skip_address_completeness"):
+            return True
+        return super()._check_delivery_address(**kwargs)
+
     def _buckaroo_official_company_registry_key(self):
         """Identifier key of the partner country's main enterprise number
         (Chamber of Commerce), e.g. ``NL_KVK`` or ``BE_EN``; ``None`` if the
