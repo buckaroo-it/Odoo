@@ -1,6 +1,7 @@
 /** @odoo-module **/
 
 import { _t } from "@web/core/l10n/translation";
+import { loadJS } from "@web/core/assets";
 import { rpc } from '@web/core/network/rpc';
 import { redirect } from '@web/core/utils/urls';
 import { ConfirmationDialog } from '@web/core/confirmation_dialog/confirmation_dialog';
@@ -13,6 +14,49 @@ export function displayWalletError(interaction, message) {
         title: _t("Error"),
         body: message,
     });
+}
+
+// The Buckaroo SDK runs `$.ajaxSetup` (through `var $ = jQuery`) as soon as it
+// loads. Odoo 20 has no frontend jQuery, so the script would throw and leave
+// `BuckarooSdk` empty. Its wallet parts never use `$`, so a stub that lives only
+// while SDK scripts load is enough. Bootstrap treats any `window.jQuery` as real
+// jQuery (and calls `$.Event`), so `data-bs-no-jquery` keeps it off the stub.
+// Loads are memoized per URL and share one stub, removed once the last pending
+// load settles; a failed load can retry.
+const _buckarooSdkLoads = {};
+let _jQueryStub = null;
+let _bsNoJQuerySet = false;
+let _pendingSdkLoads = 0;
+
+export function loadBuckarooSdk(url) {
+    if (!_buckarooSdkLoads[url]) {
+        if (window.jQuery === undefined) {
+            _jQueryStub = { ajaxSetup() {} };
+            window.jQuery = _jQueryStub;
+            _bsNoJQuerySet = !document.body.hasAttribute('data-bs-no-jquery');
+            if (_bsNoJQuerySet) {
+                document.body.setAttribute('data-bs-no-jquery', '');
+            }
+        }
+        _pendingSdkLoads++;
+        _buckarooSdkLoads[url] = loadJS(url).catch((error) => {
+            delete _buckarooSdkLoads[url];
+            throw error;
+        }).finally(() => {
+            _pendingSdkLoads--;
+            if (!_pendingSdkLoads && _jQueryStub) {
+                if (window.jQuery === _jQueryStub) {
+                    delete window.jQuery;
+                }
+                if (_bsNoJQuerySet) {
+                    document.body.removeAttribute('data-bs-no-jquery');
+                    _bsNoJQuerySet = false;
+                }
+                _jQueryStub = null;
+            }
+        });
+    }
+    return _buckarooSdkLoads[url];
 }
 
 // Variant changes are not tracked via events; read fresh DOM at click time.

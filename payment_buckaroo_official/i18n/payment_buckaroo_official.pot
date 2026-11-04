@@ -1175,6 +1175,12 @@ msgid "PayPal could not start. Please try again."
 msgstr ""
 
 #. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/payment_paypal.js:0
+msgid "PayPal is not available right now. Please choose another payment method."
+msgstr ""
+
+#. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_method_paypal.py:0
 msgid "PayPal order ID is missing. Please retry the PayPal Express flow."

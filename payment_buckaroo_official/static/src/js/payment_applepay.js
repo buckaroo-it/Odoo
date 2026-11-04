@@ -12,6 +12,7 @@ import {
     displayWalletError,
     finalizeExpressTransaction,
     isDuplicatePlacement,
+    loadBuckarooSdk,
     snapshotProductDom,
     truthyData,
 } from '@payment_buckaroo_official/js/express_wallet_utils';
@@ -29,7 +30,7 @@ function _apEnsureSdks() {
     if (!_apSdkPromise) {
         _apSdkPromise = Promise.all([
             loadJS(APPLE_PAY_SDK_URL),
-            loadJS(BUCKAROO_SDK_URL),
+            loadBuckarooSdk(BUCKAROO_SDK_URL),
         ]).catch((error) => {
             _apSdkPromise = null;
             throw error;
