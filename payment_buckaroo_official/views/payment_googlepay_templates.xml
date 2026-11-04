@@ -50,7 +50,7 @@
               name="Buckaroo Google Pay Express on Product Page"
               inherit_id="website_sale.cta_wrapper">
         <xpath expr="//div[@id='add_to_cart_wrap']" position="before">
-            <t t-set="gp_provider" t-value="request.env['payment.provider'].sudo().search([('code', '=', 'buckaroo_official'), ('state', 'in', ['enabled', 'test']), ('allow_express_checkout', '=', True)] + ([] if request.env.user._is_internal() else [('is_published', '=', True)]), limit=1)"/>
+            <t t-set="gp_provider" t-value="request.env['payment.provider']._buckaroo_official_express_provider(website)"/>
             <t t-set="gp_method" t-value="gp_provider and gp_provider.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_googlepay' and m.active and m.buckaroo_official_googlepay_show_on_product and m._buckaroo_googlepay_is_configured())[:1]"/>
             <t t-if="gp_provider and gp_method">
                 <t t-set="gp_country"
