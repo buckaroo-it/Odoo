@@ -35,6 +35,9 @@ export function buildGooglePayRequest(config, context) {
     if (!countryCode) {
         throw new Error('Missing countryCode for Google Pay request.');
     }
+    // Odoo 20 requires a phone on billing and delivery addresses before it
+    // creates the transaction; the express flow has no other way to get one.
+    const phoneNumberRequired = Boolean(context?.phoneRequired);
     const request = {
         apiVersion: 2,
         apiVersionMinor: 0,
@@ -44,7 +47,7 @@ export function buildGooglePayRequest(config, context) {
                 allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
                 allowedCardNetworks: ['AMEX', 'DISCOVER', 'INTERAC', 'JCB', 'MASTERCARD', 'VISA'],
                 billingAddressRequired: true,
-                billingAddressParameters: { format: 'FULL', phoneNumberRequired: false },
+                billingAddressParameters: { format: 'FULL', phoneNumberRequired },
             },
             tokenizationSpecification: {
                 type: 'PAYMENT_GATEWAY',
@@ -67,7 +70,7 @@ export function buildGooglePayRequest(config, context) {
     if (context?.shippingRequired) {
         // Show the delivery-method selector in the sheet and route its changes
         // through `onPaymentDataChanged` (set on the express PaymentsClient).
-        request.shippingAddressParameters = { phoneNumberRequired: false };
+        request.shippingAddressParameters = { phoneNumberRequired };
         request.shippingOptionRequired = true;
         request.callbackIntents = ['SHIPPING_ADDRESS', 'SHIPPING_OPTION'];
     }
@@ -330,6 +333,7 @@ async function _gpMountButton(interaction, container, providerData) {
         countryCode: container.dataset.countryCode || '',
         shippingRequired: !!interaction.paymentContext.shippingInfoRequired,
         emailRequired: true,
+        phoneRequired: true,
         ...overrides,
     });
 
