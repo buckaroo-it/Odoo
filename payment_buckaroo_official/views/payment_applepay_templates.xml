@@ -18,7 +18,8 @@
                      t-att-data-total-amount="amount"
                      t-att-data-currency-code="currency and currency.name or ''"
                      t-att-data-country-code="ap_country and ap_country.code or ''"
-                     t-att-data-store-name="provider_sudo.company_id.name or ''"/>
+                     t-att-data-store-name="provider_sudo.company_id.name or ''"
+                     t-att-data-test-mode="not provider_sudo.is_live"/>
             </t>
         </xpath>
     </template>
@@ -41,7 +42,8 @@
                  t-att-data-merchant-guid="ap_method.buckaroo_official_applepay_merchant_guid"
                  t-att-data-country-code="ap_country and ap_country.code or ''"
                  t-att-data-store-name="provider_sudo.company_id.name or ''"
-                 t-att-data-button-style="ap_method.buckaroo_official_applepay_button_style or 'black'"/>
+                 t-att-data-button-style="ap_method.buckaroo_official_applepay_button_style or 'black'"
+                 t-att-data-test-mode="not provider_sudo.is_live"/>
         </t>
     </template>
 
@@ -49,7 +51,7 @@
               name="Buckaroo Apple Pay Express on Product Page"
               inherit_id="website_sale.cta_wrapper">
         <xpath expr="//div[@id='add_to_cart_wrap']" position="before">
-            <t t-set="ap_provider" t-value="request.env['payment.provider'].sudo().search([('code', '=', 'buckaroo_official'), ('allow_express_checkout', '=', True)] + ([] if request.env.user._is_internal() else [('is_published', '=', True)]), limit=1)"/>
+            <t t-set="ap_provider" t-value="request.env['payment.provider']._buckaroo_official_express_provider(website)"/>
             <t t-set="ap_method" t-value="ap_provider and ap_provider.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_applepay' and m.active and m.buckaroo_official_applepay_integration_mode == 'inline' and m.buckaroo_official_applepay_show_on_product and m._buckaroo_applepay_is_configured())[:1]"/>
             <t t-if="ap_provider and ap_method">
                 <t t-set="ap_country"
@@ -68,6 +70,7 @@
                      t-att-data-currency-code="ap_currency and ap_currency.name or ''"
                      t-att-data-store-name="ap_provider.company_id.name or ''"
                      t-att-data-button-style="ap_method.buckaroo_official_applepay_button_style or 'black'"
+                     t-att-data-test-mode="not ap_provider.is_live"
                      data-landing-route="/shop/payment/validate"/>
             </t>
         </xpath>

@@ -9,6 +9,7 @@ import { PaymentForm } from '@payment/interactions/payment_form';
 import { ExpressCheckout } from '@payment/interactions/express_checkout';
 import {
     bindProductCart,
+    buckarooSdkUrl,
     displayWalletError,
     finalizeExpressTransaction,
     isDuplicatePlacement,
@@ -20,17 +21,17 @@ import {
 // Apple's SDK polyfills `<apple-pay-button>` and `applePayCapabilities` on
 // non-Safari browsers; Buckaroo's SDK owns merchant validation + capture.
 const APPLE_PAY_SDK_URL = 'https://applepay.cdn-apple.com/jsapi/1.latest/apple-pay-sdk.js';
-const BUCKAROO_SDK_URL = 'https://checkout.buckaroo.nl/api/buckaroosdk/script';
 
 let _apSdkPromise = null;
 
 // Both SDKs are needed on every Apple Pay surface; memoize the load so the
-// inline form and the express buttons share one fetch.
-function _apEnsureSdks() {
+// inline form and the express buttons share one fetch. The Buckaroo build
+// follows the provider mode so it matches the one PayPal loads on the page.
+function _apEnsureSdks(testMode) {
     if (!_apSdkPromise) {
         _apSdkPromise = Promise.all([
             loadJS(APPLE_PAY_SDK_URL),
-            loadBuckarooSdk(BUCKAROO_SDK_URL),
+            loadBuckarooSdk(buckarooSdkUrl(testMode)),
         ]).catch((error) => {
             _apSdkPromise = null;
             throw error;
@@ -268,7 +269,7 @@ patch(PaymentForm.prototype, {
             await super._prepareInlineForm(...arguments);
             return;
         }
-        await _apEnsureSdks();
+        await _apEnsureSdks(truthyData(container.dataset.testMode));
         // Pre-fetch the order's carriers (page load, off the gesture) so the
         // sheet can show the method selector the instant it opens - the order
         // already has the address from checkout, so no contact callback fires.
@@ -413,7 +414,7 @@ async function _apExpressMountButton(interaction) {
         return;
     }
     try {
-        await _apEnsureSdks();
+        await _apEnsureSdks(truthyData(container.dataset.testMode));
     } catch (error) {
         console.error('Apple Pay SDK load failed:', error);
         container.classList.add('d-none');
