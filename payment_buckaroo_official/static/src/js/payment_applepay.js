@@ -440,7 +440,9 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
     let amount;
     let currencyCode;
     let initialMethods = [];
-    let requiredShippingContactFields = [];
+    // Apple returns email and phone only on the shipping contact, and Odoo 20
+    // requires both on the billing address before it creates the transaction.
+    let requiredShippingContactFields = ['email', 'phone'];
     // Selected while the sheet is open; rides through finalize so the order's
     // carrier (and total) is the one the buyer picked.
     let selectedCarrierId = null;
@@ -557,8 +559,13 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
     }
 
     const ctx = interaction.paymentContext;
-    const addresses = { billing_address: _apContactToAddress(billingContact) };
-    if (ctx.shippingInfoRequired && shippingContact) {
+    const billingAddress = _apContactToAddress(billingContact);
+    billingAddress.email ||= shippingContact?.emailAddress || '';
+    billingAddress.phone ||= shippingContact?.phoneNumber || '';
+    const addresses = { billing_address: billingAddress };
+    // The shipping contact may carry only email and phone; without a postal
+    // address Odoo uses the billing address for delivery.
+    if (ctx.shippingInfoRequired && shippingContact?.addressLines?.length) {
         addresses.shipping_address = _apContactToAddress(shippingContact);
     }
     if (selectedCarrierId) {
