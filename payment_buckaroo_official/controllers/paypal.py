@@ -28,10 +28,18 @@ class PaypalPaymentPortal(PaymentPortal):
         paypal_order_id = sanitize_token(kwargs.pop("buckaroo_paypal_order_id", None))
         if paypal_order_id:
             request.session["buckaroo_paypal_order_id"] = paypal_order_id
+        # Only the cart/product express button sends this, as a JSON `true`;
+        # the transaction then takes the buyer's address from PayPal.
+        if kwargs.pop("buckaroo_paypal_express", None) is True:
+            request.update_context(buckaroo_paypal_express=True)
         try:
-            return super().shop_payment_transaction(order_id, access_token, **kwargs)
+            result = super().shop_payment_transaction(order_id, access_token, **kwargs)
         except Exception:
             # Abort/error before `_buckaroo_create_payment` popped it: drop the
             # stashed id so a stale one can't linger across a later PayPal tx.
             request.session.pop("buckaroo_paypal_order_id", None)
             raise
+        if isinstance(result, dict) and result.get("state") == "error":
+            # Refused without raising (a checkout step failed): same reason.
+            request.session.pop("buckaroo_paypal_order_id", None)
+        return result

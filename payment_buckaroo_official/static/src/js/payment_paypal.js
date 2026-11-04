@@ -211,7 +211,9 @@ async function _ppCreatePayment(interaction, container, paymentMethodId, data) {
         providerId: container.dataset.providerId,
         paymentMethodId,
         addresses,
-        txExtra: { buckaroo_paypal_order_id: data.orderID },
+        // Marks the transaction as express, so only express payments take the
+        // buyer's address from PayPal after capture.
+        txExtra: { buckaroo_paypal_order_id: data.orderID, buckaroo_paypal_express: true },
         txError: _t("PayPal payment could not be processed. Please try again."),
     });
 }
@@ -234,7 +236,11 @@ function _ppInitiate(interaction, container, merchantId, websiteKey, paymentMeth
             displayWalletError(interaction, _t(
                 "PayPal payment could not be processed. Please try again.",
             ));
+            if (container.dataset.placement === 'checkout') {
+                _ppUnavailable(container);
+            }
         },
+        onInitCallback: () => _ppClearInitTimer(interaction),
     };
     if (container.dataset.placement !== 'checkout') {
         // At checkout the buyer already chose address + carrier through the
@@ -244,17 +250,37 @@ function _ppInitiate(interaction, container, merchantId, websiteKey, paymentMeth
             _ppOnShippingChange(interaction, options, container, data, actions);
     }
     interaction._ppOptions = options;
-    BuckarooSdk.PayPal.initiate(options);
+    // paypal.com's script can be blocked (ad blocker, CSP) or refuse the
+    // merchant, and then no button ever renders: give up after a while so the
+    // checkout buyer is told to pick another method instead of waiting.
+    interaction._ppInitTimer = setTimeout(() => {
+        console.error('PayPal button did not render.');
+        _ppUnavailable(container);
+    }, PP_INIT_TIMEOUT_MS);
+    try {
+        BuckarooSdk.PayPal.initiate(options);
+    } catch (error) {
+        _ppClearInitTimer(interaction);
+        console.error('PayPal initiate failed:', error);
+        _ppUnavailable(container);
+    }
+}
+
+const PP_INIT_TIMEOUT_MS = 15000;
+
+function _ppClearInitTimer(interaction) {
+    clearTimeout(interaction._ppInitTimer);
+    interaction._ppInitTimer = null;
 }
 
 // PayPal's Buttons cannot render into a hidden (zero-width) container, so on the
 // checkout page the button is mounted once its inline form is shown, wherever
 // the buyer has scrolled. Cart and product surfaces are visible at load and
-// mount immediately.
+// mount immediately. Returns the observer (if any) so it can be disconnected.
 function _ppWhenVisible(el, callback) {
     if (el.offsetParent !== null || typeof ResizeObserver === 'undefined') {
         callback();
-        return;
+        return null;
     }
     const observer = new ResizeObserver((entries) => {
         if (entries.some((entry) => entry.contentRect.width > 0)) {
@@ -263,21 +289,25 @@ function _ppWhenVisible(el, callback) {
         }
     });
     observer.observe(el);
+    return observer;
 }
 
 // At checkout "Pay now" is hidden while PayPal is selected, so a silently
 // hidden button would leave the buyer stuck: tell them to pick another method.
+// The message sits next to the container, whose fixed button height would clip
+// longer translations.
 function _ppUnavailable(container) {
-    if (container.dataset.placement !== 'checkout') {
-        container.classList.add('d-none');
+    container.classList.add('d-none');
+    if (container.dataset.placement !== 'checkout'
+            || container.nextElementSibling?.classList.contains('o_buckaroo_paypal_unavailable')) {
         return;
     }
     const message = document.createElement('div');
-    message.className = 'alert alert-warning mb-0';
+    message.className = 'o_buckaroo_paypal_unavailable alert alert-warning mb-0';
     message.textContent = _t(
         "PayPal is not available right now. Please choose another payment method.",
     );
-    container.replaceChildren(message);
+    container.after(message);
 }
 
 async function _ppMountButton(interaction) {
@@ -290,14 +320,14 @@ async function _ppMountButton(interaction) {
         return;
     }
     // Keep only the first cart button when a theme renders the express form twice.
-    if (container.dataset.placement !== 'product' && isDuplicatePlacement(
+    if (container.dataset.placement === 'cart' && isDuplicatePlacement(
         container,
         'form[name="o_payment_express_checkout_form"] div[name="o_buckaroo_paypal_express_container"][data-merchant-id]',
     )) {
         container.classList.add('d-none');
         return;
     }
-    _ppWhenVisible(container, async () => {
+    interaction._ppVisibilityObserver = _ppWhenVisible(container, async () => {
         try {
             await _ppEnsureSdk(truthyData(container.dataset.testMode));
         } catch (error) {
@@ -416,6 +446,12 @@ export class BuckarooPaypalExpress extends ExpressCheckout {
         // Keep the sheet amount fresh when the cart quantity changes.
         this.env.bus.addEventListener('cart_amount_changed', (ev) =>
             this._updateAmount(...ev.detail));
+    }
+
+    destroy() {
+        this._ppVisibilityObserver?.disconnect();
+        _ppClearInitTimer(this);
+        super.destroy();
     }
 
     _updateAmount(newAmount, newMinorAmount) {

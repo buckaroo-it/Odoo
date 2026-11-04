@@ -6,8 +6,8 @@ import { rpc } from '@web/core/network/rpc';
 import { redirect } from '@web/core/utils/urls';
 import { ConfirmationDialog } from '@web/core/confirmation_dialog/confirmation_dialog';
 
-// Generic express-button helpers shared by the Buckaroo wallets (Apple Pay +
-// Google Pay). No method-specific branching lives here.
+// Generic express-button helpers shared by the Buckaroo wallets (Apple Pay,
+// Google Pay, PayPal). No method-specific branching lives here.
 
 export function displayWalletError(interaction, message) {
     interaction.services.dialog.add(ConfirmationDialog, {
@@ -28,44 +28,62 @@ export function buckarooSdkUrl(testMode) {
     return testMode ? BUCKAROO_SDK_URL_TEST : BUCKAROO_SDK_URL;
 }
 
-// The Buckaroo SDK runs `$.ajaxSetup` (through `var $ = jQuery`) as soon as it
-// loads. Odoo 20 has no frontend jQuery, so the script would throw and leave
-// `BuckarooSdk` empty. Its wallet parts never use `$`, so a stub that lives only
-// while SDK scripts load is enough. Bootstrap treats any `window.jQuery` as real
-// jQuery (and calls `$.Event`), so `data-bs-no-jquery` keeps it off the stub.
-// Loads are memoized per URL and share one stub, removed once the last pending
-// load settles; a failed load can retry.
+// The Buckaroo SDK reads the global `jQuery` once, when its script runs, into a
+// closure its wallets keep using (Apple Pay: `$(selector)`, `.on()`, `$.post()`
+// for merchant validation). Odoo 20 has no frontend jQuery, so the SDK would
+// throw and leave `BuckarooSdk` empty. Lend it a vendored jQuery only while SDK
+// scripts load, then take it off `window` again; the SDK keeps its reference.
+// Bootstrap treats any `window.jQuery` as its own (and triggers jQuery events),
+// so `data-bs-no-jquery` keeps it on native events meanwhile. Loads are
+// memoized per URL; a failed load can retry.
+const SDK_JQUERY_URL = '/payment_buckaroo_official/static/lib/jquery/jquery-3.7.1.min.js';
 const _buckarooSdkLoads = {};
-let _jQueryStub = null;
+let _sdkJQuery = null;
+let _sdkJQueryLoad = null;
 let _bsNoJQuerySet = false;
 let _pendingSdkLoads = 0;
 
-export function loadBuckarooSdk(url) {
-    if (!_buckarooSdkLoads[url]) {
-        if (window.jQuery === undefined) {
-            _jQueryStub = { ajaxSetup() {} };
-            window.jQuery = _jQueryStub;
-            _bsNoJQuerySet = !document.body.hasAttribute('data-bs-no-jquery');
+function _loadSdkJQuery() {
+    if (!_sdkJQueryLoad) {
+        // `noConflict(true)` restores the previous (absent) globals at once.
+        _sdkJQueryLoad = loadJS(SDK_JQUERY_URL).then(() => window.jQuery.noConflict(true));
+        _sdkJQueryLoad.catch(() => {
+            _sdkJQueryLoad = null;
+        });
+    }
+    return _sdkJQueryLoad;
+}
+
+async function _withSdkJQuery(load) {
+    if (window.jQuery !== undefined && window.jQuery !== _sdkJQuery) {
+        return load(); // The page has its own jQuery (Odoo 19).
+    }
+    if (!_pendingSdkLoads++ && !document.body.hasAttribute('data-bs-no-jquery')) {
+        document.body.setAttribute('data-bs-no-jquery', '');
+        _bsNoJQuerySet = true;
+    }
+    try {
+        _sdkJQuery = await _loadSdkJQuery();
+        window.jQuery = _sdkJQuery;
+        return await load();
+    } finally {
+        if (!--_pendingSdkLoads) {
+            if (window.jQuery === _sdkJQuery) {
+                delete window.jQuery;
+            }
             if (_bsNoJQuerySet) {
-                document.body.setAttribute('data-bs-no-jquery', '');
+                document.body.removeAttribute('data-bs-no-jquery');
+                _bsNoJQuerySet = false;
             }
         }
-        _pendingSdkLoads++;
-        _buckarooSdkLoads[url] = loadJS(url).catch((error) => {
+    }
+}
+
+export function loadBuckarooSdk(url) {
+    if (!_buckarooSdkLoads[url]) {
+        _buckarooSdkLoads[url] = _withSdkJQuery(() => loadJS(url)).catch((error) => {
             delete _buckarooSdkLoads[url];
             throw error;
-        }).finally(() => {
-            _pendingSdkLoads--;
-            if (!_pendingSdkLoads && _jQueryStub) {
-                if (window.jQuery === _jQueryStub) {
-                    delete window.jQuery;
-                }
-                if (_bsNoJQuerySet) {
-                    document.body.removeAttribute('data-bs-no-jquery');
-                    _bsNoJQuerySet = false;
-                }
-                _jQueryStub = null;
-            }
         });
     }
     return _buckarooSdkLoads[url];
@@ -167,13 +185,19 @@ export async function finalizeExpressTransaction(
         }));
     } catch (error) {
         console.error('Express transaction RPC failed:', error);
-        displayWalletError(interaction, txError);
+        // Show the server's reason (e.g. a ValidationError) when it has one.
+        displayWalletError(interaction, error?.data?.message || txError);
         return;
     }
 
-    // The route can refuse without raising (e.g. an incomplete address on the
-    // order): no transaction exists, so stay on the page and show why.
+    // Odoo 20 can refuse without raising when a checkout step fails (e.g. an
+    // incomplete address, or a login the website requires): no payment was
+    // started, so show why, or go to the page that fixes it.
     if (processingValues?.state === 'error') {
+        if (!processingValues.state_message && processingValues.redirect) {
+            redirect(processingValues.redirect);
+            return;
+        }
         displayWalletError(interaction, processingValues.state_message || txError);
         return;
     }

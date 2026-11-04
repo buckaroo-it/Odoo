@@ -147,3 +147,62 @@ class TestPaymentProvider(BuckarooOfficialCommon):
         self.assertTrue(mock_send.called, "no HTTP request was attempted")
         prepared_request = mock_send.call_args[0][0]
         self.assertEqual(prepared_request.headers["Software"], _buckaroo_official_software_header())
+
+
+@tagged("post_install", "-at_install")
+class TestExpressProviderLookup(BuckarooOfficialCommon):
+    """`_buckaroo_official_express_provider` picks the provider the product-page
+    express buttons render with: scoped to the website and its company, and
+    published unless an internal user is testing."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Only the test provider may match; other Buckaroo providers in the
+        # database would otherwise win the `limit=1`.
+        (
+            cls.env["payment.provider"].search(
+                [("code", "=", const.PROVIDER_CODE), ("id", "!=", cls.buckaroo.id)]
+            )
+        ).write({"state": "disabled"})
+        cls.website = cls.env["website"].create(
+            {"name": "Express Lookup", "company_id": cls.buckaroo.company_id.id}
+        )
+        cls.buckaroo.write(
+            {
+                "state": "test",
+                "allow_express_checkout": True,
+                "website_id": False,
+                "is_published": False,
+            }
+        )
+
+    def _lookup(self, website=None, user=None):
+        env = self.env(user=user) if user else self.env
+        return env["payment.provider"]._buckaroo_official_express_provider(website or self.website)
+
+    def test_internal_user_sees_unpublished_provider(self):
+        self.assertEqual(self._lookup(), self.buckaroo)
+
+    def test_shopper_needs_a_published_provider(self):
+        shopper = self.website.user_id
+        self.assertFalse(self._lookup(user=shopper))
+        self.buckaroo.is_published = True
+        self.assertEqual(self._lookup(user=shopper), self.buckaroo)
+
+    def test_provider_of_another_website_is_ignored(self):
+        other = self.env["website"].create(
+            {"name": "Other Site", "company_id": self.buckaroo.company_id.id}
+        )
+        self.buckaroo.website_id = other
+        self.assertFalse(self._lookup())
+        self.assertEqual(self._lookup(website=other), self.buckaroo)
+
+    def test_provider_of_another_company_is_ignored(self):
+        company = self.env["res.company"].create({"name": "Other Company"})
+        other = self.env["website"].create({"name": "Other Co Site", "company_id": company.id})
+        found = self._lookup(website=other)
+        # Odoo may set up a provider for the new company; it never gets ours.
+        self.assertNotEqual(found, self.buckaroo)
+        if found:
+            self.assertEqual(found.company_id, company)

@@ -125,7 +125,12 @@ class PaymentMethodPaypal(models.Model):
             params,
         )
         builder.add_parameter("payPalOrderId", order_id)
-        transaction.buckaroo_official_is_paypal_express = True
+        # Only the cart/product express button sets this (controllers/paypal.py):
+        # its order holds a stub address the PayPal address replaces after
+        # capture. A checkout "Pay now" order keeps the buyer's own address.
+        transaction.buckaroo_official_is_paypal_express = bool(
+            self.env.context.get("buckaroo_paypal_express")
+        )
         return builder.pay()
 
     def _buckaroo_handle_no_redirect_response(self, transaction, response):
