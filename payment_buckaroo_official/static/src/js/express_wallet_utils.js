@@ -115,6 +115,13 @@ export async function finalizeExpressTransaction(
         return;
     }
 
+    // The route can refuse without raising (e.g. an incomplete address on the
+    // order): no transaction exists, so stay on the page and show why.
+    if (processingValues?.state === 'error') {
+        displayWalletError(interaction, processingValues.state_message || txError);
+        return;
+    }
+
     // Buckaroo redirect-based flow: tx returns api_url to its hosted page.
     // Cross-origin, so window.location.assign (Odoo's redirect() blocks foreign origins).
     if (processingValues?.api_url) {
