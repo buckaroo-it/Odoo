@@ -1179,12 +1179,10 @@ msgstr "Creditcardinstellingen"
 #. module: payment_buckaroo_official
 #. odoo-python
 #: code:addons/payment_buckaroo_official/models/payment_method_riverty.py:0
-msgid ""
-"Riverty partial refunds are not supported via Odoo. For partial refunds, use"
-" Buckaroo Plaza."
+msgid "Riverty partial refunds need the paid order's product lines."
 msgstr ""
-"Gedeeltelijke Riverty-terugbetalingen worden niet ondersteund via "
-"Odoo. Gebruik Buckaroo Plaza voor gedeeltelijke terugbetalingen."
+"Gedeeltelijke Riverty-terugbetalingen hebben de productregels van de "
+"betaalde bestelling nodig."
 
 #. module: payment_buckaroo_official
 #. odoo-python

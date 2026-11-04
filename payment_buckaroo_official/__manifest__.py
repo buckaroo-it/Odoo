@@ -2,7 +2,7 @@
 
 {
     "name": "Buckaroo Official",
-    "version": "19.0.1.0.3",
+    "version": "19.0.1.0.4",
     "category": "Accounting/Payment Providers",
     "sequence": 350,
     "summary": "An official Buckaroo payment provider for Odoo 19.",
