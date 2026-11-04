@@ -16,6 +16,18 @@ export function displayWalletError(interaction, message) {
     });
 }
 
+// The live and test SDK builds differ in their checkout host and PayPal client
+// id, and both write the one `BuckarooSdk` global: the build that runs last
+// wins for every wallet. So every wallet on a page loads the build that
+// matches the provider mode, or PayPal can end up creating a live order for a
+// sandbox merchant.
+const BUCKAROO_SDK_URL = 'https://checkout.buckaroo.nl/api/buckaroosdk/script';
+const BUCKAROO_SDK_URL_TEST = 'https://testcheckout.buckaroo.nl/api/buckaroosdk/script';
+
+export function buckarooSdkUrl(testMode) {
+    return testMode ? BUCKAROO_SDK_URL_TEST : BUCKAROO_SDK_URL;
+}
+
 // The Buckaroo SDK runs `$.ajaxSetup` (through `var $ = jQuery`) as soon as it
 // loads. Odoo 20 has no frontend jQuery, so the script would throw and leave
 // `BuckarooSdk` empty. Its wallet parts never use `$`, so a stub that lives only

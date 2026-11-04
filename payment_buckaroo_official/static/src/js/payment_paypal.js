@@ -8,6 +8,7 @@ import { PaymentForm } from '@payment/interactions/payment_form';
 import { ExpressCheckout } from '@payment/interactions/express_checkout';
 import {
     bindProductCart,
+    buckarooSdkUrl,
     displayWalletError,
     finalizeExpressTransaction,
     isDuplicatePlacement,
@@ -23,13 +24,10 @@ import {
 // loads PayPal's sandbox client id. A test-mode provider creates a sandbox order,
 // so it must load the test SDK or the buyer approves under the wrong PayPal app
 // and the capture fails with "Order ... can't be captured in current state".
-const BUCKAROO_SDK_URL = 'https://checkout.buckaroo.nl/api/buckaroosdk/script';
-const BUCKAROO_SDK_URL_TEST = 'https://testcheckout.buckaroo.nl/api/buckaroosdk/script';
-
 // `loadBuckarooSdk` memoizes per URL, so every PayPal surface (cart, product,
 // checkout) and the other Buckaroo wallets share one fetch.
 function _ppEnsureSdk(testMode) {
-    return loadBuckarooSdk(testMode ? BUCKAROO_SDK_URL_TEST : BUCKAROO_SDK_URL);
+    return loadBuckarooSdk(buckarooSdkUrl(testMode));
 }
 
 // PayPal's `onShippingChange` only exposes a partial address (city, state,
