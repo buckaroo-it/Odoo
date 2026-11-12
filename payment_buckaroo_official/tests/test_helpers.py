@@ -20,6 +20,7 @@ from odoo.addons.payment_buckaroo_official.helpers.customer import (
     sanitize_phone,
     validate_bnpl_registry,
 )
+from odoo.addons.payment_buckaroo_official.helpers.wallet import is_amex_network
 
 from .common import BuckarooOfficialCommon
 
@@ -603,3 +604,15 @@ class TestPartnerCompanyRegistry(BuckarooOfficialCommon):
         partner = self._make_partner()
         partner._buckaroo_official_set_company_registry("not-a-kvk")
         self.assertFalse(partner._get_additional_identifier("NL_KVK"))
+
+
+class TestIsAmexNetwork(BaseCase):
+    def test_amex_in_any_casing(self):
+        for value in ("AmEx", "AMEX", "amex", " amex "):
+            with self.subTest(value=value):
+                self.assertTrue(is_amex_network(value))
+
+    def test_other_networks_and_empty_values(self):
+        for value in ("VISA", "MasterCard", "maestro", "", None):
+            with self.subTest(value=value):
+                self.assertFalse(is_amex_network(value))
