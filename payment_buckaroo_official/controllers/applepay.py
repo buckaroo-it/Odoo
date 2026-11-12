@@ -2,12 +2,14 @@
 
 from werkzeug.wrappers import Response
 
+from odoo import _
+from odoo.exceptions import ValidationError
 from odoo.http import Controller, request, route
 from odoo.tools import file_open
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
-from ..helpers.wallet import sanitize_customer_name, sanitize_token
+from ..helpers.wallet import is_amex_network, sanitize_customer_name, sanitize_token
 
 
 class ApplepayPaymentPortal(PaymentPortal):
@@ -25,6 +27,10 @@ class ApplepayPaymentPortal(PaymentPortal):
         if pm.code != "buckaroo_applepay":
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
+        if is_amex_network(kwargs.pop("buckaroo_applepay_network", None)):
+            raise ValidationError(
+                _("American Express is not supported for Apple Pay. Please choose another card.")
+            )
         token = sanitize_token(kwargs.pop("buckaroo_applepay_token", None))
         customer_name = sanitize_customer_name(kwargs.pop("buckaroo_applepay_customer_name", None))
         if token:

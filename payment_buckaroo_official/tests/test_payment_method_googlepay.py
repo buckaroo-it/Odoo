@@ -163,6 +163,32 @@ class TestGooglepaySessionBridgeController(BuckarooOfficialCommon):
         self.assertNotIn("buckaroo_googlepay_token", fake_req.session)
         self.assertNotIn("buckaroo_googlepay_customer_name", fake_req.session)
 
+    def test_amex_card_network_is_refused_before_buckaroo(self):
+        # Raising means super() (which sends the request to Buckaroo) never ran.
+        for network in ("AMEX", "amex", "AmEx"):
+            with (
+                self.subTest(network=network),
+                self.assertRaisesRegex(ValidationError, "American Express"),
+            ):
+                self._call_controller(
+                    payment_method_id=self.googlepay.id,
+                    buckaroo_googlepay_token="gp-tok-abc",
+                    buckaroo_googlepay_customer_name="Ada Lovelace",
+                    buckaroo_googlepay_card_network=network,
+                )
+
+    def test_supported_card_network_passes_and_is_not_forwarded(self):
+        result, super_stub, fake_req = self._call_controller(
+            payment_method_id=self.googlepay.id,
+            buckaroo_googlepay_token="gp-tok-abc",
+            buckaroo_googlepay_customer_name="Ada Lovelace",
+            buckaroo_googlepay_card_network="MASTERCARD",
+        )
+        self.assertEqual(result, "SUPER_OK")
+        self.assertEqual(fake_req.session.get("buckaroo_googlepay_token"), "gp-tok-abc")
+        _, kwargs_to_super = super_stub.call_args
+        self.assertNotIn("buckaroo_googlepay_card_network", kwargs_to_super)
+
     def test_empty_token_after_strip_is_not_stashed(self):
         _, _, fake_req = self._call_controller(
             payment_method_id=self.googlepay.id,
