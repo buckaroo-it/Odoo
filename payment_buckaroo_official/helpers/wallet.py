@@ -25,3 +25,13 @@ def sanitize_customer_name(value):
     if not cleaned:
         return None
     return cleaned[:128]
+
+
+def is_amex_network(value):
+    """Whether a wallet-reported card network is American Express.
+
+    Apple Pay reports ``AmEx`` (``paymentMethod.network``), Google Pay
+    ``AMEX`` (``paymentMethodData.info.cardNetwork``). Buckaroo does not accept
+    American Express through either wallet.
+    """
+    return str(value or "").strip().lower() == "amex"

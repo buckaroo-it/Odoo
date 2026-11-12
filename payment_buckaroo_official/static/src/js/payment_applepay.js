@@ -22,6 +22,13 @@ import {
 // non-Safari browsers; Buckaroo's SDK owns merchant validation + capture.
 const APPLE_PAY_SDK_URL = 'https://applepay.cdn-apple.com/jsapi/1.latest/apple-pay-sdk.js';
 
+// Card networks offered in the Apple Pay sheet: the Buckaroo SDK default, set
+// here so the plugin never depends on it. Buckaroo does not accept American
+// Express through Apple Pay, so `amex` is left out.
+const APPLE_PAY_SUPPORTED_NETWORKS = [
+    'masterCard', 'visa', 'maestro', 'vPay', 'cartesBancaires', 'privateLabel',
+];
+
 let _apSdkPromise = null;
 
 // Both SDKs are needed on every Apple Pay surface; memoize the load so the
@@ -235,6 +242,8 @@ function _apAuthorize(buttonSelector, params) {
                 resolveOnce({
                     token: _apFormatToken(payment),
                     customerName: _apCustomerName(payment),
+                    // The server refuses networks Buckaroo does not accept.
+                    network: payment?.token?.paymentMethod?.network || '',
                     billingContact: payment?.billingContact || null,
                     shippingContact: payment?.shippingContact || null,
                 });
@@ -245,6 +254,8 @@ function _apAuthorize(buttonSelector, params) {
             params.requiredBillingContactFields || ['postalAddress', 'name'],
             params.requiredShippingContactFields || [],
             () => resolveOnce({ token: null, customerName: null }),
+            undefined, // merchantCapabilities: keep the SDK default.
+            APPLE_PAY_SUPPORTED_NETWORKS,
         );
         try {
             const payment = new BuckarooSdk.ApplePay.ApplePayPayment(buttonSelector, options);
@@ -316,9 +327,9 @@ patch(PaymentForm.prototype, {
             onShippingMethodSelected: _apSetMethodHandler(storeName, container.dataset.totalAmount),
         } : {};
 
-        let token, customerName;
+        let token, customerName, network;
         try {
-            ({ token, customerName } = await _apAuthorize('#o_buckaroo_applepay_container', {
+            ({ token, customerName, network } = await _apAuthorize('#o_buckaroo_applepay_container', {
                 storeName,
                 countryCode: container.dataset.countryCode,
                 currencyCode: container.dataset.currencyCode,
@@ -347,12 +358,14 @@ patch(PaymentForm.prototype, {
 
         this._buckarooAPToken = token;
         this._buckarooAPCustomerName = customerName;
+        this._buckarooAPNetwork = network;
         try {
             await super._initiatePaymentFlow(...arguments);
         } finally {
             // Single-use token; clear so a retry forces a fresh Apple Pay sheet.
             this._buckarooAPToken = null;
             this._buckarooAPCustomerName = null;
+            this._buckarooAPNetwork = null;
         }
     },
 
@@ -372,6 +385,9 @@ patch(PaymentForm.prototype, {
         }
         if (this._buckarooAPCustomerName) {
             params.buckaroo_applepay_customer_name = this._buckarooAPCustomerName;
+        }
+        if (this._buckarooAPNetwork) {
+            params.buckaroo_applepay_network = this._buckarooAPNetwork;
         }
         return params;
     },
@@ -541,7 +557,7 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
         return;
     }
 
-    const { token, customerName, billingContact, shippingContact } = authResult;
+    const { token, customerName, network, billingContact, shippingContact } = authResult;
     if (!token || !customerName) {
         // User cancelled the sheet or Apple returned an incomplete response.
         return;
@@ -574,6 +590,7 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
         txExtra: {
             buckaroo_applepay_token: token,
             buckaroo_applepay_customer_name: customerName,
+            buckaroo_applepay_network: network,
         },
         txError: _t("Apple Pay payment could not be processed. Please try again."),
     });

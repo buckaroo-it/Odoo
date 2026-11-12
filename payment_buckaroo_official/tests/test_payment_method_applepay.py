@@ -246,6 +246,32 @@ class TestApplepaySessionBridgeController(BuckarooOfficialCommon):
         self.assertNotIn("buckaroo_applepay_token", fake_req.session)
         self.assertNotIn("buckaroo_applepay_customer_name", fake_req.session)
 
+    def test_amex_network_is_refused_before_buckaroo(self):
+        # Raising means super() (which sends the request to Buckaroo) never ran.
+        for network in ("AmEx", "amex", "AMEX"):
+            with (
+                self.subTest(network=network),
+                self.assertRaisesRegex(ValidationError, "American Express"),
+            ):
+                self._call_controller(
+                    payment_method_id=self.applepay.id,
+                    buckaroo_applepay_token="ap-tok-abc",
+                    buckaroo_applepay_customer_name="Ada Lovelace",
+                    buckaroo_applepay_network=network,
+                )
+
+    def test_supported_network_passes_and_is_not_forwarded(self):
+        result, super_stub, fake_req = self._call_controller(
+            payment_method_id=self.applepay.id,
+            buckaroo_applepay_token="ap-tok-abc",
+            buckaroo_applepay_customer_name="Ada Lovelace",
+            buckaroo_applepay_network="Visa",
+        )
+        self.assertEqual(result, "SUPER_OK")
+        self.assertEqual(fake_req.session.get("buckaroo_applepay_token"), "ap-tok-abc")
+        _, kwargs_to_super = super_stub.call_args
+        self.assertNotIn("buckaroo_applepay_network", kwargs_to_super)
+
     def test_empty_token_after_strip_is_not_stashed(self):
         _, _, fake_req = self._call_controller(
             payment_method_id=self.applepay.id,

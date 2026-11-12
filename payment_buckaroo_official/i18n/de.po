@@ -80,6 +80,18 @@ msgid "American Express"
 msgstr "American Express"
 
 #. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/applepay.py:0
+msgid "American Express is not supported for Apple Pay. Please choose another card."
+msgstr "American Express wird für Apple Pay nicht unterstützt. Bitte wählen Sie eine andere Karte."
+
+#. module: payment_buckaroo_official
+#. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/googlepay.py:0
+msgid "American Express is not supported for Google Pay. Please choose another card."
+msgstr "American Express wird für Google Pay nicht unterstützt. Bitte wählen Sie eine andere Karte."
+
+#. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.bank_transfer_thank_you_block
 msgid "Amount"
 msgstr "Betrag"
