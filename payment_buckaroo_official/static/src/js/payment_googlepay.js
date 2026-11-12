@@ -42,7 +42,8 @@ export function buildGooglePayRequest(config, context) {
             type: 'CARD',
             parameters: {
                 allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
-                allowedCardNetworks: ['AMEX', 'DISCOVER', 'INTERAC', 'JCB', 'MASTERCARD', 'VISA'],
+                // Buckaroo does not accept American Express through Google Pay.
+                allowedCardNetworks: ['DISCOVER', 'INTERAC', 'JCB', 'MASTERCARD', 'VISA'],
                 billingAddressRequired: true,
                 billingAddressParameters: { format: 'FULL', phoneNumberRequired: false },
             },
@@ -79,7 +80,9 @@ function _gpExtractTokenAndName(paymentData) {
     const billing = paymentData?.paymentMethodData?.info?.billingAddress || {};
     const shipping = paymentData?.shippingAddress || {};
     const customerName = (billing.name || shipping.name || '').trim();
-    return { token, customerName, billing, shipping };
+    // The server refuses networks Buckaroo does not accept (American Express).
+    const cardNetwork = paymentData?.paymentMethodData?.info?.cardNetwork || '';
+    return { token, customerName, cardNetwork, billing, shipping };
 }
 
 function _gpExtractAddress(address, fallbackEmail) {
@@ -240,7 +243,7 @@ patch(PaymentForm.prototype, {
             return;
         }
 
-        const { token, customerName } = _gpExtractTokenAndName(paymentData);
+        const { token, customerName, cardNetwork } = _gpExtractTokenAndName(paymentData);
         if (!token || !customerName) {
             this._displayErrorDialog(
                 _t("Error"),
@@ -252,12 +255,14 @@ patch(PaymentForm.prototype, {
 
         this._buckarooGPToken = token;
         this._buckarooGPCustomerName = customerName;
+        this._buckarooGPCardNetwork = cardNetwork;
         try {
             await super._initiatePaymentFlow(...arguments);
         } finally {
             // Single-use token; clear so a retry forces a new popup.
             this._buckarooGPToken = null;
             this._buckarooGPCustomerName = null;
+            this._buckarooGPCardNetwork = null;
         }
     },
 
@@ -277,6 +282,9 @@ patch(PaymentForm.prototype, {
         }
         if (this._buckarooGPCustomerName) {
             params.buckaroo_googlepay_customer_name = this._buckarooGPCustomerName;
+        }
+        if (this._buckarooGPCardNetwork) {
+            params.buckaroo_googlepay_card_network = this._buckarooGPCardNetwork;
         }
         return params;
     },
@@ -410,7 +418,7 @@ async function _gpExpressClick(interaction, paymentsClient, buildRequest, provid
 }
 
 async function _gpFinalize(interaction, paymentData, providerData, paymentMethodId) {
-    const { token, customerName, billing, shipping } = _gpExtractTokenAndName(paymentData);
+    const { token, customerName, cardNetwork, billing, shipping } = _gpExtractTokenAndName(paymentData);
     if (!token || !customerName) {
         displayWalletError(interaction, _t(
             "Google Pay returned an incomplete response. Please try again.",
@@ -435,6 +443,7 @@ async function _gpFinalize(interaction, paymentData, providerData, paymentMethod
         txExtra: {
             buckaroo_googlepay_token: token,
             buckaroo_googlepay_customer_name: customerName,
+            buckaroo_googlepay_card_network: cardNetwork,
         },
         txError: _t("Google Pay payment could not be processed. Please try again."),
     });

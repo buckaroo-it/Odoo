@@ -2,6 +2,7 @@
 
 import base64
 import json
+import re
 from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import ValidationError
@@ -244,6 +245,32 @@ class TestApplepaySessionBridgeController(BuckarooOfficialCommon):
         self.assertEqual(result, "SUPER_OK")
         self.assertNotIn("buckaroo_applepay_token", fake_req.session)
         self.assertNotIn("buckaroo_applepay_customer_name", fake_req.session)
+
+    def test_amex_network_is_refused_before_buckaroo(self):
+        # Raising means super() (which sends the request to Buckaroo) never ran.
+        for network in ("AmEx", "amex", "AMEX"):
+            with (
+                self.subTest(network=network),
+                self.assertRaisesRegex(ValidationError, "American Express"),
+            ):
+                self._call_controller(
+                    payment_method_id=self.applepay.id,
+                    buckaroo_applepay_token="ap-tok-abc",
+                    buckaroo_applepay_customer_name="Ada Lovelace",
+                    buckaroo_applepay_network=network,
+                )
+
+    def test_supported_network_passes_and_is_not_forwarded(self):
+        result, super_stub, fake_req = self._call_controller(
+            payment_method_id=self.applepay.id,
+            buckaroo_applepay_token="ap-tok-abc",
+            buckaroo_applepay_customer_name="Ada Lovelace",
+            buckaroo_applepay_network="Visa",
+        )
+        self.assertEqual(result, "SUPER_OK")
+        self.assertEqual(fake_req.session.get("buckaroo_applepay_token"), "ap-tok-abc")
+        _, kwargs_to_super = super_stub.call_args
+        self.assertNotIn("buckaroo_applepay_network", kwargs_to_super)
 
     def test_empty_token_after_strip_is_not_stashed(self):
         _, _, fake_req = self._call_controller(
@@ -1144,3 +1171,62 @@ class TestApplepayProductExpressIsolation(HttpCase):
         )
         # The shopper's cart was not touched by the rejected call.
         self.assertEqual(self._rpc("/shop/cart/quantity", {}), qty_before)
+
+
+@tagged("post_install", "-at_install")
+class TestWalletExpressFormsSdkMode(BuckarooOfficialCommon):
+    """Apple Pay and PayPal share the `BuckarooSdk` global, so their express
+    containers must carry the same test-mode flag: both then load the same SDK
+    build, and PayPal can't end up on the live build for a sandbox merchant."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.applepay = cls.env.ref("payment_buckaroo_official.payment_method_applepay")
+        cls.paypal = cls.env.ref("payment_buckaroo_official.payment_method_paypal")
+        cls.buckaroo.payment_method_ids = [
+            Command.link(cls.applepay.id),
+            Command.link(cls.paypal.id),
+        ]
+        cls.applepay.write(
+            {
+                "buckaroo_official_applepay_merchant_guid": "BUCK-APPLE-GUID",
+                "buckaroo_official_applepay_integration_mode": "inline",
+                "buckaroo_official_applepay_show_on_cart": True,
+            }
+        )
+        cls.paypal.write(
+            {
+                "buckaroo_official_paypal_merchant_id": "LIVEMERCHANT",
+                "buckaroo_official_paypal_sandbox_merchant_id": "SANDBOXMERCHANT",
+                "buckaroo_official_paypal_show_on_cart": True,
+            }
+        )
+
+    def _test_mode_attrs(self):
+        fake_req = MagicMock()
+        fake_req.env = self.env
+        qweb = self.env["ir.qweb"].with_context(minimal_qcontext=True)
+        values = {
+            "provider_sudo": self.buckaroo,
+            "partner_id": self.partner.id,
+            "request": fake_req,
+        }
+        attrs = {}
+        for name, xmlid in (
+            ("applepay", "payment_buckaroo_official.applepay_express_form"),
+            ("paypal", "payment_buckaroo_official.paypal_express_form"),
+        ):
+            html = str(qweb._render(self.env.ref(xmlid).id, values))
+            self.assertIn("express_container", html, name)
+            match = re.search(r'data-test-mode="([^"]*)"', html)
+            attrs[name] = match and match.group(1)
+        return attrs
+
+    def test_test_mode_provider_flags_both_wallets(self):
+        self.buckaroo.state = "test"
+        self.assertEqual(self._test_mode_attrs(), {"applepay": "True", "paypal": "True"})
+
+    def test_live_provider_flags_neither_wallet(self):
+        self.buckaroo.state = "enabled"
+        self.assertEqual(self._test_mode_attrs(), {"applepay": None, "paypal": None})

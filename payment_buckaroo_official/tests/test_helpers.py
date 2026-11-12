@@ -20,6 +20,7 @@ from odoo.addons.payment_buckaroo_official.helpers.customer import (
     sanitize_phone,
     validate_bnpl_registry,
 )
+from odoo.addons.payment_buckaroo_official.helpers.wallet import is_amex_network
 
 
 def make_tax(amount_type="percent", amount=21.0):
@@ -554,3 +555,15 @@ class TestValidateBnplRegistry(BaseCase):
         self.assertEqual(result, "12345678")
         self.assertEqual(mock_req.session["buckaroo_b2b_registry"], "12345678")
         self.assertEqual(user.partner_id.sudo().company_registry, "12345678")
+
+
+class TestIsAmexNetwork(BaseCase):
+    def test_amex_in_any_casing(self):
+        for value in ("AmEx", "AMEX", "amex", " amex "):
+            with self.subTest(value=value):
+                self.assertTrue(is_amex_network(value))
+
+    def test_other_networks_and_empty_values(self):
+        for value in ("VISA", "MasterCard", "maestro", "", None):
+            with self.subTest(value=value):
+                self.assertFalse(is_amex_network(value))

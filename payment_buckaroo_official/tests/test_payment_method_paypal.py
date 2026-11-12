@@ -60,7 +60,9 @@ class TestPaypalCreatePayment(BuckarooOfficialCommon):
             _patch_request({"buckaroo_paypal_order_id": "PP-ORDER-XYZ"}),
         ):
             MockPS.return_value.create_payment.return_value = mock_builder
-            result = self.paypal._buckaroo_create_payment(tx, client)
+            result = self.paypal.with_context(
+                buckaroo_paypal_express=True
+            )._buckaroo_create_payment(tx, client)
 
         mock_builder.pay.assert_called_once()
         self.assertEqual(result, mock_response)
@@ -71,6 +73,22 @@ class TestPaypalCreatePayment(BuckarooOfficialCommon):
         self.assertEqual(param_calls.get("payPalOrderId"), "PP-ORDER-XYZ")
         self.assertEqual(MockPS.return_value.create_payment.call_args[0][0], "paypal")
         self.assertTrue(tx.buckaroo_official_is_paypal_express)
+
+    def test_checkout_payment_is_not_marked_express(self):
+        """A checkout "Pay now" PayPal payment keeps the buyer's own address:
+        only the express button's context marks the transaction express."""
+        tx = self._create_buckaroo_tx(reference="TX-PP-CHECKOUT-FLAG", payment_method=self.paypal)
+        client = MagicMock()
+        mock_builder, _ = make_mock_sdk_builder()
+
+        with (
+            patch(_PAYPAL_PS) as MockPS,
+            _patch_request({"buckaroo_paypal_order_id": "PP-ORDER-CHK"}),
+        ):
+            MockPS.return_value.create_payment.return_value = mock_builder
+            self.paypal._buckaroo_create_payment(tx, client)
+
+        self.assertFalse(tx.buckaroo_official_is_paypal_express)
 
     def test_express_payment_pops_session_order_id(self):
         tx = self._create_buckaroo_tx(reference="TX-PP-POP", payment_method=self.paypal)

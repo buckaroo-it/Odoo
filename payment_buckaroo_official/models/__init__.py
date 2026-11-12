@@ -19,3 +19,4 @@ from . import payment_method_giftcard
 from . import payment_method_alipay
 from . import payment_method_przelewy24
 from . import payment_method_trustly
+from . import ir_http

@@ -131,7 +131,17 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
     PayPal order id so `_buckaroo_create_payment` can pop it, and drops the
     stash if the transaction aborts before it is consumed."""
 
-    def _call(self, *, pm_code="buckaroo_paypal", order_id="PP-ORDER-1", super_raises=False):
+    def _call(
+        self,
+        *,
+        pm_code="buckaroo_paypal",
+        order_id="PP-ORDER-1",
+        super_raises=False,
+        super_result=None,
+        express=None,
+        fake_req=None,
+        super_kwargs=None,
+    ):
         from ..controllers.paypal import PaypalPaymentPortal
         from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
@@ -142,18 +152,22 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
         fake_env = MagicMock()
         fake_env.__getitem__.return_value.sudo.return_value.browse.return_value = pm
 
-        fake_req = MagicMock()
+        fake_req = fake_req or MagicMock()
         fake_req.env = fake_env
         fake_req.session = session
 
         kwargs = {"payment_method_id": 5}
         if order_id is not None:
             kwargs["buckaroo_paypal_order_id"] = order_id
+        if express is not None:
+            kwargs["buckaroo_paypal_express"] = express
 
         def _super(self_, order_id_, access_token, **kw):
+            if super_kwargs is not None:
+                super_kwargs.update(kw)
             if super_raises:
                 raise ValueError("boom")
-            return {"ok": True}
+            return super_result or {"ok": True}
 
         controller = PaypalPaymentPortal()
         with (
@@ -182,6 +196,42 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
         result, session = self._call(pm_code="buckaroo_ideal")
         self.assertEqual(result, {"ok": True})
         self.assertNotIn("buckaroo_paypal_order_id", session)
+
+    def test_refusal_without_raising_drops_stashed_order_id(self):
+        refused = {"state": "error", "state_message": "", "redirect": "/shop/address"}
+        result, session = self._call(super_result=refused)
+        self.assertEqual(result, refused)
+        self.assertNotIn("buckaroo_paypal_order_id", session)
+
+    def test_express_flag_sets_context_and_is_popped(self):
+        fake_req = MagicMock()
+        super_kwargs = {}
+        self._call(express=True, fake_req=fake_req, super_kwargs=super_kwargs)
+        fake_req.update_context.assert_called_once_with(buckaroo_paypal_express=True)
+        self.assertNotIn("buckaroo_paypal_express", super_kwargs)
+
+    def test_checkout_call_without_flag_sets_no_context(self):
+        fake_req = MagicMock()
+        self._call(fake_req=fake_req)
+        fake_req.update_context.assert_not_called()
+
+    def test_express_flag_must_be_a_real_true(self):
+        for value in ("false", "true", 1):
+            fake_req = MagicMock()
+            super_kwargs = {}
+            self._call(express=value, fake_req=fake_req, super_kwargs=super_kwargs)
+            fake_req.update_context.assert_not_called()
+            self.assertNotIn("buckaroo_paypal_express", super_kwargs)
+
+    def test_express_flag_ignored_for_other_methods(self):
+        """Left in kwargs for core's whitelist to reject; never sets the context."""
+        fake_req = MagicMock()
+        super_kwargs = {}
+        self._call(
+            pm_code="buckaroo_ideal", express=True, fake_req=fake_req, super_kwargs=super_kwargs
+        )
+        fake_req.update_context.assert_not_called()
+        self.assertTrue(super_kwargs.get("buckaroo_paypal_express"))
 
     def test_checkout_transaction_route_call_stash_is_consumable_by_create_payment(self):
         """The checkout ("Pay now") entry point never runs an express
