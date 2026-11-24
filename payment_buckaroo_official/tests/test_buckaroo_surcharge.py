@@ -34,6 +34,14 @@ class _SurchargeBase(BuckarooOfficialCommon):
                 "type": "service",
             }
         )
+        cls.tax_21 = cls.env["account.tax"].create(
+            {
+                "name": "VAT 21%",
+                "type_tax_use": "sale",
+                "amount_type": "percent",
+                "amount": 21.0,
+            }
+        )
 
     def _make_order(self, qty=1, price=100.0):
         order = self.env["sale.order"].create(
@@ -49,6 +57,24 @@ class _SurchargeBase(BuckarooOfficialCommon):
                 "product_uom_qty": qty,
                 "price_unit": price,
                 "tax_ids": [Command.clear()],
+            }
+        )
+        return order
+
+    def _make_taxed_order(self, price=100.0):
+        order = self.env["sale.order"].create(
+            {
+                "partner_id": self.partner.id,
+                "currency_id": self.currency_euro.id,
+            }
+        )
+        self.env["sale.order.line"].create(
+            {
+                "order_id": order.id,
+                "product_id": self.product.id,
+                "product_uom_qty": 1,
+                "price_unit": price,
+                "tax_ids": [Command.set(self.tax_21.ids)],
             }
         )
         return order
@@ -200,33 +226,7 @@ class TestSurchargeTaxInheritance(_SurchargeBase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.tax_21 = cls.env["account.tax"].create(
-            {
-                "name": "VAT 21%",
-                "type_tax_use": "sale",
-                "amount_type": "percent",
-                "amount": 21.0,
-            }
-        )
         cls.ideal.buckaroo_official_fee_amount = "1.50"
-
-    def _make_taxed_order(self, price=100.0):
-        order = self.env["sale.order"].create(
-            {
-                "partner_id": self.partner.id,
-                "currency_id": self.currency_euro.id,
-            }
-        )
-        self.env["sale.order.line"].create(
-            {
-                "order_id": order.id,
-                "product_id": self.product.id,
-                "product_uom_qty": 1,
-                "price_unit": price,
-                "tax_ids": [Command.set(self.tax_21.ids)],
-            }
-        )
-        return order
 
     def test_inherits_tax_from_product_line(self):
         order = self._make_taxed_order()
@@ -296,6 +296,50 @@ class TestSurchargeSync(_SurchargeBase):
                 order._buckaroo_sync_surcharge_for_method(self.ideal)
                 order._buckaroo_sync_surcharge_for_method(method)
                 self.assertEqual(len(self._surcharge_lines(order)), 0)
+
+
+@tagged("post_install", "-at_install")
+class TestSurchargeAmountForMethod(_SurchargeBase):
+    """The total a wallet must authorize: what the transaction will charge once
+    the method's surcharge is synced, without touching the order."""
+
+    def test_includes_percent_and_fixed_fee(self):
+        for fee, expected in [("1.5%", 36.54), ("2.00", 38.00)]:
+            with self.subTest(fee=fee):
+                self.ideal.buckaroo_official_fee_amount = fee
+                order = self._make_order(price=36.0)
+                self.assertEqual(order._buckaroo_amount_total_for_method(self.ideal), expected)
+
+    def test_includes_vat_on_fee(self):
+        self.ideal.buckaroo_official_fee_amount = "1.50"
+        order = self._make_taxed_order(price=100.0)
+        # 121.00 + (1.50 + 21% = 1.82)
+        self.assertEqual(order._buckaroo_amount_total_for_method(self.ideal), 122.82)
+
+    def test_matches_total_after_sync(self):
+        self.ideal.buckaroo_official_fee_amount = "1.5%"
+        order = self._make_taxed_order(price=33.33)
+        expected = order._buckaroo_amount_total_for_method(self.ideal)
+        order._buckaroo_sync_surcharge_for_method(self.ideal)
+        self.assertEqual(expected, order.amount_total)
+
+    def test_leaves_order_untouched(self):
+        self.ideal.buckaroo_official_fee_amount = "1.50"
+        self.bancontact.buckaroo_official_fee_amount = "2.00"
+        order = self._make_order(price=36.0)
+        order._apply_buckaroo_surcharge_line(self.bancontact)
+
+        self.assertEqual(order._buckaroo_amount_total_for_method(self.ideal), 37.50)
+
+        line = self._surcharge_lines(order)
+        self.assertEqual(line.price_unit, 2.0)
+        self.assertEqual(order.amount_total, 38.00)
+
+    def test_non_buckaroo_method_drops_existing_fee(self):
+        self.ideal.buckaroo_official_fee_amount = "1.50"
+        order = self._make_order(price=36.0)
+        order._apply_buckaroo_surcharge_line(self.ideal)
+        self.assertEqual(order._buckaroo_amount_total_for_method(self.payment_method), 36.00)
 
 
 @tagged("post_install", "-at_install")

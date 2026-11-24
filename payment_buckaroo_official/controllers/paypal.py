@@ -2,9 +2,29 @@
 
 from odoo.http import request, route
 
+from odoo.addons.website_sale.controllers.main import WebsiteSale
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
 from ..helpers.wallet import sanitize_token
+
+
+class PaypalWebsiteSale(WebsiteSale):
+    def _get_shop_payment_values(self, order, **kwargs):
+        """Add the amount the checkout PayPal button must authorize.
+
+        The page renders ``amount`` with whatever surcharge the order holds,
+        but paying with PayPal syncs PayPal's own surcharge first. The button
+        creates the PayPal order from this amount, which must equal the
+        transaction amount or Buckaroo refuses the pay request (BTI-2182).
+        """
+        values = super()._get_shop_payment_values(order, **kwargs)
+        methods = values.get("payment_methods_sudo") or request.env["payment.method"]
+        paypal = methods.filtered(lambda pm: pm.code == "buckaroo_paypal")[:1]
+        if paypal:
+            values["buckaroo_paypal_amount"] = order.sudo()._buckaroo_amount_total_for_method(
+                paypal
+            )
+        return values
 
 
 class PaypalPaymentPortal(PaymentPortal):
