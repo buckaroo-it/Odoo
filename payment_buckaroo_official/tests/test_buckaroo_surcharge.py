@@ -360,6 +360,12 @@ class TestSurchargeAmountForMethod(_SurchargeBase):
         self._add_done_giftcard_payment(order, 10.0)
         self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), 26.54)
 
+    def test_nothing_to_pay_when_giftcard_paid_more_than_total(self):
+        self.ideal.buckaroo_official_fee_amount = "1.5%"
+        order = self._make_order(price=36.0)
+        self._add_done_giftcard_payment(order, 40.0)
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), 0.0)
+
     def test_non_buckaroo_method_drops_existing_fee(self):
         self.ideal.buckaroo_official_fee_amount = "1.50"
         order = self._make_order(price=36.0)

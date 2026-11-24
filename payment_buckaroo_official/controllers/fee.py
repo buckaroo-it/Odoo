@@ -4,9 +4,34 @@ from odoo import http
 from odoo.http import request, route
 from odoo.tools import formatLang
 
+from odoo.addons.website_sale.controllers.main import WebsiteSale
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
 from ..utils import const
+
+
+class BuckarooFeeWebsiteSale(WebsiteSale):
+    def _get_shop_payment_values(self, order, **kwargs):
+        """Add the amount each checkout wallet button shows or authorizes, by
+        payment method id.
+
+        The page renders ``amount`` with whatever surcharge the order holds,
+        but paying syncs the picked method's own surcharge first, and after a
+        partial giftcard payment only the open remainder is charged. PayPal
+        authorizes this amount up front, so it must equal the transaction
+        amount or Buckaroo refuses the pay request; the Apple Pay and Google Pay
+        sheets show it to the buyer (BTI-2182). Keyed by id: several records
+        with one code (one per provider on Odoo 20) can carry different fees.
+        """
+        values = super()._get_shop_payment_values(order, **kwargs)
+        methods = values.get("payment_methods_sudo") or request.env["payment.method"]
+        wallets = methods.filtered(lambda pm: pm.code in const.WALLET_METHOD_CODES)
+        if wallets:
+            order_sudo = order.sudo()
+            values["buckaroo_wallet_amounts"] = {
+                pm.id: order_sudo._buckaroo_amount_to_pay_for_method(pm) for pm in wallets
+            }
+        return values
 
 
 class BuckarooFeePaymentPortal(PaymentPortal):

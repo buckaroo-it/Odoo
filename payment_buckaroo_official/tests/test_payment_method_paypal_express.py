@@ -353,6 +353,17 @@ class TestPaypalFeeAmounts(BuckarooOfficialCommon):
         self.assertEqual(result["amount"], 36.54)
         self.assertEqual(result["minor_amount"], 3654)
 
+    def test_wallet_amount_uses_each_wallets_own_fee(self):
+        # Apple Pay and Google Pay pass their own method id, so the sheet shows
+        # their fee, not PayPal's.
+        applepay = self.env.ref("payment_buckaroo_official.payment_method_applepay")
+        self.buckaroo.payment_method_ids = [Command.link(applepay.id)]
+        applepay.buckaroo_official_fee_amount = "2.00"
+        order = self._make_order()
+        with self._patch_wallet_request(order):
+            result = self._wallet_controller().buckaroo_wallet_amount(payment_method_id=applepay.id)
+        self.assertEqual(result["amount"], 38.0)
+
     def test_wallet_amount_without_method_is_the_cart_total(self):
         order = self._make_order()
         with self._patch_wallet_request(order):
@@ -413,22 +424,36 @@ class TestPaypalFeeAmounts(BuckarooOfficialCommon):
     def _checkout_values(self, order, methods):
         from odoo.addons.website_sale.controllers.main import WebsiteSale
 
-        from ..controllers.paypal import PaypalWebsiteSale
+        from ..controllers.fee import BuckarooFeeWebsiteSale
 
         with patch.object(
             WebsiteSale,
             "_get_shop_payment_values",
             return_value={"amount": 36.0, "payment_methods_sudo": methods},
         ):
-            return PaypalWebsiteSale()._get_shop_payment_values(order)
+            return BuckarooFeeWebsiteSale()._get_shop_payment_values(order)
 
     def test_checkout_values_carry_paypal_amount(self):
         order = self._make_order()
         values = self._checkout_values(order, self.paypal | self.ideal)
-        self.assertEqual(values.get("buckaroo_paypal_amounts"), {self.paypal.id: 36.54})
+        self.assertEqual(values.get("buckaroo_wallet_amounts"), {self.paypal.id: 36.54})
         values = self._checkout_values(order, self.ideal)
-        self.assertNotIn("buckaroo_paypal_amounts", values)
+        self.assertNotIn("buckaroo_wallet_amounts", values)
         self.assertFalse(order.order_line.filtered("is_buckaroo_surcharge"))
+
+    def test_checkout_values_cover_every_wallet(self):
+        # The Apple Pay and Google Pay sheets show the amount the tx charges.
+        applepay = self.env.ref("payment_buckaroo_official.payment_method_applepay")
+        googlepay = self.env.ref("payment_buckaroo_official.payment_method_googlepay")
+        self.buckaroo.payment_method_ids = [Command.link(applepay.id), Command.link(googlepay.id)]
+        applepay.buckaroo_official_fee_amount = "2.00"
+        googlepay.buckaroo_official_fee_amount = ""
+        order = self._make_order()
+        values = self._checkout_values(order, self.paypal | applepay | googlepay | self.ideal)
+        self.assertEqual(
+            values.get("buckaroo_wallet_amounts"),
+            {self.paypal.id: 36.54, applepay.id: 38.0, googlepay.id: 36.0},
+        )
 
     def test_checkout_values_key_each_paypal_method_by_id(self):
         # Each PayPal button must authorize its own method's fee.
@@ -436,5 +461,5 @@ class TestPaypalFeeAmounts(BuckarooOfficialCommon):
         order = self._make_order()
         values = self._checkout_values(order, self.paypal | other)
         self.assertEqual(
-            values.get("buckaroo_paypal_amounts"), {self.paypal.id: 36.54, other.id: 38.0}
+            values.get("buckaroo_wallet_amounts"), {self.paypal.id: 36.54, other.id: 38.0}
         )

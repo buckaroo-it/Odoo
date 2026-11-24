@@ -281,6 +281,28 @@ class TestGiftcardSummaryTemplate(BuckarooOfficialCommon):
 
         self.assertEqual(pending_tx.amount, 22.0)
 
+    def test_validate_hook_refuses_when_giftcard_paid_whole_total(self):
+        # A cheaper method after a partial giftcard payment can drop the total
+        # to or below what the giftcard paid; charging it again would charge
+        # the buyer twice. Odoo 20's core refuses this case (`_is_paid`).
+        from odoo.exceptions import UserError
+
+        order = self._make_order(price=22.0)
+        self._add_done_giftcard_tx(order, amount=25.0)
+        for payment_method in (self.ideal, self.payment_method):
+            with self.subTest(payment_method=payment_method.code):
+                draft_tx = self._make_draft_tx(order, amount=22.0, payment_method=payment_method)
+                draft_tx.reference = f"TX-DRAFT-PAID-{payment_method.id}"
+                with self.assertRaises(UserError):
+                    self._invoke_validate_hook(order, draft_tx)
+
+    def test_validate_hook_allows_paid_total_without_giftcard(self):
+        # Core's own `amount_paid == amount_total` check covers other methods.
+        order = self._make_order(price=22.0)
+        draft_tx = self._make_draft_tx(order, amount=22.0, payment_method=self.ideal)
+        self._invoke_validate_hook(order, draft_tx)
+        self.assertEqual(draft_tx.amount, 22.0)
+
     def test_paid_with_line_skipped_for_draft_giftcard_tx(self):
         order = self._make_order(price=22.0)
         # Pending (not done) giftcard tx — no "Paid with" line.

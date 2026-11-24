@@ -118,6 +118,81 @@ export function isDuplicatePlacement(container, selector) {
     return all.length > 1 && all[0] !== container;
 }
 
+// A wallet button shows (Apple Pay, Google Pay) or authorizes (PayPal) the
+// amount it holds when clicked, and the click must open the sheet at once, so
+// it can't wait for the server then. That amount must equal what the
+// transaction charges: the method's Buckaroo fee and, after a partial giftcard
+// payment, only the open remainder (BTI-2182). The server computes it ahead of
+// the click. While a refresh is in flight, or after one failed, the wallet's
+// container `el` is inert (no mouse, keyboard or focus, inside a wallet iframe
+// too). A failed refresh is retried a few times before `el` stays inert, so a
+// network blip doesn't block the button. Refreshes can overlap (quick quantity
+// or variant changes): only the latest settles `el`. `state` (the interaction)
+// holds the request counter.
+// Resolves with the response, `null` when the refresh failed, or `undefined`
+// when a newer refresh superseded it.
+function _startWalletAmountRequest(state, el) {
+    state._walletAmountRequest = (state._walletAmountRequest || 0) + 1;
+    el.inert = true;
+    el.classList.add('opacity-50');
+    return state._walletAmountRequest;
+}
+
+function _settleWalletAmountRequest(state, el, request, ok) {
+    if (request !== state._walletAmountRequest) {
+        return false;
+    }
+    el.inert = !ok;
+    el.classList.toggle('opacity-50', !ok);
+    return true;
+}
+
+const WALLET_AMOUNT_RETRY_DELAYS_MS = [1000, 3000];
+
+async function _walletAmountRequest(state, el, route, params) {
+    const request = _startWalletAmountRequest(state, el);
+    let resp = null;
+    for (const delay of [0, ...WALLET_AMOUNT_RETRY_DELAYS_MS]) {
+        if (delay) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        if (request !== state._walletAmountRequest) {
+            return undefined;
+        }
+        try {
+            resp = await rpc(route, params);
+            break;
+        } catch (error) {
+            console.error(`Wallet amount refresh failed (${route}):`, error);
+        }
+    }
+    return _settleWalletAmountRequest(state, el, request, !!resp) ? resp : undefined;
+}
+
+// Cart total the wallet charges: `{ amount, minor_amount, currency_code }`.
+export function fetchWalletCartAmount(state, el, paymentMethodId) {
+    return _walletAmountRequest(state, el, '/shop/buckaroo/wallet/amount', {
+        payment_method_id: paymentMethodId,
+    });
+}
+
+// Product page (no cart yet): `{ subtotal, delivery_methods }` rated off a
+// throwaway order, the subtotal including the method's fee. An unreadable
+// product resolves `null` but leaves `el` usable: the click reports it.
+export async function fetchWalletProductPrefetch(state, el, paymentMethodId) {
+    const snap = snapshotProductDom();
+    if (!snap) {
+        // Still a new request, so an older prefetch can't land after it.
+        _settleWalletAmountRequest(state, el, _startWalletAmountRequest(state, el), true);
+        return null;
+    }
+    return _walletAmountRequest(state, el, '/shop/buckaroo/wallet/product_methods', {
+        product_id: snap.productId,
+        qty: snap.qty,
+        payment_method_id: paymentMethodId,
+    });
+}
+
 // Product pages have no cart yet: bind the shown variant to a throwaway cart
 // (express_init) and copy its authoritative routes/amount/partner onto the
 // interaction's paymentContext. Returns false (showing `startError`) on failure.

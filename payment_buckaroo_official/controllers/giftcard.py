@@ -5,6 +5,7 @@ import re
 from werkzeug.exceptions import BadRequest
 
 from odoo import _
+from odoo.exceptions import UserError
 from odoo.http import request, route
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
@@ -37,6 +38,20 @@ class GiftcardPaymentPortal(PaymentPortal):
 
     def _validate_transaction_for_order(self, transaction, sale_order):
         result = super()._validate_transaction_for_order(transaction, sale_order)
+        # A cheaper method picked after a partial giftcard payment can drop the
+        # total to or below what the giftcard paid. Core only refuses an exact
+        # match, so the new transaction would charge the whole total again
+        # (Odoo 20's core refuses this case itself). Raising rolls back the
+        # transaction just created. BTI-2182.
+        currency = sale_order.currency_id
+        if (
+            transaction.state == "draft"
+            and sale_order._buckaroo_giftcard_done_transactions()
+            and currency.compare_amounts(sale_order.amount_paid, sale_order.amount_total) >= 0
+        ):
+            raise UserError(
+                sale_order.env._("The giftcard already paid this order. Please refresh the page.")
+            )
         if transaction.provider_code != const.PROVIDER_CODE:
             return result
         if transaction.state != "draft":

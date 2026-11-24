@@ -1601,6 +1601,12 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/giftcard.py:0
+msgid "The giftcard already paid this order. Please refresh the page."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#. odoo-python
 #: code:addons/payment_buckaroo_official/controllers/express_wallet.py:0
 msgid "The given product does not exist."
 msgstr ""
