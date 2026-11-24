@@ -95,6 +95,9 @@ class SaleOrder(models.Model):
         the remainder, or nothing when the giftcard already paid the total.
         """
         self.ensure_one()
+        # The flushing savepoint runs every pending precommit hook (e.g. chatter
+        # tracking) before it starts, so its rollback only drops the hooks this
+        # preview itself adds.
         savepoint = self.env.cr.savepoint()
         try:
             self._buckaroo_sync_surcharge_for_method(payment_method)

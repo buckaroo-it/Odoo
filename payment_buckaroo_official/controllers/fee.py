@@ -1,13 +1,20 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import logging
+
+from psycopg2 import OperationalError
+
 from odoo import http
+from odoo.exceptions import ValidationError
 from odoo.http import request, route
-from odoo.tools import formatLang
+from odoo.tools import float_compare, formatLang
 
 from odoo.addons.website_sale.controllers.main import WebsiteSale
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
 from ..utils import const
+
+_logger = logging.getLogger(__name__)
 
 
 class BuckarooFeeWebsiteSale(WebsiteSale):
@@ -26,11 +33,21 @@ class BuckarooFeeWebsiteSale(WebsiteSale):
         values = super()._get_shop_payment_values(order, **kwargs)
         methods = values.get("payment_methods_sudo") or request.env["payment.method"]
         wallets = methods.filtered(lambda pm: pm.code in const.WALLET_METHOD_CODES)
-        if wallets:
-            order_sudo = order.sudo()
-            values["buckaroo_wallet_amounts"] = {
-                pm.id: order_sudo._buckaroo_amount_to_pay_for_method(pm) for pm in wallets
-            }
+        order_sudo = order.sudo()
+        amounts = {}
+        for pm in wallets:
+            # A failing preview must not break the page for every method. That
+            # wallet gets no amount (`None`): the page says it's unavailable
+            # rather than offer an amount the transaction won't charge.
+            try:
+                amounts[pm.id] = order_sudo._buckaroo_amount_to_pay_for_method(pm)
+            except OperationalError:
+                raise  # A concurrency error: Odoo retries the request.
+            except Exception:
+                _logger.exception("Buckaroo wallet amount preview failed for %s", pm.code)
+                amounts[pm.id] = None
+        if amounts:
+            values["buckaroo_wallet_amounts"] = amounts
         return values
 
 
@@ -42,6 +59,11 @@ class BuckarooFeePaymentPortal(PaymentPortal):
         website=True,
     )
     def shop_payment_transaction(self, order_id, access_token, **kwargs):
+        # Checked in `_validate_transaction_for_order`. Popped for every
+        # request: core rejects keys it doesn't know.
+        sheet_amount = kwargs.pop("buckaroo_wallet_amount", None)
+        if sheet_amount is not None:
+            request.update_context(**{const.WALLET_SHEET_AMOUNT_CONTEXT_KEY: sheet_amount})
         if not self._buckaroo_official_request_for_buckaroo(kwargs):
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
         if order_id:
@@ -53,6 +75,49 @@ class BuckarooFeePaymentPortal(PaymentPortal):
                 request.update_context(**{const.PICK_METHOD_CONTEXT_KEY: method_id})
         kwargs.pop("amount", None)
         return super().shop_payment_transaction(order_id, access_token, **kwargs)
+
+    def _validate_transaction_for_order(self, transaction, sale_order):
+        result = super()._validate_transaction_for_order(transaction, sale_order)
+        self._buckaroo_check_wallet_sheet_amount(transaction, sale_order)
+        return result
+
+    @staticmethod
+    def _buckaroo_check_wallet_sheet_amount(transaction, sale_order):
+        """Refuse to charge another amount than the Apple Pay / Google Pay
+        sheet showed when the buyer approved it.
+
+        The sheet total is computed before the payment (a product page rates
+        its carrier off a throwaway order, for one), so the order can still
+        differ when the transaction is created, e.g. a carrier priced by the
+        buyer's address. Raising rolls back the transaction before Buckaroo
+        is called, so nothing is charged (BTI-2182). Compares with the amount
+        to pay, not ``transaction.amount``: another hook may still shrink the
+        transaction to an open giftcard remainder.
+        """
+        context = transaction.env.context
+        sheet_amount = context.get(const.WALLET_SHEET_AMOUNT_CONTEXT_KEY)
+        if transaction.state != "draft":
+            return
+        # A wallet token without its sheet total (e.g. a page loaded before an
+        # upgrade) can't be checked: refuse it rather than charge unchecked.
+        if sheet_amount is None and not context.get(const.WALLET_SHEET_REQUIRED_CONTEXT_KEY):
+            return
+        try:
+            sheet_amount = float(sheet_amount)
+        except (TypeError, ValueError):
+            sheet_amount = None
+        expected = sale_order.sudo()._buckaroo_amount_to_pay_for_method(
+            transaction.payment_method_id
+        )
+        # The sheets show 2 decimals; a 3-decimal currency can't match closer.
+        digits = min(sale_order.currency_id.decimal_places, 2)
+        if sheet_amount is None or float_compare(sheet_amount, expected, precision_digits=digits):
+            raise ValidationError(
+                sale_order.env._(
+                    "The total changed while you were paying, so nothing was charged. "
+                    "Please check the amount and try again."
+                )
+            )
 
     @staticmethod
     def _buckaroo_official_request_for_buckaroo(kwargs):

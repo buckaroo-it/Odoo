@@ -364,6 +364,19 @@ class TestPaypalFeeAmounts(BuckarooOfficialCommon):
             result = self._wallet_controller().buckaroo_wallet_amount(payment_method_id=applepay.id)
         self.assertEqual(result["amount"], 38.0)
 
+    def test_wallet_methods_total_includes_the_wallet_fee(self):
+        # The inline Apple Pay sheet seeds its carriers from this route.
+        order = self._make_order()
+        controller = self._wallet_controller()
+        with (
+            self._patch_wallet_request(order),
+            patch.object(
+                type(controller), "_get_delivery_methods_express_checkout", return_value={}
+            ),
+        ):
+            result = controller.buckaroo_wallet_methods(payment_method_id=self.paypal.id)
+        self.assertEqual(result["amount"], 36.54)
+
     def test_wallet_amount_without_method_is_the_cart_total(self):
         order = self._make_order()
         with self._patch_wallet_request(order):
@@ -454,6 +467,59 @@ class TestPaypalFeeAmounts(BuckarooOfficialCommon):
             values.get("buckaroo_wallet_amounts"),
             {self.paypal.id: 36.54, applepay.id: 38.0, googlepay.id: 36.0},
         )
+
+    def test_checkout_values_skip_a_failing_preview(self):
+        # One wallet's broken fee must not break the payment page; that
+        # wallet gets no amount, so the page shows it as unavailable.
+        applepay = self.env.ref("payment_buckaroo_official.payment_method_applepay")
+        self.buckaroo.payment_method_ids = [Command.link(applepay.id)]
+        order = self._make_order()
+        original = type(order)._buckaroo_amount_to_pay_for_method
+
+        def preview(order_self, payment_method):
+            if payment_method == applepay:
+                raise ValueError("broken surcharge product")
+            return original(order_self, payment_method)
+
+        with (
+            patch.object(type(order), "_buckaroo_amount_to_pay_for_method", preview),
+            self.assertLogs("odoo.addons.payment_buckaroo_official.controllers.fee", "ERROR"),
+        ):
+            values = self._checkout_values(order, self.paypal | applepay)
+        self.assertEqual(
+            values.get("buckaroo_wallet_amounts"), {self.paypal.id: 36.54, applepay.id: None}
+        )
+
+    def test_transaction_route_moves_sheet_amount_into_context(self):
+        # Core rejects unknown kwargs: the sheet total must not reach it.
+        from odoo.addons.website_sale.controllers.payment import PaymentPortal
+
+        from ..controllers import fee as fee_module
+        from ..utils import const
+
+        captured = {}
+
+        def fake_super(self_, order_id, access_token, **kwargs):
+            captured["kwargs"] = kwargs
+            captured["context"] = dict(fee_module.request.env.context)
+            return {}
+
+        fake_req = MagicMock()
+        fake_req.env = self.env
+
+        def update_context(**ctx):
+            fake_req.env = fake_req.env(context={**fake_req.env.context, **ctx})
+
+        fake_req.update_context.side_effect = update_context
+        with (
+            patch.object(fee_module, "request", fake_req),
+            patch.object(PaymentPortal, "shop_payment_transaction", fake_super),
+        ):
+            fee_module.BuckarooFeePaymentPortal().shop_payment_transaction(
+                1, "token", payment_method_id=self.paypal.id, buckaroo_wallet_amount=36.54
+            )
+        self.assertNotIn("buckaroo_wallet_amount", captured["kwargs"])
+        self.assertEqual(captured["context"][const.WALLET_SHEET_AMOUNT_CONTEXT_KEY], 36.54)
 
     def test_checkout_values_key_each_paypal_method_by_id(self):
         # Each PayPal button must authorize its own method's fee.

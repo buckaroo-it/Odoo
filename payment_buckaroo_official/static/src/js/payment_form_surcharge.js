@@ -4,6 +4,33 @@ import { PaymentForm } from '@payment/interactions/payment_form';
 
 patch(PaymentForm.prototype, {
 
+    // A checkout wallet (Apple Pay, Google Pay) marks the order changed before
+    // its transaction route: when that fails (e.g. the total changed, or an
+    // Apple Pay sheet changed the carrier), reload once the error is read, so
+    // the page and every wallet amount match the order again (BTI-2182).
+    _displayErrorDialog() {
+        if (!this._walletSheetChangedOrder) {
+            return super._displayErrorDialog(...arguments);
+        }
+        // Once per wallet attempt, so a later unrelated error doesn't reload.
+        this._walletSheetChangedOrder = false;
+        // Core's dialog, with a reload once it's closed.
+        const dialog = this.services.dialog;
+        const add = dialog.add;
+        dialog.add = (component, props, options = {}) => add.call(dialog, component, props, {
+            ...options,
+            onClose: () => {
+                options.onClose?.();
+                window.location.reload();
+            },
+        });
+        try {
+            return super._displayErrorDialog(...arguments);
+        } finally {
+            dialog.add = add;
+        }
+    },
+
     async selectPaymentOption(ev) {
         await super.selectPaymentOption(ev);
 

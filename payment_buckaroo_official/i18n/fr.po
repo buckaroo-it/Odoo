@@ -1003,6 +1003,12 @@ msgstr ""
 "> Paramètres > Enregistrement de jeton."
 
 #. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/express_wallet_utils.js:0
+msgid "Nothing is left to pay for this order."
+msgstr "Il ne reste rien à payer pour cette commande."
+
+#. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.giftcard_inline_form
 msgid "PIN"
 msgstr "PIN"
@@ -1453,9 +1459,21 @@ msgstr "Le code technique de ce fournisseur de paiement."
 
 #. module: payment_buckaroo_official
 #. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/fee.py:0
+msgid "The total changed while you were paying, so nothing was charged. Please check the amount and try again."
+msgstr "Le total a changé pendant le paiement, rien n'a donc été débité. Veuillez vérifier le montant et réessayer."
+
+#. module: payment_buckaroo_official
+#. odoo-python
 #: code:addons/payment_buckaroo_official/models/account_move.py:0
 msgid "This Buckaroo payment has already been fully refunded."
 msgstr "Ce paiement Buckaroo a déjà été entièrement remboursé."
+
+#. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/express_wallet_utils.js:0
+msgid "This payment method is not available right now. Please choose another payment method."
+msgstr "Ce moyen de paiement n'est pas disponible pour le moment. Veuillez choisir un autre moyen de paiement."
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.payment_provider_form_buckaroo_official

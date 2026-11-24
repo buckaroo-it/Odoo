@@ -15,6 +15,11 @@ import {
     finalizeExpressTransaction,
     isDuplicatePlacement,
     loadBuckarooSdk,
+    markWalletSheetChangedOrder,
+    refreshDuringMount,
+    reloadIfWalletSheetChangedOrder,
+    showWalletBlocked,
+    walletCheckoutBlocker,
     snapshotProductDom,
     truthyData,
 } from '@payment_buckaroo_official/js/express_wallet_utils';
@@ -72,7 +77,9 @@ function _ppProductAmount(interaction) {
     const prefetch = interaction._ppProductShipping;
     const subtotal = prefetch ? prefetch.subtotal : (snap ? snap.unitPrice * snap.qty : 0);
     const methods = prefetch?.delivery_methods || [];
-    return methods.length ? subtotal + (methods[0].amount || 0) : subtotal;
+    const total = methods.length ? subtotal + (methods[0].amount || 0) : subtotal;
+    // Float sums can carry extra digits; PayPal takes 2 decimals.
+    return Math.round(total * 100) / 100;
 }
 
 function _ppInitialAmount(interaction, container) {
@@ -105,6 +112,12 @@ async function _ppPrefetchProductMethods(interaction) {
     if (prefetch !== undefined) {
         interaction._ppProductShipping = prefetch;
     }
+    if (prefetch === null) {
+        // PayPal creates its order on click with no way to stop it, so a
+        // product without an amount keeps the button inert.
+        interaction.el.inert = true;
+        interaction.el.classList.add('opacity-50');
+    }
 }
 
 // Cart page: the express form's amount is the cart total without the PayPal
@@ -119,6 +132,22 @@ async function _ppRefreshCartAmount(interaction) {
     if (interaction._ppOptions) {
         // `createOrder` reads `options.amount` lazily at click time.
         interaction._ppOptions.amount = interaction.paymentContext.amount;
+    }
+    _ppApplyZeroAmount(interaction);
+}
+
+// Nothing left to pay (a giftcard covered it): PayPal can't create a 0.00
+// order, so hide the button as the other wallets do. Only a rendered button:
+// PayPal can't render into a hidden container, and an unrendered or
+// duplicate one must stay hidden.
+function _ppApplyZeroAmount(interaction) {
+    if (!interaction._ppRendered) {
+        return;
+    }
+    const nothingToPay = parseFloat(interaction.paymentContext.amount) === 0;
+    if (nothingToPay || interaction._ppHiddenForZero) {
+        interaction._ppHiddenForZero = nothingToPay;
+        interaction.el.classList.toggle('d-none', nothingToPay);
     }
 }
 
@@ -146,6 +175,7 @@ async function _ppOnShippingChange(interaction, options, container, data, action
         return _ppPatchAmount(actions, currency, total);
     }
 
+    markWalletSheetChangedOrder(interaction);
     let resp;
     try {
         const carrierId = data.selected_shipping_option?.id;
@@ -248,7 +278,10 @@ function _ppInitiate(interaction, container, merchantId, websiteKey, paymentMeth
         amount: _ppInitialAmount(interaction, container),
         createPaymentHandler: (data) => _ppCreatePayment(interaction, container, paymentMethodId, data),
         onClickCallback: () => _ppOnClick(interaction, container),
-        onCancelCallback: () => { interaction._ppBindPromise = null; },
+        onCancelCallback: () => {
+            interaction._ppBindPromise = null;
+            reloadIfWalletSheetChangedOrder(interaction);
+        },
         // The SDK calls this unconditionally after `createPaymentHandler`
         // resolves; finalize has already redirected, so it is a no-op.
         onSuccessCallback: () => {},
@@ -261,7 +294,11 @@ function _ppInitiate(interaction, container, merchantId, websiteKey, paymentMeth
                 _ppUnavailable(container);
             }
         },
-        onInitCallback: () => _ppClearInitTimer(interaction),
+        onInitCallback: () => {
+            _ppClearInitTimer(interaction);
+            interaction._ppRendered = true;
+            _ppApplyZeroAmount(interaction);
+        },
     };
     if (container.dataset.placement !== 'checkout') {
         // At checkout the buyer already chose address + carrier through the
@@ -349,6 +386,12 @@ async function _ppMountButton(interaction) {
         return;
     }
     interaction._ppVisibilityObserver = _ppWhenVisible(container, async () => {
+        const blocker = container.dataset.placement === 'checkout'
+            && walletCheckoutBlocker(container.dataset.amount);
+        if (blocker) {
+            showWalletBlocked(container, blocker);
+            return;
+        }
         try {
             await _ppEnsureSdk(truthyData(container.dataset.testMode));
         } catch (error) {
@@ -362,9 +405,14 @@ async function _ppMountButton(interaction) {
             return;
         }
         if (container.dataset.placement === 'product') {
-            await _ppPrefetchProductMethods(interaction);
+            await refreshDuringMount(
+                container.closest('form') || document, 'change',
+                () => _ppPrefetchProductMethods(interaction),
+            );
         } else if (container.dataset.placement === 'cart') {
-            await _ppRefreshCartAmount(interaction);
+            await refreshDuringMount(
+                interaction.env.bus, 'cart_amount_changed', () => _ppRefreshCartAmount(interaction),
+            );
         }
         _ppInitiate(interaction, container, merchantId, websiteKey, paymentMethodId);
     });
@@ -387,6 +435,9 @@ patch(PaymentForm.prototype, {
 
     async _buckarooPaypalSubmit(orderID) {
         this._buckarooPaypalOrderId = orderID;
+        // A refused payment (e.g. Buckaroo's amount check) reloads the page
+        // once its error is read, so the next attempt uses the current total.
+        markWalletSheetChangedOrder(this);
         try {
             await this.submitForm(new Event('BuckarooPaypalCheckoutApproved'));
         } finally {
@@ -462,14 +513,23 @@ export class BuckarooPaypalExpress extends ExpressCheckout {
         if (this.paymentContext.placement === 'product') {
             // Re-rate carriers when the variant or quantity changes so the sheet
             // amount stays accurate at click time.
+            // Only a mounted button (`_ppOptions`): the mount itself refreshes
+            // until stable, and a duplicate or unavailable one has no amount.
             const form = this.el.closest('form') || document;
-            this._ppRefresh = () => _ppRefreshProduct(this);
-            form.addEventListener('change', this._ppRefresh);
+            this.addListener(form, 'change', () => {
+                if (this._ppOptions) {
+                    _ppRefreshProduct(this);
+                }
+            });
             return;
         }
         // Keep the sheet amount fresh when the cart quantity changes. The
         // event's amount excludes the PayPal fee, so refetch it instead.
-        this.addListener(this.env.bus, 'cart_amount_changed', () => _ppRefreshCartAmount(this));
+        this.addListener(this.env.bus, 'cart_amount_changed', () => {
+            if (this._ppOptions) {
+                _ppRefreshCartAmount(this);
+            }
+        });
     }
 
     destroy() {

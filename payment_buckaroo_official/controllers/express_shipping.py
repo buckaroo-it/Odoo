@@ -65,7 +65,7 @@ class BuckarooWalletShippingController(Delivery):
         website=True,
         sitemap=False,
     )
-    def buckaroo_wallet_methods(self):
+    def buckaroo_wallet_methods(self, payment_method_id=None):
         """Available carriers for the cart's current address, used to seed the
         inline Apple Pay sheet so the method selector shows on open (the order
         already has the address from checkout, so no address callback fires)."""
@@ -83,7 +83,7 @@ class BuckarooWalletShippingController(Delivery):
                 for carrier, price in methods
             ],
             "selected_id": order_sudo.carrier_id.id or None,
-            **self._buckaroo_wallet_amounts(),
+            **self._buckaroo_wallet_amounts(payment_method_id),
         }
 
     @http.route(
