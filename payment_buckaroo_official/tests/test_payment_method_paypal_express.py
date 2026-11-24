@@ -459,24 +459,41 @@ class TestPaypalFeeAmounts(BuckarooOfficialCommon):
             without_fee = controller.buckaroo_wallet_product_methods(self.product.id, qty=1)
         self.assertAlmostEqual(with_fee["subtotal"] - without_fee["subtotal"], 2.0, places=2)
 
-    def test_checkout_values_carry_paypal_amount(self):
+    def _second_paypal(self, fee):
+        """The `buckaroo_paypal` record of a second Buckaroo provider (Odoo 20
+        keeps one method record per provider)."""
+        provider = self.buckaroo.copy({"name": "Buckaroo second shop"})
+        other = provider.payment_method_ids.filtered(
+            lambda pm: pm.code == "buckaroo_paypal"
+        ) or self.paypal.copy({"provider_id": provider.id})
+        other.buckaroo_official_fee_amount = fee
+        return other
+
+    def _checkout_values(self, order, methods):
         from odoo.addons.website_sale.controllers.main import WebsiteSale
 
         from ..controllers.paypal import PaypalWebsiteSale
 
+        with patch.object(
+            WebsiteSale,
+            "_get_shop_payment_values",
+            return_value={"amount": 36.0, "payment_methods_sudo": methods},
+        ):
+            return PaypalWebsiteSale()._get_shop_payment_values(order)
+
+    def test_checkout_values_carry_paypal_amount(self):
         order = self._make_order()
-        for methods, expected in [
-            (self.paypal | self.ideal, 36.54),
-            (self.ideal, None),
-        ]:
-            with (
-                self.subTest(methods=methods.mapped("code")),
-                patch.object(
-                    WebsiteSale,
-                    "_get_shop_payment_values",
-                    return_value={"amount": 36.0, "payment_methods_sudo": methods},
-                ),
-            ):
-                values = PaypalWebsiteSale()._get_shop_payment_values(order)
-                self.assertEqual(values.get("buckaroo_paypal_amount"), expected)
+        values = self._checkout_values(order, self.paypal | self.ideal)
+        self.assertEqual(values.get("buckaroo_paypal_amounts"), {self.paypal.id: 36.54})
+        values = self._checkout_values(order, self.ideal)
+        self.assertNotIn("buckaroo_paypal_amounts", values)
         self.assertFalse(order.order_line.filtered("is_buckaroo_surcharge"))
+
+    def test_checkout_values_key_each_paypal_method_by_id(self):
+        # Each PayPal button must authorize its own method's fee.
+        other = self._second_paypal("2.00")
+        order = self._make_order()
+        values = self._checkout_values(order, self.paypal | other)
+        self.assertEqual(
+            values.get("buckaroo_paypal_amounts"), {self.paypal.id: 36.54, other.id: 38.0}
+        )
