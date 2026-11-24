@@ -21,7 +21,7 @@ class PaypalWebsiteSale(WebsiteSale):
         methods = values.get("payment_methods_sudo") or request.env["payment.method"]
         paypal = methods.filtered(lambda pm: pm.code == "buckaroo_paypal")[:1]
         if paypal:
-            values["buckaroo_paypal_amount"] = order.sudo()._buckaroo_amount_total_for_method(
+            values["buckaroo_paypal_amount"] = order.sudo()._buckaroo_amount_to_pay_for_method(
                 paypal
             )
         return values

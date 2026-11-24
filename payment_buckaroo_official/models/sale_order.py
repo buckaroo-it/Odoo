@@ -83,18 +83,22 @@ class SaleOrder(models.Model):
             return
         self._apply_buckaroo_surcharge_line(payment_method)
 
-    def _buckaroo_amount_total_for_method(self, payment_method):
-        """Total the transaction will charge when paid with *payment_method*.
+    def _buckaroo_amount_to_pay_for_method(self, payment_method):
+        """Amount the transaction will charge when paid with *payment_method*.
 
         Wallets that authorize an amount up front (PayPal) must authorize
         exactly this, or Buckaroo refuses the pay request (BTI-2182). Syncs the
         method's surcharge with the code the transaction route runs, then rolls
-        it back, so the order keeps its current surcharge line.
+        it back, so the order keeps its current surcharge line. After a partial
+        giftcard payment the transaction is shrunk to the open remainder
+        (``controllers/giftcard.py``), so that is the amount to pay.
         """
         self.ensure_one()
         savepoint = self.env.cr.savepoint()
         try:
             self._buckaroo_sync_surcharge_for_method(payment_method)
+            if self._buckaroo_has_giftcard_pending_remainder():
+                return self.currency_id.round(self._buckaroo_partial_payment_remainder())
             return self.amount_total
         finally:
             savepoint.close(rollback=True)

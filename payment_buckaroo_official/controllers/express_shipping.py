@@ -199,7 +199,7 @@ class BuckarooWalletShippingController(Delivery):
         currency = order_sudo.currency_id
         fee_method = self._buckaroo_wallet_fee_method(payment_method_id)
         total = (
-            order_sudo._buckaroo_amount_total_for_method(fee_method)
+            order_sudo._buckaroo_amount_to_pay_for_method(fee_method)
             if fee_method
             else order_sudo.amount_total
         )
