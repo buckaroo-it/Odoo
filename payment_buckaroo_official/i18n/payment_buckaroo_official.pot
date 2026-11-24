@@ -41,6 +41,12 @@ msgid "%s surcharge"
 msgstr ""
 
 #. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/express_wallet_utils.js:0
+msgid "Nothing is left to pay for this order."
+msgstr ""
+
+#. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.klarna_inline_form
 msgid "Please select your gender"
 msgstr ""
@@ -1659,8 +1665,20 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/fee.py:0
+msgid "The total changed while you were paying, so nothing was charged. Please check the amount and try again."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#. odoo-python
 #: code:addons/payment_buckaroo_official/models/account_move.py:0
 msgid "This Buckaroo payment has already been fully refunded."
+msgstr ""
+
+#. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/express_wallet_utils.js:0
+msgid "This payment method is not available right now. Please choose another payment method."
 msgstr ""
 
 #. module: payment_buckaroo_official

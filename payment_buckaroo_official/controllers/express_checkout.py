@@ -49,10 +49,26 @@ class BuckarooWalletExpressCheckout(WebsiteSale):
                     shipping_option=shipping_option,
                     **kwargs,
                 )
+                if shipping_option and not shipping_address:
+                    self._buckaroo_apply_shipping_option(express_sudo, shipping_option)
         # Single-use: drop the key so a stale id can't linger across later
         # (possibly different-identity) requests. The tx route uses id + token.
         request.session.pop(BuckarooWalletExpressMixin.EXPRESS_ORDER_SESSION_KEY, None)
         return partner_id
+
+    @staticmethod
+    def _buckaroo_apply_shipping_option(order_sudo, shipping_option):
+        """Set the carrier a sheet without a shipping address priced (Google
+        Pay on the product page). Core applies ``shipping_option`` only with a
+        shipping address, so the order would keep another carrier and charge a
+        different total than the sheet showed (BTI-2182)."""
+        try:
+            dm_id = int(shipping_option.get("id"))
+        except (AttributeError, TypeError, ValueError):
+            return
+        carrier = order_sudo._get_delivery_methods().filtered(lambda dm: dm.id == dm_id)
+        if carrier:
+            order_sudo._set_delivery_method(carrier)
 
     def _buckaroo_express_order_sudo(self):
         """Pending express order from the session, or empty.

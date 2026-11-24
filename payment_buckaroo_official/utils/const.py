@@ -8,6 +8,10 @@ PICK_METHOD_CONTEXT_KEY = "buckaroo_official_pick_method_id"
 # Wallets whose sheet shows (Apple Pay, Google Pay) or authorizes (PayPal)
 # an amount up front, before the transaction route adds the method's fee.
 WALLET_METHOD_CODES = ("buckaroo_paypal", "buckaroo_applepay", "buckaroo_googlepay")
+# The total an Apple Pay / Google Pay sheet showed when the buyer approved it.
+WALLET_SHEET_AMOUNT_CONTEXT_KEY = "buckaroo_official_wallet_sheet_amount"
+# Set when an Apple Pay / Google Pay token was posted: the sheet total must be too.
+WALLET_SHEET_REQUIRED_CONTEXT_KEY = "buckaroo_official_wallet_sheet_required"
 
 DEFAULT_PAYMENT_METHOD_CODES = [
     "buckaroo_ideal",

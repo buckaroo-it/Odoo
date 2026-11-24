@@ -59,7 +59,7 @@
                      t-att-data-merchant-id="pm_sudo._buckaroo_paypal_merchant_id_for(provider_sudo)"
                      t-att-data-website-key="provider_sudo.buckaroo_official_website_key or ''"
                      t-att-data-test-mode="not provider_sudo.is_live"
-                     t-att-data-amount="(buckaroo_wallet_amounts or {}).get(pm_sudo.id, amount)"
+                     t-att-data-amount="str((buckaroo_wallet_amounts or {}).get(pm_sudo.id, amount))"
                      t-att-data-currency-name="currency and currency.name.lower()"/>
             </t>
         </xpath>

@@ -9,10 +9,57 @@ import { ConfirmationDialog } from '@web/core/confirmation_dialog/confirmation_d
 // Generic express-button helpers shared by the Buckaroo wallets (Apple Pay,
 // Google Pay, PayPal). No method-specific branching lives here.
 
+// A wallet sheet's address and carrier callbacks write to the order (the
+// carrier sets the delivery line). If the sheet then closes without paying,
+// the page (summary, every wallet button's amount) still shows the old total,
+// and another wallet would authorize it. Call `markWalletSheetChangedOrder`
+// from those callbacks; a cancel or error then reloads the page so everything
+// matches the order again (BTI-2182).
+export function markWalletSheetChangedOrder(state) {
+    state._walletSheetChangedOrder = true;
+}
+
+// Returns whether it reloads (the caller then stops).
+export function reloadIfWalletSheetChangedOrder(state) {
+    if (!state._walletSheetChangedOrder) {
+        return false;
+    }
+    state._walletSheetChangedOrder = false;
+    window.location.reload();
+    return true;
+}
+
+// Why a checkout wallet can't take a payment, or null when it can: nothing is
+// left to pay (a giftcard covered the order), or its amount couldn't be
+// computed (the template renders "None"). No sheet or PayPal order then.
+export function walletCheckoutBlocker(amount) {
+    const total = parseFloat(amount);
+    if (total > 0) {
+        return null;
+    }
+    return total === 0
+        ? _t("Nothing is left to pay for this order.")
+        : _t("This payment method is not available right now. Please choose another payment method.");
+}
+
+// Say `message` (a `walletCheckoutBlocker`) in place of the wallet's button.
+export function showWalletBlocked(container, message) {
+    container.classList.add('d-none');
+    if (container.nextElementSibling?.classList.contains('o_buckaroo_wallet_blocked')) {
+        return;
+    }
+    const notice = document.createElement('div');
+    notice.className = 'o_buckaroo_wallet_blocked alert alert-info mb-0';
+    notice.textContent = message;
+    container.after(notice);
+}
+
 export function displayWalletError(interaction, message) {
     interaction.services.dialog.add(ConfirmationDialog, {
         title: _t("Error"),
         body: message,
+    }, {
+        onClose: () => reloadIfWalletSheetChangedOrder(interaction),
     });
 }
 
@@ -166,7 +213,13 @@ async function _walletAmountRequest(state, el, route, params) {
             console.error(`Wallet amount refresh failed (${route}):`, error);
         }
     }
-    return _settleWalletAmountRequest(state, el, request, !!resp) ? resp : undefined;
+    // The routes answer an empty placeholder (no `currency_code`) when there is
+    // no cart or product: no amount to charge, so the button stays inert.
+    const ok = !!resp?.currency_code;
+    if (!_settleWalletAmountRequest(state, el, request, ok)) {
+        return undefined;
+    }
+    return ok ? resp : null;
 }
 
 // Cart total the wallet charges: `{ amount, minor_amount, currency_code }`.
@@ -178,7 +231,8 @@ export function fetchWalletCartAmount(state, el, paymentMethodId) {
 
 // Product page (no cart yet): `{ subtotal, delivery_methods }` rated off a
 // throwaway order, the subtotal including the method's fee. An unreadable
-// product resolves `null` but leaves `el` usable: the click reports it.
+// product resolves `null` but leaves `el` usable, so the wallet's click can
+// tell the buyer.
 export async function fetchWalletProductPrefetch(state, el, paymentMethodId) {
     const snap = snapshotProductDom();
     if (!snap) {
@@ -196,6 +250,27 @@ export async function fetchWalletProductPrefetch(state, el, paymentMethodId) {
 // Product pages have no cart yet: bind the shown variant to a throwaway cart
 // (express_init) and copy its authoritative routes/amount/partner onto the
 // interaction's paymentContext. Returns false (showing `startError`) on failure.
+// Colibri adds an interaction's listeners (`cart_amount_changed` on the bus,
+// `change` on the product form) in `start()`, only after `willStart`
+// resolved, and a mount refresh can take seconds with retries. Run `refresh`
+// again while `eventName` fired on `target` meanwhile, so the button never
+// keeps the total from before a quantity or variant change.
+export async function refreshDuringMount(target, eventName, refresh) {
+    let changed = false;
+    const onChange = () => {
+        changed = true;
+    };
+    target.addEventListener(eventName, onChange);
+    try {
+        do {
+            changed = false;
+            await refresh();
+        } while (changed);
+    } finally {
+        target.removeEventListener(eventName, onChange);
+    }
+}
+
 export async function bindProductCart(interaction, route, snapshot, startError) {
     let payload;
     try {
@@ -227,6 +302,10 @@ export async function finalizeExpressTransaction(
     interaction, { providerId, paymentMethodId, addresses, txExtra, txError },
 ) {
     const ctx = interaction.paymentContext;
+    // From here the order takes the buyer's address, and the transaction route
+    // may refuse (e.g. the total changed): any error then reloads the page on
+    // close, so the next attempt starts from the current order.
+    markWalletSheetChangedOrder(interaction);
     let partnerId;
     try {
         partnerId = await interaction.waitFor(rpc(ctx.expressCheckoutRoute, addresses));
