@@ -10,6 +10,8 @@ import {
     bindProductCart,
     buckarooSdkUrl,
     displayWalletError,
+    fetchWalletCartAmount,
+    fetchWalletProductPrefetch,
     finalizeExpressTransaction,
     isDuplicatePlacement,
     loadBuckarooSdk,
@@ -57,28 +59,6 @@ function _ppMethodId(interaction) {
     return parseInt(interaction.el.dataset.paymentMethodId);
 }
 
-// `createOrder` reads `options.amount` the moment the button is clicked, and
-// Buckaroo refuses an order authorized for any amount but the transaction's.
-// So the button is inert (no mouse, keyboard or focus, inside PayPal's iframe
-// too) while an amount refresh is in flight, or after one failed. Refreshes can overlap (quick quantity or variant changes): only
-// the latest settles the button.
-function _ppStartAmountRequest(interaction) {
-    interaction._ppAmountRequest = (interaction._ppAmountRequest || 0) + 1;
-    interaction.el.inert = true;
-    interaction.el.classList.add('opacity-50');
-    return interaction._ppAmountRequest;
-}
-
-// Returns whether *request* is still the latest one, i.e. may set the amount.
-function _ppSettleAmountRequest(interaction, request, ok) {
-    if (request !== interaction._ppAmountRequest) {
-        return false;
-    }
-    interaction.el.inert = !ok;
-    interaction.el.classList.toggle('opacity-50', !ok);
-    return true;
-}
-
 function _ppCurrencyCode(interaction, container) {
     return (interaction.paymentContext.currencyName || container.dataset.currencyCode || '').toUpperCase();
 }
@@ -119,28 +99,10 @@ function _ppPatchAmount(actions, currency, total) {
 }
 
 async function _ppPrefetchProductMethods(interaction) {
-    const snap = snapshotProductDom();
-    // Before the early return too, so an older prefetch can't land after it.
-    const request = _ppStartAmountRequest(interaction);
-    if (!snap) {
-        // The click reports the unreadable product (`_ppOnClick`).
-        interaction._ppProductShipping = null;
-        _ppSettleAmountRequest(interaction, request, true);
-        return;
-    }
-    let prefetch;
-    try {
-        prefetch = await rpc('/shop/buckaroo/wallet/product_methods', {
-            product_id: snap.productId,
-            qty: snap.qty,
-            payment_method_id: _ppMethodId(interaction),
-        });
-    } catch (error) {
-        console.error('PayPal product shipping prefetch failed:', error);
-        prefetch = null;
-    }
-    // Without the prefetch the amount would miss the PayPal fee.
-    if (_ppSettleAmountRequest(interaction, request, !!prefetch)) {
+    const prefetch = await fetchWalletProductPrefetch(
+        interaction, interaction.el, _ppMethodId(interaction),
+    );
+    if (prefetch !== undefined) {
         interaction._ppProductShipping = prefetch;
     }
 }
@@ -148,17 +110,8 @@ async function _ppPrefetchProductMethods(interaction) {
 // Cart page: the express form's amount is the cart total without the PayPal
 // fee, so read the total PayPal must authorize from the server instead.
 async function _ppRefreshCartAmount(interaction) {
-    const request = _ppStartAmountRequest(interaction);
-    let resp;
-    try {
-        resp = await rpc('/shop/buckaroo/wallet/amount', {
-            payment_method_id: _ppMethodId(interaction),
-        });
-    } catch (error) {
-        console.error('PayPal cart amount refresh failed:', error);
-        resp = null;
-    }
-    if (!_ppSettleAmountRequest(interaction, request, !!resp) || !resp) {
+    const resp = await fetchWalletCartAmount(interaction, interaction.el, _ppMethodId(interaction));
+    if (!resp) {
         return;
     }
     interaction.paymentContext.amount = parseFloat(resp.amount);
@@ -497,7 +450,7 @@ export class BuckarooPaypalExpress extends ExpressCheckout {
         }
         // Checkout: amount and currency come off this container's own dataset
         // (added by the inline-form template) via the spread above; the amount
-        // already includes the PayPal fee (`buckaroo_paypal_amounts`). The core
+        // already includes the PayPal fee (`buckaroo_wallet_amounts`). The core
         // payment form carries the transaction route/token/partner for
         // whichever method is submitted - `_ppCreatePayment` hands off to it
         // instead of reading those fields off this interaction.

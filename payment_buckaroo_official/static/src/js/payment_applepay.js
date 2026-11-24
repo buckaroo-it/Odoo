@@ -11,6 +11,8 @@ import {
     bindProductCart,
     buckarooSdkUrl,
     displayWalletError,
+    fetchWalletCartAmount,
+    fetchWalletProductPrefetch,
     finalizeExpressTransaction,
     isDuplicatePlacement,
     loadBuckarooSdk,
@@ -113,15 +115,19 @@ function _apTotalLineItem(storeName, amount) {
 // `onShippingMethodSelected` callback: persist the picked carrier server-side
 // (set_method) and return the refreshed total; on failure fall back to
 // `fallbackAmount`. `onPick` runs first for callers that also track the
-// selection locally.
-function _apSetMethodHandler(storeName, fallbackAmount, onPick) {
+// selection locally. The total includes the Apple Pay fee and only the open
+// giftcard remainder, as the transaction charges (BTI-2182).
+function _apSetMethodHandler(storeName, paymentMethodId, fallbackAmount, onPick) {
     return async (method) => {
         if (onPick) {
             onPick(method);
         }
         let resp;
         try {
-            resp = await rpc('/shop/buckaroo/wallet/set_method', { dm_id: method.identifier });
+            resp = await rpc('/shop/buckaroo/wallet/set_method', {
+                dm_id: method.identifier,
+                payment_method_id: paymentMethodId,
+            });
         } catch (error) {
             console.error('Apple Pay shipping method update failed:', error);
             return { newTotal: _apTotalLineItem(storeName, fallbackAmount) };
@@ -323,8 +329,13 @@ patch(PaymentForm.prototype, {
         const prefetchMethods = (prefetch.delivery_methods || []).slice().sort((a, b) =>
             (a.id === prefetch.selected_id ? -1 : 0) - (b.id === prefetch.selected_id ? -1 : 0));
         const initialMethods = prefetchMethods.map(_apShippingMethod);
+        // The template's total already includes the Apple Pay fee.
         const shippingCallbacks = initialMethods.length ? {
-            onShippingMethodSelected: _apSetMethodHandler(storeName, container.dataset.totalAmount),
+            onShippingMethodSelected: _apSetMethodHandler(
+                storeName,
+                parseInt(container.dataset.paymentMethodId),
+                container.dataset.totalAmount,
+            ),
         } : {};
 
         let token, customerName, network;
@@ -395,21 +406,30 @@ patch(PaymentForm.prototype, {
 
 // Rate the shown product's carriers off a throwaway order so the product-page
 // sheet can seed its method selector (no cart exists yet). Re-run on
-// variant/qty changes so free-over thresholds stay accurate.
+// variant/qty changes so free-over thresholds stay accurate. The subtotal
+// includes the Apple Pay fee.
 async function _apPrefetchProductMethods(interaction) {
-    const snap = snapshotProductDom();
-    if (!snap) {
-        interaction._apProductShipping = null;
+    const prefetch = await fetchWalletProductPrefetch(
+        interaction, interaction.el, parseInt(interaction.el.dataset.paymentMethodId),
+    );
+    if (prefetch !== undefined) {
+        interaction._apProductShipping = prefetch;
+    }
+}
+
+// Cart page: the express form's amount excludes the Apple Pay fee, so read the
+// total the transaction charges from the server instead.
+async function _apRefreshCartAmount(interaction) {
+    const resp = await fetchWalletCartAmount(
+        interaction, interaction.el, parseInt(interaction.el.dataset.paymentMethodId),
+    );
+    if (!resp) {
         return;
     }
-    try {
-        interaction._apProductShipping = await rpc('/shop/buckaroo/wallet/product_methods', {
-            product_id: snap.productId,
-            qty: snap.qty,
-        });
-    } catch (error) {
-        console.error('Apple Pay product shipping prefetch failed:', error);
-        interaction._apProductShipping = null;
+    interaction.paymentContext.amount = parseFloat(resp.amount);
+    interaction.paymentContext.minorAmount = parseInt(resp.minor_amount);
+    if (interaction._apMounted) {
+        interaction.el.classList.toggle('d-none', interaction.paymentContext.amount === 0);
     }
 }
 
@@ -446,6 +466,8 @@ async function _apExpressMountButton(interaction) {
     );
     if (interaction._apMounted && container.dataset.placement === 'product') {
         await _apPrefetchProductMethods(interaction);
+    } else if (interaction._apMounted) {
+        await _apRefreshCartAmount(interaction);
     }
 }
 
@@ -510,6 +532,7 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
                     try {
                         resp = await rpc('/shop/buckaroo/wallet/shipping_address', {
                             partial_delivery_address: _apContactToAddress(contact),
+                            payment_method_id: paymentMethodId,
                         });
                     } catch (error) {
                         console.error('Apple Pay shipping address update failed:', error);
@@ -530,9 +553,11 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
                     };
                 },
                 // Buyer switched method: persist it and return the new total.
-                onShippingMethodSelected: _apSetMethodHandler(storeName, amount, (method) => {
-                    selectedCarrierId = parseInt(method.identifier) || selectedCarrierId;
-                }),
+                onShippingMethodSelected: _apSetMethodHandler(
+                    storeName, paymentMethodId, amount, (method) => {
+                        selectedCarrierId = parseInt(method.identifier) || selectedCarrierId;
+                    },
+                ),
             };
         }
     }
@@ -642,21 +667,20 @@ export class BuckarooApplePayExpress extends ExpressCheckout {
             // Re-rate carriers when the variant or quantity changes so the sheet
             // (and its free-over thresholds) stays accurate at click time.
             const form = this.el.closest('form') || document;
-            this._apRefresh = () => _apPrefetchProductMethods(this);
-            form.addEventListener('change', this._apRefresh);
+            this.addListener(form, 'change', () => {
+                if (this._apMounted) {
+                    _apPrefetchProductMethods(this);
+                }
+            });
             return;
         }
-        // Keep the sheet amount fresh when the cart quantity changes.
-        this.env.bus.addEventListener('cart_amount_changed', (ev) =>
-            this._updateAmount(...ev.detail));
-    }
-
-    _updateAmount(newAmount, newMinorAmount) {
-        this.paymentContext.amount = parseFloat(newAmount);
-        this.paymentContext.minorAmount = parseInt(newMinorAmount);
-        if (this._apMounted) {
-            this.el.classList.toggle('d-none', this.paymentContext.amount === 0);
-        }
+        // Keep the sheet amount fresh when the cart quantity changes. The
+        // event's amount excludes the Apple Pay fee, so refetch it instead.
+        this.addListener(this.env.bus, 'cart_amount_changed', () => {
+            if (this._apMounted) {
+                _apRefreshCartAmount(this);
+            }
+        });
     }
 }
 

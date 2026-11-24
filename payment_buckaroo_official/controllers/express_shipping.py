@@ -17,9 +17,11 @@ class BuckarooWalletShippingController(Delivery):
     reuse Odoo's express delivery machinery and return the server-authoritative
     order total, so the wallet charges exactly what the sale order totals.
 
-    A wallet that authorizes its amount up front (PayPal) passes its
-    ``payment_method_id``: the totals then include that method's surcharge,
-    which the transaction route adds before charging (BTI-2182).
+    The wallets (PayPal, Apple Pay, Google Pay) pass their
+    ``payment_method_id``: the totals then include that method's surcharge and
+    only the open giftcard remainder, as the transaction route charges.
+    PayPal authorizes this amount up front; the Apple Pay and Google Pay
+    sheets show it to the buyer (BTI-2182).
     """
 
     _EMPTY_AMOUNTS = {"amount": 0.0, "minor_amount": 0, "currency_code": ""}

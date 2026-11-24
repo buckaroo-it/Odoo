@@ -5,6 +5,10 @@ PROVIDER_CODE = "buckaroo_official"
 
 PICK_METHOD_CONTEXT_KEY = "buckaroo_official_pick_method_id"
 
+# Wallets whose sheet shows (Apple Pay, Google Pay) or authorizes (PayPal)
+# an amount up front, before the transaction route adds the method's fee.
+WALLET_METHOD_CODES = ("buckaroo_paypal", "buckaroo_applepay", "buckaroo_googlepay")
+
 DEFAULT_PAYMENT_METHOD_CODES = [
     "buckaroo_ideal",
     "buckaroo_bancontact",

@@ -95,8 +95,9 @@ class SaleOrder(models.Model):
     def _buckaroo_amount_to_pay_for_method(self, payment_method):
         """Amount the transaction will charge when paid with *payment_method*.
 
-        Wallets that authorize an amount up front (PayPal) must authorize
-        exactly this, or Buckaroo refuses the pay request (BTI-2182). Syncs the
+        PayPal authorizes this amount up front, so it must be exact or Buckaroo
+        refuses the pay request; the Apple Pay and Google Pay sheets show it to
+        the buyer (BTI-2182). Syncs the
         method's surcharge with the code the transaction route runs, then rolls
         it back, so the order keeps its current surcharge line. Like core's
         ``/shop/payment/transaction``, it charges only what is still unpaid
