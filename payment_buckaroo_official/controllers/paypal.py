@@ -10,20 +10,24 @@ from ..helpers.wallet import sanitize_token
 
 class PaypalWebsiteSale(WebsiteSale):
     def _get_shop_payment_values(self, order, **kwargs):
-        """Add the amount the checkout PayPal button must authorize.
+        """Add the amount each checkout PayPal button must authorize, by
+        payment method id.
 
         The page renders ``amount`` with whatever surcharge the order holds,
-        but paying with PayPal syncs PayPal's own surcharge first. The button
-        creates the PayPal order from this amount, which must equal the
-        transaction amount or Buckaroo refuses the pay request (BTI-2182).
+        but paying with PayPal syncs that PayPal method's own surcharge first.
+        The button creates the PayPal order from this amount, which must equal
+        the transaction amount or Buckaroo refuses the pay request (BTI-2182).
+        Keyed by id: several ``buckaroo_paypal`` records (one per provider on
+        Odoo 20) can be offered, each with its own fee.
         """
         values = super()._get_shop_payment_values(order, **kwargs)
         methods = values.get("payment_methods_sudo") or request.env["payment.method"]
-        paypal = methods.filtered(lambda pm: pm.code == "buckaroo_paypal")[:1]
-        if paypal:
-            values["buckaroo_paypal_amount"] = order.sudo()._buckaroo_amount_to_pay_for_method(
-                paypal
-            )
+        paypal_methods = methods.filtered(lambda pm: pm.code == "buckaroo_paypal")
+        if paypal_methods:
+            order_sudo = order.sudo()
+            values["buckaroo_paypal_amounts"] = {
+                pm.id: order_sudo._buckaroo_amount_to_pay_for_method(pm) for pm in paypal_methods
+            }
         return values
 
 

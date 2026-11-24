@@ -495,7 +495,7 @@ export class BuckarooPaypalExpress extends ExpressCheckout {
         }
         // Checkout: amount and currency come off this container's own dataset
         // (added by the inline-form template) via the spread above; the amount
-        // already includes the PayPal fee (`buckaroo_paypal_amount`). The core
+        // already includes the PayPal fee (`buckaroo_paypal_amounts`). The core
         // payment form carries the transaction route/token/partner for
         // whichever method is submitted - `_ppCreatePayment` hands off to it
         // instead of reading those fields off this interaction.
