@@ -416,7 +416,7 @@ class TestPaypalFeeAmounts(BuckarooOfficialCommon):
 
     def test_wallet_amount_ignores_unknown_method(self):
         order = self._make_order()
-        for method_id in (999999, "abc", self.payment_method.id):
+        for method_id in (999999, 2**40, -1, "abc", self.payment_method.id):
             with self.subTest(method_id=method_id), self._patch_wallet_request(order):
                 result = self._wallet_controller().buckaroo_wallet_amount(
                     payment_method_id=method_id

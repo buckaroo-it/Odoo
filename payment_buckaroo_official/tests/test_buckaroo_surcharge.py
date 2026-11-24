@@ -308,18 +308,18 @@ class TestSurchargeAmountForMethod(_SurchargeBase):
             with self.subTest(fee=fee):
                 self.ideal.buckaroo_official_fee_amount = fee
                 order = self._make_order(price=36.0)
-                self.assertEqual(order._buckaroo_amount_total_for_method(self.ideal), expected)
+                self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), expected)
 
     def test_includes_vat_on_fee(self):
         self.ideal.buckaroo_official_fee_amount = "1.50"
         order = self._make_taxed_order(price=100.0)
         # 121.00 + (1.50 + 21% = 1.82)
-        self.assertEqual(order._buckaroo_amount_total_for_method(self.ideal), 122.82)
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), 122.82)
 
     def test_matches_total_after_sync(self):
         self.ideal.buckaroo_official_fee_amount = "1.5%"
         order = self._make_taxed_order(price=33.33)
-        expected = order._buckaroo_amount_total_for_method(self.ideal)
+        expected = order._buckaroo_amount_to_pay_for_method(self.ideal)
         order._buckaroo_sync_surcharge_for_method(self.ideal)
         self.assertEqual(expected, order.amount_total)
 
@@ -329,17 +329,39 @@ class TestSurchargeAmountForMethod(_SurchargeBase):
         order = self._make_order(price=36.0)
         order._apply_buckaroo_surcharge_line(self.bancontact)
 
-        self.assertEqual(order._buckaroo_amount_total_for_method(self.ideal), 37.50)
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), 37.50)
 
         line = self._surcharge_lines(order)
         self.assertEqual(line.price_unit, 2.0)
         self.assertEqual(order.amount_total, 38.00)
 
+    def _add_done_giftcard_payment(self, order, amount):
+        self.env["payment.transaction"].create(
+            {
+                "provider_id": self.buckaroo.id,
+                "payment_method_id": self._pm("buckaroo_vvvgiftcard").id,
+                "reference": f"TX-GC-PAID-{order.id}",
+                "amount": amount,
+                "currency_id": order.currency_id.id,
+                "partner_id": self.partner.id,
+                "operation": "online_redirect",
+                "state": "done",
+                "sale_order_ids": [Command.link(order.id)],
+            }
+        )
+
+    def test_after_partial_giftcard_payment_is_the_remainder(self):
+        # The giftcard flow shrinks the next transaction to what is still open.
+        self.ideal.buckaroo_official_fee_amount = "1.5%"
+        order = self._make_order(price=36.0)
+        self._add_done_giftcard_payment(order, 10.0)
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), 26.54)
+
     def test_non_buckaroo_method_drops_existing_fee(self):
         self.ideal.buckaroo_official_fee_amount = "1.50"
         order = self._make_order(price=36.0)
         order._apply_buckaroo_surcharge_line(self.ideal)
-        self.assertEqual(order._buckaroo_amount_total_for_method(self.payment_method), 36.00)
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.payment_method), 36.00)
 
 
 @tagged("post_install", "-at_install")
