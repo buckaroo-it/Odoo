@@ -50,13 +50,28 @@ function _ppPartialToAddress(shippingAddress) {
     };
 }
 
+// The wallet routes add this method's fee to the totals they return: the
+// transaction route adds it before charging, and Buckaroo refuses a PayPal order
+// authorized for any other amount (BTI-2182).
+function _ppMethodId(interaction) {
+    return parseInt(interaction.el.dataset.paymentMethodId);
+}
+
+// Amount refreshes can overlap (quick quantity or variant changes); only the
+// latest may set the amount, or a stale fee-less total could reach PayPal.
+function _ppNextAmountRequest(interaction) {
+    interaction._ppAmountRequest = (interaction._ppAmountRequest || 0) + 1;
+    return interaction._ppAmountRequest;
+}
+
 function _ppCurrencyCode(interaction, container) {
     return (interaction.paymentContext.currencyName || container.dataset.currencyCode || '').toUpperCase();
 }
 
 // Product subtotal (+ cheapest carrier) summed client-side: a product page has
 // no cart yet, so carriers are pre-rated off a throwaway order and the totals
-// are computed here, the same way the Apple Pay product path does it.
+// are computed here, the same way the Apple Pay product path does it. The
+// prefetched subtotal already includes the PayPal fee.
 function _ppProductAmount(interaction) {
     const snap = snapshotProductDom();
     const prefetch = interaction._ppProductShipping;
@@ -94,14 +109,55 @@ async function _ppPrefetchProductMethods(interaction) {
         interaction._ppProductShipping = null;
         return;
     }
+    const request = _ppNextAmountRequest(interaction);
+    let prefetch;
     try {
-        interaction._ppProductShipping = await rpc('/shop/buckaroo/wallet/product_methods', {
+        prefetch = await rpc('/shop/buckaroo/wallet/product_methods', {
             product_id: snap.productId,
             qty: snap.qty,
+            payment_method_id: _ppMethodId(interaction),
         });
     } catch (error) {
         console.error('PayPal product shipping prefetch failed:', error);
-        interaction._ppProductShipping = null;
+        prefetch = null;
+    }
+    if (request !== interaction._ppAmountRequest) {
+        return;
+    }
+    interaction._ppProductShipping = prefetch;
+    if (!prefetch) {
+        // Without the prefetch the amount would miss the PayPal fee, and
+        // Buckaroo refuses the order: hide the button instead.
+        _ppUnavailable(interaction.el);
+    }
+}
+
+// Cart page: the express form's amount is the cart total without the PayPal
+// fee, so read the total PayPal must authorize from the server instead.
+async function _ppRefreshCartAmount(interaction) {
+    const request = _ppNextAmountRequest(interaction);
+    let resp;
+    try {
+        resp = await rpc('/shop/buckaroo/wallet/amount', {
+            payment_method_id: _ppMethodId(interaction),
+        });
+    } catch (error) {
+        console.error('PayPal cart amount refresh failed:', error);
+        resp = null;
+    }
+    if (request !== interaction._ppAmountRequest) {
+        return;
+    }
+    if (!resp) {
+        // A fee-less amount would make Buckaroo refuse the order.
+        _ppUnavailable(interaction.el);
+        return;
+    }
+    interaction.paymentContext.amount = parseFloat(resp.amount);
+    interaction.paymentContext.minorAmount = parseInt(resp.minor_amount);
+    if (interaction._ppOptions) {
+        // `createOrder` reads `options.amount` lazily at click time.
+        interaction._ppOptions.amount = interaction.paymentContext.amount;
     }
 }
 
@@ -134,13 +190,17 @@ async function _ppOnShippingChange(interaction, options, container, data, action
         const carrierId = data.selected_shipping_option?.id;
         if (carrierId) {
             // Buyer switched carrier: persist it and read the new total.
-            resp = await rpc('/shop/buckaroo/wallet/set_method', { dm_id: carrierId });
+            resp = await rpc('/shop/buckaroo/wallet/set_method', {
+                dm_id: carrierId,
+                payment_method_id: _ppMethodId(interaction),
+            });
             interaction._ppSelectedCarrierId = parseInt(carrierId) || interaction._ppSelectedCarrierId;
         } else {
             // Buyer picked an address: fetch the serviceable carriers (Odoo
             // preselects the cheapest server-side).
             resp = await rpc('/shop/buckaroo/wallet/shipping_address', {
                 partial_delivery_address: _ppPartialToAddress(data.shipping_address),
+                payment_method_id: _ppMethodId(interaction),
             });
             const methods = resp.delivery_methods || [];
             if (!methods.length) {
@@ -342,6 +402,11 @@ async function _ppMountButton(interaction) {
         }
         if (container.dataset.placement === 'product') {
             await _ppPrefetchProductMethods(interaction);
+        } else if (container.dataset.placement === 'cart') {
+            await _ppRefreshCartAmount(interaction);
+        }
+        if (container.classList.contains('d-none')) {
+            return;
         }
         _ppInitiate(interaction, container, merchantId, websiteKey, paymentMethodId);
     });
@@ -424,7 +489,8 @@ export class BuckarooPaypalExpress extends ExpressCheckout {
             });
         }
         // Checkout: amount and currency come off this container's own dataset
-        // (added by the inline-form template) via the spread above. The core
+        // (added by the inline-form template) via the spread above; the amount
+        // already includes the PayPal fee (`buckaroo_paypal_amount`). The core
         // payment form carries the transaction route/token/partner for
         // whichever method is submitted - `_ppCreatePayment` hands off to it
         // instead of reading those fields off this interaction.
@@ -443,23 +509,15 @@ export class BuckarooPaypalExpress extends ExpressCheckout {
             form.addEventListener('change', this._ppRefresh);
             return;
         }
-        // Keep the sheet amount fresh when the cart quantity changes.
-        this.env.bus.addEventListener('cart_amount_changed', (ev) =>
-            this._updateAmount(...ev.detail));
+        // Keep the sheet amount fresh when the cart quantity changes. The
+        // event's amount excludes the PayPal fee, so refetch it instead.
+        this.env.bus.addEventListener('cart_amount_changed', () => _ppRefreshCartAmount(this));
     }
 
     destroy() {
         this._ppVisibilityObserver?.disconnect();
         _ppClearInitTimer(this);
         super.destroy();
-    }
-
-    _updateAmount(newAmount, newMinorAmount) {
-        this.paymentContext.amount = parseFloat(newAmount);
-        this.paymentContext.minorAmount = parseInt(newMinorAmount);
-        if (this._ppOptions) {
-            this._ppOptions.amount = parseFloat(newAmount);
-        }
     }
 }
 

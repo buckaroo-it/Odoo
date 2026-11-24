@@ -83,6 +83,22 @@ class SaleOrder(models.Model):
             return
         self._apply_buckaroo_surcharge_line(payment_method)
 
+    def _buckaroo_amount_total_for_method(self, payment_method):
+        """Total the transaction will charge when paid with *payment_method*.
+
+        Wallets that authorize an amount up front (PayPal) must authorize
+        exactly this, or Buckaroo refuses the pay request (BTI-2182). Syncs the
+        method's surcharge with the code the transaction route runs, then rolls
+        it back, so the order keeps its current surcharge line.
+        """
+        self.ensure_one()
+        savepoint = self.env.cr.savepoint()
+        try:
+            self._buckaroo_sync_surcharge_for_method(payment_method)
+            return self.amount_total
+        finally:
+            savepoint.close(rollback=True)
+
     def _check_cart_is_ready_to_be_paid(self):
         # Runs under parent's FOR NO KEY UPDATE NOWAIT; concurrent picks serialise.
         pm_id = self.env.context.get(const.PICK_METHOD_CONTEXT_KEY)

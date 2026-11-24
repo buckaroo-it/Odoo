@@ -290,3 +290,138 @@ class TestPaypalPaymentPortalSession(BuckarooOfficialCommon):
             call.args[0]: call.args[1] for call in mock_builder.add_parameter.call_args_list
         }
         self.assertEqual(param_calls.get("payPalOrderId"), "PP-CHECKOUT-1")
+
+
+@tagged("post_install", "-at_install")
+class TestPaypalFeeAmounts(BuckarooOfficialCommon):
+    """BTI-2182: every amount handed to the PayPal button must include the
+    PayPal fee the transaction route adds, or Buckaroo refuses the pay request
+    with "different authorized amount"."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.paypal = cls.env.ref("payment_buckaroo_official.payment_method_paypal")
+        cls.buckaroo.payment_method_ids = [Command.link(cls.paypal.id)]
+        cls.paypal.buckaroo_official_fee_amount = "1.5%"
+        cls.product = cls.env["product.product"].create(
+            {
+                "name": "PayPal Fee Widget",
+                "list_price": 36.0,
+                "type": "service",
+                "taxes_id": [Command.clear()],
+            }
+        )
+        cls.website = cls.env["website"].get_current_website()
+
+    def _make_order(self):
+        order = self.env["sale.order"].create(
+            {"partner_id": self.partner.id, "website_id": self.website.id}
+        )
+        self.env["sale.order.line"].create(
+            {
+                "order_id": order.id,
+                "product_id": self.product.id,
+                "product_uom_qty": 1,
+                "price_unit": 36.0,
+                "tax_ids": [Command.clear()],
+            }
+        )
+        return order
+
+    def _patch_wallet_request(self, order=None):
+        fake_req = MagicMock()
+        fake_req.env = self.env
+        fake_req.cart = order.sudo() if order else self.env["sale.order"]
+        fake_req.website = self.website
+        return patch(
+            "odoo.addons.payment_buckaroo_official.controllers.express_shipping.request",
+            fake_req,
+        )
+
+    def _wallet_controller(self):
+        from ..controllers.express_shipping import BuckarooWalletShippingController
+
+        return BuckarooWalletShippingController()
+
+    def test_wallet_amount_includes_paypal_fee(self):
+        order = self._make_order()
+        with self._patch_wallet_request(order):
+            result = self._wallet_controller().buckaroo_wallet_amount(
+                payment_method_id=self.paypal.id
+            )
+        self.assertEqual(result["amount"], 36.54)
+        self.assertEqual(result["minor_amount"], 3654)
+
+    def test_wallet_amount_without_method_is_the_cart_total(self):
+        order = self._make_order()
+        with self._patch_wallet_request(order):
+            result = self._wallet_controller().buckaroo_wallet_amount()
+        self.assertEqual(result["amount"], 36.0)
+
+    def test_wallet_amount_ignores_unknown_method(self):
+        order = self._make_order()
+        for method_id in (999999, "abc", self.payment_method.id):
+            with self.subTest(method_id=method_id), self._patch_wallet_request(order):
+                result = self._wallet_controller().buckaroo_wallet_amount(
+                    payment_method_id=method_id
+                )
+                self.assertEqual(result["amount"], 36.0)
+
+    def test_wallet_amount_leaves_cart_untouched(self):
+        order = self._make_order()
+        with self._patch_wallet_request(order):
+            self._wallet_controller().buckaroo_wallet_amount(payment_method_id=self.paypal.id)
+        self.assertFalse(order.order_line.filtered("is_buckaroo_surcharge"))
+        self.assertEqual(order.amount_total, 36.0)
+
+    def test_wallet_amount_without_cart_is_empty(self):
+        with self._patch_wallet_request():
+            result = self._wallet_controller().buckaroo_wallet_amount(
+                payment_method_id=self.paypal.id
+            )
+        self.assertEqual(result["amount"], 0.0)
+
+    def test_set_method_total_includes_paypal_fee(self):
+        order = self._make_order()
+        with self._patch_wallet_request(order):
+            result = self._wallet_controller().buckaroo_wallet_set_method(
+                dm_id="none", payment_method_id=self.paypal.id
+            )
+        self.assertEqual(result["amount"], 36.54)
+
+    def test_product_methods_subtotal_includes_paypal_fee(self):
+        from odoo.addons.website_sale.tests.common import MockRequest
+
+        # Fixed fee: the website pricelist sets the product price, not the test.
+        self.paypal.buckaroo_official_fee_amount = "2.00"
+        # The throwaway rating order reads the website off the real request.
+        with MockRequest(self.env, website=self.website):
+            controller = self._wallet_controller()
+            with_fee = controller.buckaroo_wallet_product_methods(
+                self.product.id, qty=1, payment_method_id=self.paypal.id
+            )
+            without_fee = controller.buckaroo_wallet_product_methods(self.product.id, qty=1)
+        self.assertAlmostEqual(with_fee["subtotal"] - without_fee["subtotal"], 2.0, places=2)
+
+    def test_checkout_values_carry_paypal_amount(self):
+        from odoo.addons.website_sale.controllers.main import WebsiteSale
+
+        from ..controllers.paypal import PaypalWebsiteSale
+
+        order = self._make_order()
+        for methods, expected in [
+            (self.paypal | self.ideal, 36.54),
+            (self.ideal, None),
+        ]:
+            with (
+                self.subTest(methods=methods.mapped("code")),
+                patch.object(
+                    WebsiteSale,
+                    "_get_shop_payment_values",
+                    return_value={"amount": 36.0, "payment_methods_sudo": methods},
+                ),
+            ):
+                values = PaypalWebsiteSale()._get_shop_payment_values(order)
+                self.assertEqual(values.get("buckaroo_paypal_amount"), expected)
+        self.assertFalse(order.order_line.filtered("is_buckaroo_surcharge"))
