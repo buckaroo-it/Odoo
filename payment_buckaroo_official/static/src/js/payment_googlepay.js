@@ -10,10 +10,16 @@ import { ExpressCheckout } from '@payment/interactions/express_checkout';
 import {
     bindProductCart,
     displayWalletError,
+    fetchWalletCartAmount,
+    fetchWalletProductPrefetch,
     finalizeExpressTransaction,
     isDuplicatePlacement,
+    markWalletSheetChangedOrder,
+    refreshDuringMount,
+    reloadIfWalletSheetChangedOrder,
     snapshotProductDom,
     truthyData,
+    walletCheckoutBlocker,
 } from '@payment_buckaroo_official/js/express_wallet_utils';
 
 const GOOGLE_PAY_JS_URL = 'https://pay.google.com/gp/p/js/pay.js';
@@ -61,7 +67,9 @@ export function buildGooglePayRequest(config, context) {
         },
         transactionInfo: {
             totalPriceStatus: 'FINAL',
-            totalPrice: String(totalPrice),
+            // Sums of float amounts (subtotal + carrier) can carry extra
+            // digits; Google Pay rejects anything but 2 decimals.
+            totalPrice: totalPrice.toFixed(2),
             currencyCode,
             countryCode,
         },
@@ -115,7 +123,10 @@ function _gpRedactedAddress(address) {
     };
 }
 
+// Every total the express sheet shows passes through here, so the last one is
+// what the buyer approved: the transaction route refuses another amount.
 function _gpTransactionInfo(interaction, total) {
+    interaction._gpSheetTotal = parseFloat(total || 0).toFixed(2);
     return {
         countryCode: interaction._gpCountryCode || '',
         currencyCode: (interaction.paymentContext.currencyName || '').toUpperCase(),
@@ -127,13 +138,17 @@ function _gpTransactionInfo(interaction, total) {
 
 // Fires while the sheet is open: on address pick it needs the serviceable
 // carriers, on method switch it needs the new total. Same Buckaroo routes the
-// Apple Pay shipping callbacks use; money math stays server-side.
+// Apple Pay shipping callbacks use; money math stays server-side, and the
+// totals include the Google Pay fee and only the open giftcard remainder, as
+// the transaction charges (BTI-2182).
 async function _gpOnPaymentDataChanged(interaction, intermediate) {
+    markWalletSheetChangedOrder(interaction);
     if (intermediate.callbackTrigger === 'SHIPPING_OPTION') {
         let resp;
         try {
             resp = await rpc('/shop/buckaroo/wallet/set_method', {
                 dm_id: intermediate.shippingOptionData?.id,
+                payment_method_id: interaction._gpMethodId,
             });
         } catch (error) {
             console.error('Google Pay shipping method update failed:', error);
@@ -149,6 +164,7 @@ async function _gpOnPaymentDataChanged(interaction, intermediate) {
     try {
         resp = await rpc('/shop/buckaroo/wallet/shipping_address', {
             partial_delivery_address: _gpRedactedAddress(intermediate.shippingAddress),
+            payment_method_id: interaction._gpMethodId,
         });
     } catch (error) {
         console.error('Google Pay shipping address update failed:', error);
@@ -215,6 +231,12 @@ patch(PaymentForm.prototype, {
             this._enableButton();
             return;
         }
+        const blocker = walletCheckoutBlocker(container.dataset.totalAmount);
+        if (blocker) {
+            this._displayErrorDialog(_t("Error"), blocker);
+            this._enableButton();
+            return;
+        }
         const env = container.dataset.environment === 'PRODUCTION' ? 'PRODUCTION' : 'TEST';
         if (!this._buckarooGPClient) {
             this._buckarooGPClient = new google.payments.api.PaymentsClient({ environment: env });
@@ -259,6 +281,10 @@ patch(PaymentForm.prototype, {
         this._buckarooGPToken = token;
         this._buckarooGPCustomerName = customerName;
         this._buckarooGPCardNetwork = cardNetwork;
+        this._buckarooGPSheetTotal = container.dataset.totalAmount;
+        // A refused transaction (e.g. the total changed) reloads the page once
+        // its error is read, so the next attempt uses the current total.
+        markWalletSheetChangedOrder(this);
         try {
             await super._initiatePaymentFlow(...arguments);
         } finally {
@@ -266,6 +292,7 @@ patch(PaymentForm.prototype, {
             this._buckarooGPToken = null;
             this._buckarooGPCustomerName = null;
             this._buckarooGPCardNetwork = null;
+            this._buckarooGPSheetTotal = null;
         }
     },
 
@@ -289,9 +316,37 @@ patch(PaymentForm.prototype, {
         if (this._buckarooGPCardNetwork) {
             params.buckaroo_googlepay_card_network = this._buckarooGPCardNetwork;
         }
+        if (this._buckarooGPSheetTotal) {
+            params.buckaroo_wallet_amount = parseFloat(this._buckarooGPSheetTotal);
+        }
         return params;
     },
 });
+
+// Product page (no cart yet): subtotal with the Google Pay fee, plus the
+// cheapest carrier, which the buy-now order preselects.
+async function _gpPrefetchProduct(interaction) {
+    const prefetch = await fetchWalletProductPrefetch(
+        interaction, interaction._gpContainer, interaction._gpMethodId,
+    );
+    if (prefetch !== undefined) {
+        interaction._gpProductShipping = prefetch;
+    }
+}
+
+// Cart page: the express form's amount excludes the Google Pay fee, so read
+// the total the transaction charges from the server instead.
+async function _gpRefreshCartAmount(interaction) {
+    const resp = await fetchWalletCartAmount(
+        interaction, interaction._gpContainer, interaction._gpMethodId,
+    );
+    if (!resp) {
+        return;
+    }
+    interaction.paymentContext.amount = parseFloat(resp.amount);
+    interaction.paymentContext.minorAmount = parseInt(resp.minor_amount);
+    interaction._gpContainer.classList.toggle('d-none', interaction.paymentContext.amount === 0);
+}
 
 async function _gpMountButton(interaction, container, providerData) {
     const merchantGuid = container.dataset.merchantGuid || '';
@@ -374,6 +429,20 @@ async function _gpMountButton(interaction, container, providerData) {
         buttonColor: container.dataset.buttonStyle === 'white' ? 'white' : 'black',
     });
     container.replaceChildren(button);
+    // Set once the button exists, so only a mounted button refreshes. On the
+    // cart, `interaction` is the core express form shared with other
+    // providers: the refresh targets this container only.
+    interaction._gpMethodId = paymentMethodId;
+    interaction._gpContainer = container;
+    if (isProduct) {
+        await refreshDuringMount(
+            container.closest('form') || document, 'change', () => _gpPrefetchProduct(interaction),
+        );
+    } else {
+        await refreshDuringMount(
+            interaction.env.bus, 'cart_amount_changed', () => _gpRefreshCartAmount(interaction),
+        );
+    }
 }
 
 async function _gpExpressClick(interaction, paymentsClient, buildRequest, providerData, paymentMethodId, isProduct) {
@@ -389,11 +458,25 @@ async function _gpExpressClick(interaction, paymentsClient, buildRequest, provid
             ));
             return;
         }
-        request = buildRequest({ totalPrice: snapshot.unitPrice * snapshot.qty, shippingRequired: false });
+        const prefetch = interaction._gpProductShipping;
+        if (!prefetch) {
+            // Without it the sheet would miss the fee and the server refuses.
+            displayWalletError(interaction, _t(
+                "Could not read the product details. Please reload the page and try again.",
+            ));
+            return;
+        }
+        const methods = prefetch.delivery_methods || [];
+        // The sheet collects no address, so finalize sends this carrier
+        // for the buy-now order to use the one priced here.
+        interaction._gpProductCarrierId = methods.length ? methods[0].id : null;
+        const totalPrice = prefetch.subtotal + (methods.length ? methods[0].amount || 0 : 0);
+        request = buildRequest({ totalPrice, shippingRequired: false });
     } else {
         request = buildRequest();
     }
 
+    interaction._gpSheetTotal = request.transactionInfo.totalPrice;
     let paymentData;
     try {
         paymentData = await paymentsClient.loadPaymentData(request);
@@ -403,6 +486,8 @@ async function _gpExpressClick(interaction, paymentsClient, buildRequest, provid
             displayWalletError(interaction, _t(
                 "Google Pay payment could not be processed. Please try again.",
             ));
+        } else {
+            reloadIfWalletSheetChangedOrder(interaction);
         }
         return;
     }
@@ -435,7 +520,7 @@ async function _gpFinalize(interaction, paymentData, providerData, paymentMethod
     if (interaction.paymentContext.shippingInfoRequired && shipping?.name) {
         addresses.shipping_address = _gpExtractAddress(shipping, email);
     }
-    const shipOptId = paymentData?.shippingOptionData?.id;
+    const shipOptId = paymentData?.shippingOptionData?.id || interaction._gpProductCarrierId;
     if (shipOptId) {
         // Re-apply the picked carrier so its cost is in the order total Buckaroo charges.
         addresses.shipping_option = { id: String(shipOptId) };
@@ -448,6 +533,8 @@ async function _gpFinalize(interaction, paymentData, providerData, paymentMethod
             buckaroo_googlepay_token: token,
             buckaroo_googlepay_customer_name: customerName,
             buckaroo_googlepay_card_network: cardNetwork,
+            // The server refuses to charge another total than the sheet showed.
+            buckaroo_wallet_amount: parseFloat(interaction._gpSheetTotal),
         },
         txError: _t("Google Pay payment could not be processed. Please try again."),
     });
@@ -474,6 +561,15 @@ patch(ExpressCheckout.prototype, {
         }
         await _gpMountButton(this, container, providerData);
     },
+
+    // The event's amount excludes the Google Pay fee: refetch it. Other
+    // providers' express forms share this prototype and keep core behavior.
+    _updateAmount() {
+        super._updateAmount(...arguments);
+        if (this._gpMethodId) {
+            _gpRefreshCartAmount(this);
+        }
+    },
 });
 
 // Product page lives inside Odoo's Add-to-Cart `<form>`. HTML5
@@ -495,7 +591,14 @@ export class BuckarooGooglePayProductExpress extends ExpressCheckout {
     }
 
     start() {
-        // No `cart_amount_changed` listener: product page has no cart.
+        // No `cart_amount_changed` listener: product page has no cart. Re-rate
+        // when the variant or quantity changes so the sheet amount stays right.
+        const form = this.el.closest('form') || document;
+        this.addListener(form, 'change', () => {
+            if (this._gpContainer) {
+                _gpPrefetchProduct(this);
+            }
+        });
     }
 }
 

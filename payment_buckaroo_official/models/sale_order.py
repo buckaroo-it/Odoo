@@ -92,6 +92,28 @@ class SaleOrder(models.Model):
             return
         self._apply_buckaroo_surcharge_line(payment_method)
 
+    def _buckaroo_amount_to_pay_for_method(self, payment_method):
+        """Amount the transaction will charge when paid with *payment_method*.
+
+        PayPal authorizes this amount up front, so it must be exact or Buckaroo
+        refuses the pay request; the Apple Pay and Google Pay sheets show it to
+        the buyer (BTI-2182). Syncs the
+        method's surcharge with the code the transaction route runs, then rolls
+        it back, so the order keeps its current surcharge line. Like core's
+        ``/shop/payment/transaction``, it charges only what is still unpaid
+        (e.g. the remainder after a partial giftcard payment).
+        """
+        self.ensure_one()
+        # The flushing savepoint runs every pending precommit hook (e.g. chatter
+        # tracking) before it starts, so its rollback only drops the hooks this
+        # preview itself adds.
+        savepoint = self.env.cr.savepoint()
+        try:
+            self._buckaroo_sync_surcharge_for_method(payment_method)
+            return self.currency_id.round(max(0.0, self.amount_total - self.amount_paid))
+        finally:
+            savepoint.close(rollback=True)
+
     def _get_update_prices_lines(self):
         """Keep the surcharge out of pricelist recomputation: its price comes
         from the payment method, not the surcharge product."""
