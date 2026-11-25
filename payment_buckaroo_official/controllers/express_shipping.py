@@ -16,6 +16,12 @@ class BuckarooWalletShippingController(Delivery):
     once when they switch method (the sheet needs the new total). Both routes
     reuse Odoo's express delivery machinery and return the server-authoritative
     order total, so the wallet charges exactly what the sale order totals.
+
+    The wallets (PayPal, Apple Pay, Google Pay) pass their
+    ``payment_method_id``: the totals then include that method's surcharge and
+    only the open giftcard remainder, as the transaction route charges.
+    PayPal authorizes this amount up front; the Apple Pay and Google Pay
+    sheets show it to the buyer (BTI-2182).
     """
 
     _EMPTY_AMOUNTS = {"amount": 0.0, "minor_amount": 0, "currency_code": ""}
@@ -31,7 +37,7 @@ class BuckarooWalletShippingController(Delivery):
         website=True,
         sitemap=False,
     )
-    def buckaroo_wallet_shipping_address(self, partial_delivery_address):
+    def buckaroo_wallet_shipping_address(self, partial_delivery_address, payment_method_id=None):
         if not request.cart:
             return {"delivery_methods": [], **self._EMPTY_AMOUNTS}
         # Odoo applies the (redacted) address, preselects the cheapest carrier
@@ -48,7 +54,7 @@ class BuckarooWalletShippingController(Delivery):
                 }
                 for m in methods
             ],
-            **self._buckaroo_wallet_amounts(),
+            **self._buckaroo_wallet_amounts(payment_method_id),
         }
 
     @http.route(
@@ -59,7 +65,7 @@ class BuckarooWalletShippingController(Delivery):
         website=True,
         sitemap=False,
     )
-    def buckaroo_wallet_methods(self):
+    def buckaroo_wallet_methods(self, payment_method_id=None):
         """Available carriers for the cart's current address, used to seed the
         inline Apple Pay sheet so the method selector shows on open (the order
         already has the address from checkout, so no address callback fires)."""
@@ -77,7 +83,7 @@ class BuckarooWalletShippingController(Delivery):
                 for carrier, price in methods
             ],
             "selected_id": order_sudo.carrier_id.id or None,
-            **self._buckaroo_wallet_amounts(),
+            **self._buckaroo_wallet_amounts(payment_method_id),
         }
 
     @http.route(
@@ -88,7 +94,7 @@ class BuckarooWalletShippingController(Delivery):
         website=True,
         sitemap=False,
     )
-    def buckaroo_wallet_product_methods(self, product_id, qty=1):
+    def buckaroo_wallet_product_methods(self, product_id, qty=1, payment_method_id=None):
         """Carriers for a product page, where no cart exists yet. Rates them off
         a throwaway order (rolled back), so the express sheet can seed its
         method selector before anything is added to the cart. Total math is then
@@ -126,6 +132,10 @@ class BuckarooWalletShippingController(Delivery):
                     if order._has_deliverable_products()
                     else []
                 )
+                # After rating: the real order is rated before the transaction
+                # adds the surcharge, so the fee must not sway carrier prices.
+                if fee_method := self._buckaroo_wallet_fee_method(payment_method_id):
+                    order._buckaroo_sync_surcharge_for_method(fee_method)
                 result = {
                     "delivery_methods": [
                         {"id": carrier.id, "name": carrier.name, "amount": currency.round(price)}
@@ -147,23 +157,54 @@ class BuckarooWalletShippingController(Delivery):
         website=True,
         sitemap=False,
     )
-    def buckaroo_wallet_set_method(self, dm_id):
+    def buckaroo_wallet_set_method(self, dm_id, payment_method_id=None):
         order_sudo = request.cart
         if not order_sudo:
             return dict(self._EMPTY_AMOUNTS)
         try:
             cid = int(dm_id)
         except (TypeError, ValueError):
-            return self._buckaroo_wallet_amounts()
+            return self._buckaroo_wallet_amounts(payment_method_id)
         carrier = request.env["delivery.carrier"].sudo().browse(cid).exists()
         if carrier and carrier.id in order_sudo._get_delivery_methods().ids:
             order_sudo._set_delivery_method(carrier)
-        return self._buckaroo_wallet_amounts()
+        return self._buckaroo_wallet_amounts(payment_method_id)
 
-    def _buckaroo_wallet_amounts(self):
+    @http.route(
+        "/shop/buckaroo/wallet/amount",
+        type="jsonrpc",
+        auth="public",
+        methods=["POST"],
+        website=True,
+        sitemap=False,
+    )
+    def buckaroo_wallet_amount(self, payment_method_id=None):
+        """Cart total for a cart-page wallet button, refreshed when it mounts
+        and whenever the cart quantity changes."""
+        if not request.cart:
+            return dict(self._EMPTY_AMOUNTS)
+        return self._buckaroo_wallet_amounts(payment_method_id)
+
+    @staticmethod
+    def _buckaroo_wallet_fee_method(payment_method_id):
+        """The Buckaroo method whose surcharge the totals must include, or an
+        empty recordset (unknown id, or not a Buckaroo method)."""
+        PaymentMethod = request.env["payment.method"].sudo()
+        try:
+            method = PaymentMethod.browse(int(payment_method_id)).exists()
+        except (TypeError, ValueError):
+            return PaymentMethod
+        return method if method and method._is_linked_to_buckaroo() else PaymentMethod
+
+    def _buckaroo_wallet_amounts(self, payment_method_id=None):
         order_sudo = request.cart
         currency = order_sudo.currency_id
-        total = order_sudo.amount_total
+        fee_method = self._buckaroo_wallet_fee_method(payment_method_id)
+        total = (
+            order_sudo._buckaroo_amount_to_pay_for_method(fee_method)
+            if fee_method
+            else order_sudo.amount_total
+        )
         return {
             "amount": total,
             "minor_amount": payment_utils.to_minor_currency_units(total, currency),

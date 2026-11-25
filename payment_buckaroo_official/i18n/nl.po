@@ -994,6 +994,12 @@ msgstr ""
 "Instellingen > Token Registratie."
 
 #. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/express_wallet_utils.js:0
+msgid "Nothing is left to pay for this order."
+msgstr "Er hoeft niets meer betaald te worden voor deze bestelling."
+
+#. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.giftcard_inline_form
 msgid "PIN"
 msgstr "PIN"
@@ -1409,6 +1415,12 @@ msgstr ""
 
 #. module: payment_buckaroo_official
 #. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/giftcard.py:0
+msgid "The giftcard already paid this order. Please refresh the page."
+msgstr "De giftcard heeft deze bestelling al betaald. Vernieuw de pagina."
+
+#. module: payment_buckaroo_official
+#. odoo-python
 #: code:addons/payment_buckaroo_official/controllers/express_googlepay.py:0
 msgid "The given product does not exist."
 msgstr "Het opgegeven product bestaat niet."
@@ -1436,9 +1448,21 @@ msgstr "De technische code van deze betaalprovider."
 
 #. module: payment_buckaroo_official
 #. odoo-python
+#: code:addons/payment_buckaroo_official/controllers/fee.py:0
+msgid "The total changed while you were paying, so nothing was charged. Please check the amount and try again."
+msgstr "Het totaal is veranderd tijdens het betalen, dus er is niets afgeschreven. Controleer het bedrag en probeer het opnieuw."
+
+#. module: payment_buckaroo_official
+#. odoo-python
 #: code:addons/payment_buckaroo_official/models/account_move.py:0
 msgid "This Buckaroo payment has already been fully refunded."
 msgstr "Deze Buckaroo-betaling is al volledig terugbetaald."
+
+#. module: payment_buckaroo_official
+#. odoo-javascript
+#: code:addons/payment_buckaroo_official/static/src/js/express_wallet_utils.js:0
+msgid "This payment method is not available right now. Please choose another payment method."
+msgstr "Deze betaalmethode is nu niet beschikbaar. Kies een andere betaalmethode."
 
 #. module: payment_buckaroo_official
 #: model_terms:ir.ui.view,arch_db:payment_buckaroo_official.payment_provider_form_buckaroo_official

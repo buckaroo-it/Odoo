@@ -35,3 +35,20 @@ def is_amex_network(value):
     American Express through either wallet.
     """
     return str(value or "").strip().lower() == "amex"
+
+
+def call_dropping_session_on_failure(session, keys, call):
+    """Run the transaction route ``call``; drop the wallet values stashed in
+    ``session`` under ``keys`` when it refuses the payment (raises, or answers
+    ``state == "error"``), so a stale token can't ride along with a later
+    transaction. ``_buckaroo_create_payment`` pops them on success."""
+    try:
+        result = call()
+    except Exception:
+        for key in keys:
+            session.pop(key, None)
+        raise
+    if isinstance(result, dict) and result.get("state") == "error":
+        for key in keys:
+            session.pop(key, None)
+    return result

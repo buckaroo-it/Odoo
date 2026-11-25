@@ -979,3 +979,160 @@ class TestGooglepayProductExpressInitController(BuckarooOfficialCommon):
         self.assertIsInstance(result, dict)
         self.assertEqual(result["partner_id"], -1)
         add_to_cart_mock.assert_called_once()
+
+
+@tagged("post_install", "-at_install")
+class TestWalletExpressShippingOption(BuckarooOfficialCommon):
+    """BTI-2182: the Google Pay product sheet collects no shipping address but
+    adds the cheapest carrier's price. Core applies ``shipping_option`` only
+    with an address, so the express route applies it, or the buy-now order
+    keeps another carrier and charges a different total."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.website = cls.env["website"].get_current_website()
+        cls.product = cls.env["product.product"].create(
+            {"name": "Shipped Widget", "list_price": 36.0, "type": "consu"}
+        )
+        delivery_product = cls.env["product.product"].create(
+            {"name": "Delivery", "type": "service", "list_price": 0.0}
+        )
+        cls.cheap, cls.fast = cls.env["delivery.carrier"].create(
+            [
+                {
+                    "name": name,
+                    "delivery_type": "fixed",
+                    "fixed_price": price,
+                    "product_id": delivery_product.id,
+                    "is_published": True,
+                }
+                for name, price in (("Cheap", 2.0), ("Fast", 9.0))
+            ]
+        )
+
+    def _make_order(self):
+        order = self.env["sale.order"].create(
+            {"partner_id": self.partner.id, "website_id": self.website.id}
+        )
+        self.env["sale.order.line"].create(
+            {"order_id": order.id, "product_id": self.product.id, "product_uom_qty": 1}
+        )
+        order._set_delivery_method(self.fast)
+        return order
+
+    def _apply(self, order, shipping_option):
+        from ..controllers.express_checkout import BuckarooWalletExpressCheckout
+
+        BuckarooWalletExpressCheckout._buckaroo_apply_shipping_option(order.sudo(), shipping_option)
+
+    def test_applies_the_priced_carrier(self):
+        order = self._make_order()
+        self._apply(order, {"id": str(self.cheap.id)})
+        self.assertEqual(order.carrier_id, self.cheap)
+
+    def test_ignores_unknown_or_malformed_carrier(self):
+        order = self._make_order()
+        for shipping_option in ({"id": "999999"}, {"id": "abc"}, {}, "x"):
+            with self.subTest(shipping_option=shipping_option):
+                self._apply(order, shipping_option)
+                self.assertEqual(order.carrier_id, self.fast)
+
+    def test_route_applies_option_only_without_shipping_address(self):
+        from odoo.addons.website_sale.controllers.main import WebsiteSale
+
+        from ..controllers.express_checkout import BuckarooWalletExpressCheckout
+
+        controller = BuckarooWalletExpressCheckout()
+        for shipping_address, expected in ((None, self.cheap), ({"name": "X"}, self.fast)):
+            with self.subTest(with_address=bool(shipping_address)):
+                order = self._make_order()
+                fake_req = MagicMock()
+                fake_req.env = self.env
+                fake_req.session = {}
+                with (
+                    patch(
+                        "odoo.addons.payment_buckaroo_official.controllers.express_checkout.request",
+                        fake_req,
+                    ),
+                    patch(
+                        "odoo.addons.payment_buckaroo_official.controllers.express_wallet.request",
+                        fake_req,
+                    ),
+                    patch.object(
+                        BuckarooWalletExpressCheckout,
+                        "_buckaroo_express_order_sudo",
+                        return_value=order.sudo(),
+                    ),
+                    # Core applies the option itself when an address is given.
+                    patch.object(WebsiteSale, "process_express_checkout", return_value=1),
+                ):
+                    controller.buckaroo_wallet_express_checkout(
+                        billing_address={"name": "X"},
+                        shipping_address=shipping_address,
+                        shipping_option={"id": str(self.cheap.id)},
+                    )
+                self.assertEqual(order.carrier_id, expected)
+
+
+@tagged("post_install", "-at_install")
+class TestWalletTokenSessionCleanup(BuckarooOfficialCommon):
+    """The Apple Pay / Google Pay token is stashed in the session for
+    ``_buckaroo_create_payment``; a refused transaction (the sheet-total or
+    giftcard check, a checkout step) must drop it, so a stale token can't ride
+    along with a later transaction (BTI-2182)."""
+
+    WALLETS = (
+        ("applepay", "ApplepayPaymentPortal", "buckaroo_applepay"),
+        ("googlepay", "GooglepayPaymentPortal", "buckaroo_googlepay"),
+    )
+
+    def _call(self, module, class_name, code, super_behavior):
+        import importlib
+
+        from odoo.addons.website_sale.controllers.payment import PaymentPortal
+
+        controllers = importlib.import_module(
+            f"odoo.addons.payment_buckaroo_official.controllers.{module}"
+        )
+        pm = MagicMock()
+        pm.code = code
+        fake_req = MagicMock()
+        fake_req.env.__getitem__.return_value.sudo.return_value.browse.return_value = pm
+        fake_req.session = {}
+
+        def fake_super(self_, order_id, access_token, **kwargs):
+            if super_behavior == "raise":
+                raise ValueError("refused")
+            if super_behavior == "error":
+                return {"state": "error", "state_message": "refused"}
+            return {"ok": True}
+
+        kwargs = {
+            "payment_method_id": 5,
+            f"{code}_token": '{"token": 1}',
+            f"{code}_customer_name": "Test Buyer",
+        }
+        with (
+            patch.object(controllers, "request", fake_req),
+            patch.object(PaymentPortal, "shop_payment_transaction", fake_super),
+        ):
+            try:
+                getattr(controllers, class_name)().shop_payment_transaction(1, "tok", **kwargs)
+            except ValueError:
+                pass
+        return fake_req.session
+
+    def test_refused_transaction_drops_the_stashed_token(self):
+        for module, class_name, code in self.WALLETS:
+            for behavior in ("raise", "error"):
+                with self.subTest(wallet=module, behavior=behavior):
+                    session = self._call(module, class_name, code, behavior)
+                    self.assertNotIn(f"{code}_token", session)
+                    self.assertNotIn(f"{code}_customer_name", session)
+
+    def test_accepted_transaction_keeps_the_token_for_the_payment(self):
+        for module, class_name, code in self.WALLETS:
+            with self.subTest(wallet=module):
+                session = self._call(module, class_name, code, "ok")
+                self.assertEqual(session.get(f"{code}_token"), '{"token": 1}')
