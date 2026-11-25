@@ -25,3 +25,30 @@ def sanitize_customer_name(value):
     if not cleaned:
         return None
     return cleaned[:128]
+
+
+def is_amex_network(value):
+    """Whether a wallet-reported card network is American Express.
+
+    Apple Pay reports ``AmEx`` (``paymentMethod.network``), Google Pay
+    ``AMEX`` (``paymentMethodData.info.cardNetwork``). Buckaroo does not accept
+    American Express through either wallet.
+    """
+    return str(value or "").strip().lower() == "amex"
+
+
+def call_dropping_session_on_failure(session, keys, call):
+    """Run the transaction route ``call``; drop the wallet values stashed in
+    ``session`` under ``keys`` when it refuses the payment (raises, or answers
+    ``state == "error"``), so a stale token can't ride along with a later
+    transaction. ``_buckaroo_create_payment`` pops them on success."""
+    try:
+        result = call()
+    except Exception:
+        for key in keys:
+            session.pop(key, None)
+        raise
+    if isinstance(result, dict) and result.get("state") == "error":
+        for key in keys:
+            session.pop(key, None)
+    return result

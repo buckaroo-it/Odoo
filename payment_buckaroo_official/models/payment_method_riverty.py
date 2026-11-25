@@ -209,22 +209,37 @@ class PaymentMethodRiverty(models.Model):
         return None
 
     def _buckaroo_create_refund(self, source_tx, refund_tx, client):
-        """Riverty refund: full only.
-
-        Partial refunds need an article-level breakdown that Odoo's
-        amount-based refund flow can't supply; raising early avoids a
-        491 mid-checkout.
+        """Riverty refund. A full refund is amount-only. A partial refund
+        must carry articles, but Odoo's refund wizard only knows an amount,
+        so it sends one ``Return`` article priced at the refund amount,
+        built from the order's first product line (its VAT rate included).
         """
         if self.code != "buckaroo_riverty":
             return super()._buckaroo_create_refund(source_tx, refund_tx, client)
-        if round(abs(refund_tx.amount), 2) != round(source_tx.amount, 2):
-            raise ValidationError(
-                _(
-                    "Riverty partial refunds are not supported via Odoo. "
-                    "For partial refunds, use Buckaroo Plaza."
-                )
-            )
-        return super()._buckaroo_create_refund(source_tx, refund_tx, client)
+        refund_amount = abs(refund_tx.amount)
+        if round(refund_amount, 2) == round(source_tx.amount, 2):
+            return super()._buckaroo_create_refund(source_tx, refund_tx, client)
+
+        # Child txs carry no sale orders: the refund reads them from its source,
+        # and a capture (the source after an authorize) from the authorization.
+        order_tx = source_tx if source_tx.sale_order_ids else source_tx.source_transaction_id
+        product_articles = [
+            article for article in get_order_articles(order_tx) if article["type"] == "product"
+        ]
+        if not product_articles:
+            raise ValidationError(_("Riverty partial refunds need the paid order's product lines."))
+        article = dict(product_articles[0], quantity=1, unit_price_incl=refund_amount)
+        refund_article = self._format_riverty_articles([article])[0]
+        refund_article["RefundType"] = "Return"
+
+        builder = PaymentService(client).create_payment(
+            self.buckaroo_official_sdk_service_name,
+            self._buckaroo_get_refund_params(source_tx, refund_tx),
+        )
+        builder.add_parameter("article", [refund_article])
+        # The SDK allows no service parameters on a Riverty Refund
+        # and would silently drop the article, so skip its filter.
+        return builder.refund(validate=False)
 
 
 class ResPartner(models.Model):

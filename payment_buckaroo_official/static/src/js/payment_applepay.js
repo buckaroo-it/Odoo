@@ -9,27 +9,43 @@ import { PaymentForm } from '@payment/interactions/payment_form';
 import { ExpressCheckout } from '@payment/interactions/express_checkout';
 import {
     bindProductCart,
+    buckarooSdkUrl,
     displayWalletError,
+    fetchWalletCartAmount,
+    fetchWalletProductPrefetch,
     finalizeExpressTransaction,
     isDuplicatePlacement,
+    loadBuckarooSdk,
+    markWalletSheetChangedOrder,
+    refreshDuringMount,
+    reloadIfWalletSheetChangedOrder,
+    showWalletBlocked,
     snapshotProductDom,
     truthyData,
+    walletCheckoutBlocker,
 } from '@payment_buckaroo_official/js/express_wallet_utils';
 
 // Apple's SDK polyfills `<apple-pay-button>` and `applePayCapabilities` on
 // non-Safari browsers; Buckaroo's SDK owns merchant validation + capture.
 const APPLE_PAY_SDK_URL = 'https://applepay.cdn-apple.com/jsapi/1.latest/apple-pay-sdk.js';
-const BUCKAROO_SDK_URL = 'https://checkout.buckaroo.nl/api/buckaroosdk/script';
+
+// Card networks offered in the Apple Pay sheet: the Buckaroo SDK default, set
+// here so the plugin never depends on it. Buckaroo does not accept American
+// Express through Apple Pay, so `amex` is left out.
+const APPLE_PAY_SUPPORTED_NETWORKS = [
+    'masterCard', 'visa', 'maestro', 'vPay', 'cartesBancaires', 'privateLabel',
+];
 
 let _apSdkPromise = null;
 
 // Both SDKs are needed on every Apple Pay surface; memoize the load so the
-// inline form and the express buttons share one fetch.
-function _apEnsureSdks() {
+// inline form and the express buttons share one fetch. The Buckaroo build
+// follows the provider mode so it matches the one PayPal loads on the page.
+function _apEnsureSdks(testMode) {
     if (!_apSdkPromise) {
         _apSdkPromise = Promise.all([
             loadJS(APPLE_PAY_SDK_URL),
-            loadJS(BUCKAROO_SDK_URL),
+            loadBuckarooSdk(buckarooSdkUrl(testMode)),
         ]).catch((error) => {
             _apSdkPromise = null;
             throw error;
@@ -104,21 +120,42 @@ function _apTotalLineItem(storeName, amount) {
 // `onShippingMethodSelected` callback: persist the picked carrier server-side
 // (set_method) and return the refreshed total; on failure fall back to
 // `fallbackAmount`. `onPick` runs first for callers that also track the
-// selection locally.
-function _apSetMethodHandler(storeName, fallbackAmount, onPick) {
+// selection locally. The total includes the Apple Pay fee and only the open
+// giftcard remainder, as the transaction charges (BTI-2182).
+function _apSetMethodHandler(state, storeName, paymentMethodId, fallbackAmount, onPick) {
     return async (method) => {
         if (onPick) {
             onPick(method);
         }
+        markWalletSheetChangedOrder(state);
         let resp;
         try {
-            resp = await rpc('/shop/buckaroo/wallet/set_method', { dm_id: method.identifier });
+            resp = await rpc('/shop/buckaroo/wallet/set_method', {
+                dm_id: method.identifier,
+                payment_method_id: paymentMethodId,
+            });
         } catch (error) {
             console.error('Apple Pay shipping method update failed:', error);
             return { newTotal: _apTotalLineItem(storeName, fallbackAmount) };
         }
         return { newTotal: _apTotalLineItem(storeName, resp.amount) };
     };
+}
+
+// Wrap the sheet callbacks so `onTotal` sees every total the sheet shows: the
+// transaction route refuses another amount than the one the buyer approved.
+function _apTrackSheetTotal(callbacks, onTotal) {
+    const tracked = {};
+    for (const [name, callback] of Object.entries(callbacks)) {
+        tracked[name] = async (...args) => {
+            const result = await callback(...args);
+            if (result?.newTotal) {
+                onTotal(result.newTotal.amount);
+            }
+            return result;
+        };
+    }
+    return tracked;
 }
 
 // `ApplePayError` is defined by Apple's SDK; the non-Safari polyfill may omit
@@ -233,6 +270,8 @@ function _apAuthorize(buttonSelector, params) {
                 resolveOnce({
                     token: _apFormatToken(payment),
                     customerName: _apCustomerName(payment),
+                    // The server refuses networks Buckaroo does not accept.
+                    network: payment?.token?.paymentMethod?.network || '',
                     billingContact: payment?.billingContact || null,
                     shippingContact: payment?.shippingContact || null,
                 });
@@ -243,6 +282,8 @@ function _apAuthorize(buttonSelector, params) {
             params.requiredBillingContactFields || ['postalAddress', 'name'],
             params.requiredShippingContactFields || [],
             () => resolveOnce({ token: null, customerName: null }),
+            undefined, // merchantCapabilities: keep the SDK default.
+            APPLE_PAY_SUPPORTED_NETWORKS,
         );
         try {
             const payment = new BuckarooSdk.ApplePay.ApplePayPayment(buttonSelector, options);
@@ -261,18 +302,25 @@ patch(PaymentForm.prototype, {
             return;
         }
         const container = this.el.querySelector('#o_buckaroo_applepay_container');
+        const blocker = container && walletCheckoutBlocker(container.dataset.totalAmount);
+        if (blocker) {
+            showWalletBlocked(container, blocker);
+            return;
+        }
         if (!container || container.dataset.integrationMode === 'redirect') {
             // Redirect mode: skip the SDK/button and let the method submit
             // through Odoo's standard hosted-redirect flow.
             await super._prepareInlineForm(...arguments);
             return;
         }
-        await _apEnsureSdks();
+        await _apEnsureSdks(truthyData(container.dataset.testMode));
         // Pre-fetch the order's carriers (page load, off the gesture) so the
         // sheet can show the method selector the instant it opens - the order
         // already has the address from checkout, so no contact callback fires.
         try {
-            this._buckarooAPMethods = await rpc('/shop/buckaroo/wallet/methods', {});
+            this._buckarooAPMethods = await rpc('/shop/buckaroo/wallet/methods', {
+                payment_method_id: parseInt(container.dataset.paymentMethodId),
+            });
         } catch (error) {
             console.error('Apple Pay shipping methods prefetch failed:', error);
             this._buckarooAPMethods = null;
@@ -288,6 +336,12 @@ patch(PaymentForm.prototype, {
             return super._initiatePaymentFlow(...arguments);
         }
         const container = this.el.querySelector('#o_buckaroo_applepay_container');
+        const blocker = container && walletCheckoutBlocker(container.dataset.totalAmount);
+        if (blocker) {
+            this._displayErrorDialog(_t("Error"), blocker);
+            this._enableButton();
+            return;
+        }
         if (container?.dataset.integrationMode === 'redirect') {
             // Redirect mode: defer to the standard hosted-redirect flow.
             return super._initiatePaymentFlow(...arguments);
@@ -310,13 +364,20 @@ patch(PaymentForm.prototype, {
         const prefetchMethods = (prefetch.delivery_methods || []).slice().sort((a, b) =>
             (a.id === prefetch.selected_id ? -1 : 0) - (b.id === prefetch.selected_id ? -1 : 0));
         const initialMethods = prefetchMethods.map(_apShippingMethod);
-        const shippingCallbacks = initialMethods.length ? {
-            onShippingMethodSelected: _apSetMethodHandler(storeName, container.dataset.totalAmount),
-        } : {};
+        // The template's total already includes the Apple Pay fee.
+        let sheetTotal = container.dataset.totalAmount;
+        const shippingCallbacks = initialMethods.length ? _apTrackSheetTotal({
+            onShippingMethodSelected: _apSetMethodHandler(
+                this,
+                storeName,
+                parseInt(container.dataset.paymentMethodId),
+                container.dataset.totalAmount,
+            ),
+        }, (total) => { sheetTotal = total; }) : {};
 
-        let token, customerName;
+        let token, customerName, network;
         try {
-            ({ token, customerName } = await _apAuthorize('#o_buckaroo_applepay_container', {
+            ({ token, customerName, network } = await _apAuthorize('#o_buckaroo_applepay_container', {
                 storeName,
                 countryCode: container.dataset.countryCode,
                 currencyCode: container.dataset.currencyCode,
@@ -330,27 +391,35 @@ patch(PaymentForm.prototype, {
             }));
         } catch (error) {
             console.error('Apple Pay authorization failed:', error);
-            this._displayErrorDialog(
-                _t("Error"),
-                _t("Apple Pay payment could not be processed. Please try again."),
-            );
+            displayWalletError(this, _t(
+                "Apple Pay payment could not be processed. Please try again.",
+            ));
             this._enableButton();
             return;
         }
         if (!token || !customerName) {
             // User cancelled the sheet or Apple returned an incomplete response.
-            this._enableButton();
+            if (!reloadIfWalletSheetChangedOrder(this)) {
+                this._enableButton();
+            }
             return;
         }
 
         this._buckarooAPToken = token;
         this._buckarooAPCustomerName = customerName;
+        this._buckarooAPNetwork = network;
+        this._buckarooAPSheetTotal = sheetTotal;
+        // A refused transaction (e.g. the total changed) reloads the page once
+        // its error is read, so the next attempt uses the current total.
+        markWalletSheetChangedOrder(this);
         try {
             await super._initiatePaymentFlow(...arguments);
         } finally {
             // Single-use token; clear so a retry forces a fresh Apple Pay sheet.
             this._buckarooAPToken = null;
             this._buckarooAPCustomerName = null;
+            this._buckarooAPNetwork = null;
+            this._buckarooAPSheetTotal = null;
         }
     },
 
@@ -371,27 +440,42 @@ patch(PaymentForm.prototype, {
         if (this._buckarooAPCustomerName) {
             params.buckaroo_applepay_customer_name = this._buckarooAPCustomerName;
         }
+        if (this._buckarooAPNetwork) {
+            params.buckaroo_applepay_network = this._buckarooAPNetwork;
+        }
+        if (this._buckarooAPSheetTotal) {
+            params.buckaroo_wallet_amount = parseFloat(this._buckarooAPSheetTotal);
+        }
         return params;
     },
 });
 
 // Rate the shown product's carriers off a throwaway order so the product-page
 // sheet can seed its method selector (no cart exists yet). Re-run on
-// variant/qty changes so free-over thresholds stay accurate.
+// variant/qty changes so free-over thresholds stay accurate. The subtotal
+// includes the Apple Pay fee.
 async function _apPrefetchProductMethods(interaction) {
-    const snap = snapshotProductDom();
-    if (!snap) {
-        interaction._apProductShipping = null;
+    const prefetch = await fetchWalletProductPrefetch(
+        interaction, interaction.el, parseInt(interaction.el.dataset.paymentMethodId),
+    );
+    if (prefetch !== undefined) {
+        interaction._apProductShipping = prefetch;
+    }
+}
+
+// Cart page: the express form's amount excludes the Apple Pay fee, so read the
+// total the transaction charges from the server instead.
+async function _apRefreshCartAmount(interaction) {
+    const resp = await fetchWalletCartAmount(
+        interaction, interaction.el, parseInt(interaction.el.dataset.paymentMethodId),
+    );
+    if (!resp) {
         return;
     }
-    try {
-        interaction._apProductShipping = await rpc('/shop/buckaroo/wallet/product_methods', {
-            product_id: snap.productId,
-            qty: snap.qty,
-        });
-    } catch (error) {
-        console.error('Apple Pay product shipping prefetch failed:', error);
-        interaction._apProductShipping = null;
+    interaction.paymentContext.amount = parseFloat(resp.amount);
+    interaction.paymentContext.minorAmount = parseInt(resp.minor_amount);
+    if (interaction._apMounted) {
+        interaction.el.classList.toggle('d-none', interaction.paymentContext.amount === 0);
     }
 }
 
@@ -412,7 +496,7 @@ async function _apExpressMountButton(interaction) {
         return;
     }
     try {
-        await _apEnsureSdks();
+        await _apEnsureSdks(truthyData(container.dataset.testMode));
     } catch (error) {
         console.error('Apple Pay SDK load failed:', error);
         container.classList.add('d-none');
@@ -427,7 +511,14 @@ async function _apExpressMountButton(interaction) {
         () => _apExpressClick(interaction, container, paymentMethodId),
     );
     if (interaction._apMounted && container.dataset.placement === 'product') {
-        await _apPrefetchProductMethods(interaction);
+        await refreshDuringMount(
+            container.closest('form') || document, 'change',
+            () => _apPrefetchProductMethods(interaction),
+        );
+    } else if (interaction._apMounted) {
+        await refreshDuringMount(
+            interaction.env.bus, 'cart_amount_changed', () => _apRefreshCartAmount(interaction),
+        );
     }
 }
 
@@ -460,8 +551,15 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
         // client-side, the same way the Woo plugin does it. The real cart + its
         // authoritative total are created on authorize.
         const prefetch = interaction._apProductShipping;
-        const methods = prefetch?.delivery_methods || [];
-        const subtotal = prefetch ? prefetch.subtotal : snapshot.unitPrice * snapshot.qty;
+        if (!prefetch) {
+            // Without it the sheet would miss the fee and the server refuses.
+            displayWalletError(interaction, _t(
+                "Could not read the product details. Please reload the page and try again.",
+            ));
+            return;
+        }
+        const methods = prefetch.delivery_methods || [];
+        const subtotal = prefetch.subtotal;
         if (methods.length) {
             initialMethods = methods.map(_apShippingMethod);
             selectedCarrierId = methods[0].id;
@@ -486,10 +584,12 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
             shippingCallbacks = {
                 // Buyer confirmed an address: fetch the serviceable carriers.
                 onShippingContactSelected: async (contact) => {
+                    markWalletSheetChangedOrder(interaction);
                     let resp;
                     try {
                         resp = await rpc('/shop/buckaroo/wallet/shipping_address', {
                             partial_delivery_address: _apContactToAddress(contact),
+                            payment_method_id: paymentMethodId,
                         });
                     } catch (error) {
                         console.error('Apple Pay shipping address update failed:', error);
@@ -510,12 +610,17 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
                     };
                 },
                 // Buyer switched method: persist it and return the new total.
-                onShippingMethodSelected: _apSetMethodHandler(storeName, amount, (method) => {
-                    selectedCarrierId = parseInt(method.identifier) || selectedCarrierId;
-                }),
+                onShippingMethodSelected: _apSetMethodHandler(
+                    interaction, storeName, paymentMethodId, amount, (method) => {
+                        selectedCarrierId = parseInt(method.identifier) || selectedCarrierId;
+                    },
+                ),
             };
         }
     }
+
+    let sheetTotal = _apTotalLineItem(storeName, amount).amount;
+    shippingCallbacks = _apTrackSheetTotal(shippingCallbacks, (total) => { sheetTotal = total; });
 
     let authResult;
     try {
@@ -539,9 +644,10 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
         return;
     }
 
-    const { token, customerName, billingContact, shippingContact } = authResult;
+    const { token, customerName, network, billingContact, shippingContact } = authResult;
     if (!token || !customerName) {
         // User cancelled the sheet or Apple returned an incomplete response.
+        reloadIfWalletSheetChangedOrder(interaction);
         return;
     }
 
@@ -572,6 +678,9 @@ async function _apExpressClick(interaction, container, paymentMethodId) {
         txExtra: {
             buckaroo_applepay_token: token,
             buckaroo_applepay_customer_name: customerName,
+            buckaroo_applepay_network: network,
+            // The server refuses to charge another total than the sheet showed.
+            buckaroo_wallet_amount: parseFloat(sheetTotal),
         },
         txError: _t("Apple Pay payment could not be processed. Please try again."),
     });
@@ -616,21 +725,20 @@ export class BuckarooApplePayExpress extends ExpressCheckout {
             // Re-rate carriers when the variant or quantity changes so the sheet
             // (and its free-over thresholds) stays accurate at click time.
             const form = this.el.closest('form') || document;
-            this._apRefresh = () => _apPrefetchProductMethods(this);
-            form.addEventListener('change', this._apRefresh);
+            this.addListener(form, 'change', () => {
+                if (this._apMounted) {
+                    _apPrefetchProductMethods(this);
+                }
+            });
             return;
         }
-        // Keep the sheet amount fresh when the cart quantity changes.
-        this.env.bus.addEventListener('cart_amount_changed', (ev) =>
-            this._updateAmount(...ev.detail));
-    }
-
-    _updateAmount(newAmount, newMinorAmount) {
-        this.paymentContext.amount = parseFloat(newAmount);
-        this.paymentContext.minorAmount = parseInt(newMinorAmount);
-        if (this._apMounted) {
-            this.el.classList.toggle('d-none', this.paymentContext.amount === 0);
-        }
+        // Keep the sheet amount fresh when the cart quantity changes. The
+        // event's amount excludes the Apple Pay fee, so refetch it instead.
+        this.addListener(this.env.bus, 'cart_amount_changed', () => {
+            if (this._apMounted) {
+                _apRefreshCartAmount(this);
+            }
+        });
     }
 }
 

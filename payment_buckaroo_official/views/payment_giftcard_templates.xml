@@ -13,7 +13,7 @@
                     <div class="row g-2">
                         <div class="col-12">
                             <label class="form-label text-muted small mb-1">Brand</label>
-                            <div class="form-control-plaintext fw-semibold" t-esc="pm_sudo.name"/>
+                            <div class="form-control-plaintext fw-semibold" t-out="pm_sudo.name"/>
                         </div>
                         <div class="col-12">
                             <label class="form-label text-muted small mb-1">Card number</label>

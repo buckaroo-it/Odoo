@@ -35,6 +35,14 @@ class _SurchargeBase(BuckarooOfficialCommon):
                 "type": "service",
             }
         )
+        cls.tax_21 = cls.env["account.tax"].create(
+            {
+                "name": "VAT 21%",
+                "type_tax_use": "sale",
+                "amount_type": "percent",
+                "amount": 21.0,
+            }
+        )
 
     def _make_order(self, qty=1, price=100.0):
         order = self.env["sale.order"].create(
@@ -50,6 +58,24 @@ class _SurchargeBase(BuckarooOfficialCommon):
                 "product_uom_qty": qty,
                 "price_unit": price,
                 "tax_ids": [Command.clear()],
+            }
+        )
+        return order
+
+    def _make_taxed_order(self, price=100.0):
+        order = self.env["sale.order"].create(
+            {
+                "partner_id": self.partner.id,
+                "currency_id": self.currency_euro.id,
+            }
+        )
+        self.env["sale.order.line"].create(
+            {
+                "order_id": order.id,
+                "product_id": self.product.id,
+                "product_uom_qty": 1,
+                "price_unit": price,
+                "tax_ids": [Command.set(self.tax_21.ids)],
             }
         )
         return order
@@ -201,33 +227,7 @@ class TestSurchargeTaxInheritance(_SurchargeBase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.tax_21 = cls.env["account.tax"].create(
-            {
-                "name": "VAT 21%",
-                "type_tax_use": "sale",
-                "amount_type": "percent",
-                "amount": 21.0,
-            }
-        )
         cls.ideal.buckaroo_official_fee_amount = "1.50"
-
-    def _make_taxed_order(self, price=100.0):
-        order = self.env["sale.order"].create(
-            {
-                "partner_id": self.partner.id,
-                "currency_id": self.currency_euro.id,
-            }
-        )
-        self.env["sale.order.line"].create(
-            {
-                "order_id": order.id,
-                "product_id": self.product.id,
-                "product_uom_qty": 1,
-                "price_unit": price,
-                "tax_ids": [Command.set(self.tax_21.ids)],
-            }
-        )
-        return order
 
     def test_inherits_tax_from_product_line(self):
         order = self._make_taxed_order()
@@ -297,6 +297,146 @@ class TestSurchargeSync(_SurchargeBase):
                 order._buckaroo_sync_surcharge_for_method(self.ideal)
                 order._buckaroo_sync_surcharge_for_method(method)
                 self.assertEqual(len(self._surcharge_lines(order)), 0)
+
+
+@tagged("post_install", "-at_install")
+class TestSurchargeAmountForMethod(_SurchargeBase):
+    """The total a wallet must authorize: what the transaction will charge once
+    the method's surcharge is synced, without touching the order."""
+
+    def test_includes_percent_and_fixed_fee(self):
+        for fee, expected in [("1.5%", 36.54), ("2.00", 38.00)]:
+            with self.subTest(fee=fee):
+                self.ideal.buckaroo_official_fee_amount = fee
+                order = self._make_order(price=36.0)
+                self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), expected)
+
+    def test_includes_vat_on_fee(self):
+        self.ideal.buckaroo_official_fee_amount = "1.50"
+        order = self._make_taxed_order(price=100.0)
+        # 121.00 + (1.50 + 21% = 1.82)
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), 122.82)
+
+    def test_matches_total_after_sync(self):
+        self.ideal.buckaroo_official_fee_amount = "1.5%"
+        order = self._make_taxed_order(price=33.33)
+        expected = order._buckaroo_amount_to_pay_for_method(self.ideal)
+        order._buckaroo_sync_surcharge_for_method(self.ideal)
+        self.assertEqual(expected, order.amount_total)
+
+    def test_leaves_order_untouched(self):
+        self.ideal.buckaroo_official_fee_amount = "1.50"
+        self.bancontact.buckaroo_official_fee_amount = "2.00"
+        order = self._make_order(price=36.0)
+        order._apply_buckaroo_surcharge_line(self.bancontact)
+
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), 37.50)
+
+        line = self._surcharge_lines(order)
+        self.assertEqual(line.price_unit, 2.0)
+        self.assertEqual(order.amount_total, 38.00)
+
+    def _add_done_giftcard_payment(self, order, amount):
+        giftcard = self.env.ref("payment_buckaroo_official.payment_method_brand_vvvgiftcard")
+        self.buckaroo.payment_method_ids = [Command.link(giftcard.id)]
+        self.env["payment.transaction"].create(
+            {
+                "provider_id": self.buckaroo.id,
+                "payment_method_id": giftcard.id,
+                "reference": f"TX-GC-PAID-{order.id}",
+                "amount": amount,
+                "currency_id": order.currency_id.id,
+                "partner_id": self.partner.id,
+                "operation": "online_redirect",
+                "state": "done",
+                "sale_order_ids": [Command.link(order.id)],
+            }
+        )
+
+    def test_after_partial_giftcard_payment_is_the_remainder(self):
+        # The giftcard flow shrinks the next transaction to what is still open.
+        self.ideal.buckaroo_official_fee_amount = "1.5%"
+        order = self._make_order(price=36.0)
+        self._add_done_giftcard_payment(order, 10.0)
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), 26.54)
+
+    def test_nothing_to_pay_when_giftcard_paid_more_than_total(self):
+        self.ideal.buckaroo_official_fee_amount = "1.5%"
+        order = self._make_order(price=36.0)
+        self._add_done_giftcard_payment(order, 40.0)
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.ideal), 0.0)
+
+    def _draft_tx(self, order, sheet_amount=None, amount=None, token_flow=False):
+        from ..utils import const
+
+        ctx = {} if sheet_amount is None else {const.WALLET_SHEET_AMOUNT_CONTEXT_KEY: sheet_amount}
+        if token_flow:
+            ctx[const.WALLET_SHEET_REQUIRED_CONTEXT_KEY] = True
+        return (
+            self.env["payment.transaction"]
+            .with_context(**ctx)
+            .create(
+                {
+                    "provider_id": self.buckaroo.id,
+                    "payment_method_id": self.ideal.id,
+                    "reference": f"TX-SHEET-{order.id}-{sheet_amount!r}-{token_flow}",
+                    "amount": order.amount_total if amount is None else amount,
+                    "currency_id": order.currency_id.id,
+                    "partner_id": self.partner.id,
+                    "operation": "online_direct",
+                    "sale_order_ids": [Command.link(order.id)],
+                }
+            )
+        )
+
+    def _check_sheet(self, tx, order):
+        from ..controllers.fee import BuckarooFeePaymentPortal
+
+        BuckarooFeePaymentPortal._buckaroo_check_wallet_sheet_amount(tx, order)
+
+    def test_sheet_amount_matching_the_charge_passes(self):
+        self.ideal.buckaroo_official_fee_amount = "1.5%"
+        order = self._make_order(price=36.0)
+        order._buckaroo_sync_surcharge_for_method(self.ideal)
+        for sheet_amount in (36.54, "36.54", None):
+            with self.subTest(sheet_amount=sheet_amount):
+                self._check_sheet(self._draft_tx(order, sheet_amount), order)
+
+    def test_sheet_amount_differing_from_the_charge_is_refused(self):
+        # E.g. a carrier re-rated for the buyer's address after the sheet
+        # showed its price: nothing may be charged.
+        from odoo.exceptions import ValidationError
+
+        self.ideal.buckaroo_official_fee_amount = "1.5%"
+        order = self._make_order(price=36.0)
+        order._buckaroo_sync_surcharge_for_method(self.ideal)
+        for sheet_amount in (36.0, 36.55, "abc"):
+            with self.subTest(sheet_amount=sheet_amount), self.assertRaises(ValidationError):
+                self._check_sheet(self._draft_tx(order, sheet_amount), order)
+
+    def test_wallet_token_without_sheet_amount_is_refused(self):
+        # A token flow that sent no sheet total can't be checked; a redirect
+        # flow (no token) has no sheet and is left alone.
+        from odoo.exceptions import ValidationError
+
+        order = self._make_order(price=36.0)
+        self._check_sheet(self._draft_tx(order), order)
+        with self.assertRaises(ValidationError):
+            self._check_sheet(self._draft_tx(order, token_flow=True), order)
+
+    def test_sheet_amount_is_the_giftcard_remainder(self):
+        # The giftcard hook may shrink the transaction after this check runs:
+        # the sheet's remainder must pass against the full-total draft.
+        order = self._make_order(price=36.0)
+        self._add_done_giftcard_payment(order, 10.0)
+        tx = self._draft_tx(order, 26.0, amount=36.0)
+        self._check_sheet(tx, order)
+
+    def test_non_buckaroo_method_drops_existing_fee(self):
+        self.ideal.buckaroo_official_fee_amount = "1.50"
+        order = self._make_order(price=36.0)
+        order._apply_buckaroo_surcharge_line(self.ideal)
+        self.assertEqual(order._buckaroo_amount_to_pay_for_method(self.payment_method), 36.00)
 
 
 @tagged("post_install", "-at_install")

@@ -39,4 +39,4 @@ class TestPackagingRequirements(BaseCase):
         manifest_path = ADDON_ROOT / "__manifest__.py"
         manifest = ast.literal_eval(manifest_path.read_text())
         python_deps = manifest.get("external_dependencies", {}).get("python", [])
-        self.assertIn("buckaroo", python_deps)
+        self.assertIn("buckaroo-sdk", python_deps)

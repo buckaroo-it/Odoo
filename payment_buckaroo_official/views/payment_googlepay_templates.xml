@@ -16,7 +16,7 @@
                      t-att-data-merchant-guid="pm_sudo.buckaroo_official_googlepay_merchant_guid or ''"
                      t-att-data-google-merchant-id="pm_sudo.buckaroo_official_googlepay_google_merchant_id or ''"
                      t-att-data-merchant-name="provider_sudo.company_id.name or ''"
-                     t-att-data-total-amount="amount"
+                     t-att-data-total-amount="str((buckaroo_wallet_amounts or {}).get(pm_sudo.id, amount))"
                      t-att-data-currency-code="currency and currency.name or ''"
                      t-att-data-country-code="gp_country and gp_country.code or ''"/>
             </t>
@@ -50,7 +50,7 @@
               name="Buckaroo Google Pay Express on Product Page"
               inherit_id="website_sale.cta_wrapper">
         <xpath expr="//div[@id='add_to_cart_wrap']" position="before">
-            <t t-set="gp_provider" t-value="request.env['payment.provider'].sudo().search([('code', '=', 'buckaroo_official'), ('state', 'in', ['enabled', 'test']), ('allow_express_checkout', '=', True)], limit=1)"/>
+            <t t-set="gp_provider" t-value="request.env['payment.provider']._buckaroo_official_express_provider(website)"/>
             <t t-set="gp_method" t-value="gp_provider and gp_provider.payment_method_ids.filtered(lambda m: m.code == 'buckaroo_googlepay' and m.active and m.buckaroo_official_googlepay_show_on_product and m._buckaroo_googlepay_is_configured())[:1]"/>
             <t t-if="gp_provider and gp_method">
                 <t t-set="gp_country"

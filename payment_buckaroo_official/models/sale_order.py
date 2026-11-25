@@ -83,6 +83,30 @@ class SaleOrder(models.Model):
             return
         self._apply_buckaroo_surcharge_line(payment_method)
 
+    def _buckaroo_amount_to_pay_for_method(self, payment_method):
+        """Amount the transaction will charge when paid with *payment_method*.
+
+        PayPal authorizes this amount up front, so it must be exact or Buckaroo
+        refuses the pay request; the Apple Pay and Google Pay sheets show it to
+        the buyer (BTI-2182). Syncs the
+        method's surcharge with the code the transaction route runs, then rolls
+        it back, so the order keeps its current surcharge line. After a giftcard
+        payment only the open amount is charged (``controllers/giftcard.py``):
+        the remainder, or nothing when the giftcard already paid the total.
+        """
+        self.ensure_one()
+        # The flushing savepoint runs every pending precommit hook (e.g. chatter
+        # tracking) before it starts, so its rollback only drops the hooks this
+        # preview itself adds.
+        savepoint = self.env.cr.savepoint()
+        try:
+            self._buckaroo_sync_surcharge_for_method(payment_method)
+            if self._buckaroo_giftcard_done_transactions():
+                return self.currency_id.round(max(0.0, self.amount_total - self.amount_paid))
+            return self.amount_total
+        finally:
+            savepoint.close(rollback=True)
+
     def _check_cart_is_ready_to_be_paid(self):
         # Runs under parent's FOR NO KEY UPDATE NOWAIT; concurrent picks serialise.
         pm_id = self.env.context.get(const.PICK_METHOD_CONTEXT_KEY)

@@ -1,13 +1,22 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+from functools import partial
 from werkzeug.wrappers import Response
 
+from odoo import _
+from odoo.exceptions import ValidationError
 from odoo.http import Controller, request, route
 from odoo.tools import file_open
 
 from odoo.addons.website_sale.controllers.payment import PaymentPortal
 
-from ..helpers.wallet import sanitize_customer_name, sanitize_token
+from ..helpers.wallet import (
+    call_dropping_session_on_failure,
+    is_amex_network,
+    sanitize_customer_name,
+    sanitize_token,
+)
+from ..utils import const
 
 
 class ApplepayPaymentPortal(PaymentPortal):
@@ -25,13 +34,23 @@ class ApplepayPaymentPortal(PaymentPortal):
         if pm.code != "buckaroo_applepay":
             return super().shop_payment_transaction(order_id, access_token, **kwargs)
 
+        if is_amex_network(kwargs.pop("buckaroo_applepay_network", None)):
+            raise ValidationError(
+                _("American Express is not supported for Apple Pay. Please choose another card.")
+            )
         token = sanitize_token(kwargs.pop("buckaroo_applepay_token", None))
         customer_name = sanitize_customer_name(kwargs.pop("buckaroo_applepay_customer_name", None))
         if token:
             request.session["buckaroo_applepay_token"] = token
+            # The sheet total check in `fee.py` must run for every token.
+            request.update_context(**{const.WALLET_SHEET_REQUIRED_CONTEXT_KEY: True})
         if customer_name:
             request.session["buckaroo_applepay_customer_name"] = customer_name
-        return super().shop_payment_transaction(order_id, access_token, **kwargs)
+        return call_dropping_session_on_failure(
+            request.session,
+            ("buckaroo_applepay_token", "buckaroo_applepay_customer_name"),
+            partial(super().shop_payment_transaction, order_id, access_token, **kwargs),
+        )
 
 
 class ApplepayWellKnownController(Controller):

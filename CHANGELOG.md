@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [19.0.1.0.4]
+
+### Fixed
+- [BTI-1998] Riverty orders can now be partially refunded from Odoo. The refund amount is editable, and a partial refund is sent to Riverty as one returned article with that amount and the VAT rate of the order's first product. Existing databases get partial refunds for Riverty on upgrade.
+
+---
+
 ## [19.0.1.0.3]
 
 ### Changed
