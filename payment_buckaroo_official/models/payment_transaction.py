@@ -284,6 +284,32 @@ class PaymentTransaction(models.Model):
             raise ValidationError("Buckaroo: missing transaction reference in callback data.")
         return ref
 
+    @api.model
+    def _search_by_reference(self, provider_code, payment_data):
+        tx = super()._search_by_reference(provider_code, payment_data)
+        if tx or provider_code != const.PROVIDER_CODE:
+            return tx
+        # A Plaza refund can carry its own invoice number (a Riverty partial
+        # refund of order S00707 arrives as lBLS00707), so fall back to the
+        # refunded tx its refund relation names.
+        refund_relation = payment_data.get_refund_relation()
+        if not refund_relation:
+            return tx
+        tx = self.search(
+            [
+                ("provider_code", "=", provider_code),
+                ("provider_reference", "=", refund_relation),
+            ],
+            limit=1,
+        )
+        if tx:
+            _logger.info(
+                "Buckaroo refund push %s matched transaction %s by its refund relation",
+                payment_data.reference,
+                tx.reference,
+            )
+        return tx
+
     def _extract_amount_data(self, payment_data):
         if self.provider_code != const.PROVIDER_CODE:
             return super()._extract_amount_data(payment_data)
