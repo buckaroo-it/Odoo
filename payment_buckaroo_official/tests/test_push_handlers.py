@@ -545,3 +545,75 @@ class TestPlazaRefundPush(BuckarooOfficialCommon):
         )
 
         self.assertFalse(tx.child_transaction_ids)
+
+
+@tagged("post_install", "-at_install")
+class TestPlazaRefundPushOwnInvoice(BuckarooOfficialCommon):
+    """Plaza can give a refund its own invoice number: a Riverty partial
+    refund of order S00707 is pushed as ``lBLS00707``. The push still names
+    the refunded tx in its refund relation, which locates it."""
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch.object(PaymentTransaction, "_post_process", lambda self: None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        riverty = self.env.ref("payment_buckaroo_official.payment_method_riverty")
+        self.tx = self._create_buckaroo_tx(reference="S00707", amount=81.0, payment_method=riverty)
+        self.tx.provider_reference = "1723CE289B4F4FA9B5C7900F7013098D"
+        self.tx._set_done()
+
+    @staticmethod
+    def _riverty_plaza_refund_push(**overrides):
+        """The Plaza push of refund 11E475428C87485EAF01C6BC1979C20E (BTI-2184)."""
+        raw = {
+            "brq_amount_credit": "12.00",
+            "brq_currency": "EUR",
+            "brq_description": "lBLS00707",
+            "brq_invoicenumber": "lBLS00707",
+            "brq_mutationtype": "Collecting",
+            "brq_relatedtransaction_refund": "1723CE289B4F4FA9B5C7900F7013098D",
+            "brq_SERVICE_afterpay_Processed": "Classic",
+            "brq_statuscode": "190",
+            "brq_statuscode_detail": "S990",
+            "brq_transaction_method": "afterpay",
+            "brq_transaction_type": "C041",
+            "brq_transactions": "11E475428C87485EAF01C6BC1979C20E",
+        }
+        raw.update(overrides)
+        return parsed_from_form(raw)
+
+    def _refunds(self):
+        return self.tx.child_transaction_ids.filtered(lambda t: t.operation == "refund")
+
+    def test_refund_push_with_own_invoice_spawns_refund_child(self):
+        _route_push(self.env, self._riverty_plaza_refund_push())
+
+        refund = self._refunds()
+        self.assertEqual(len(refund), 1)
+        self.assertEqual(refund.reference, "R-S00707")
+        self.assertEqual(refund.amount, -12.0)
+        self.assertEqual(refund.state, "done")
+        self.assertEqual(refund.source_transaction_id, self.tx)
+        self.assertEqual(refund.provider_reference, "11E475428C87485EAF01C6BC1979C20E")
+        self.assertEqual(self.tx.state, "done")
+
+    def test_refund_push_with_own_invoice_is_idempotent_on_replay(self):
+        push = self._riverty_plaza_refund_push()
+
+        _route_push(self.env, push)
+        _route_push(self.env, push)
+
+        self.assertEqual(len(self._refunds()), 1)
+
+    def test_unknown_invoice_without_refund_relation_finds_nothing(self):
+        push = self._riverty_plaza_refund_push(brq_relatedtransaction_refund="")
+
+        self.assertIsNone(_route_push(self.env, push))
+        self.assertFalse(self._refunds())
+
+    def test_unknown_invoice_with_unknown_refund_relation_finds_nothing(self):
+        push = self._riverty_plaza_refund_push(brq_relatedtransaction_refund="UNKNOWN_KEY")
+
+        self.assertIsNone(_route_push(self.env, push))
+        self.assertFalse(self._refunds())
